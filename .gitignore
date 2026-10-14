@@ -1,0 +1,9 @@
+assets/
+game/resource/textures/
+game/resource/techniques
+game/resource/ini/fonts.ini
+game/resource/sounds/
+game/resource/ini/aliases/
+game/engine.out
+*.log
+*.dxvk-cache
