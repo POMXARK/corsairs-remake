@@ -10,6 +10,8 @@ GAME="$DIR/game"
 
 "$DIR/tools/fetch_assets.sh" "$DIR/assets"
 python3 -I "$DIR/tools/make_assets.py" "$DIR/assets" "$GAME/resource"
+# the deck scene: generated models and wood textures, no downloads
+python3 -I "$DIR/tools/make_scene.py" "$GAME/resource"
 # shaders are copied next to the engine by the build; empty folders are expected by the services
 ln -sfn "$(dirname "$ENGINE")/resource/techniques" "$GAME/resource/techniques"
 mkdir -p "$GAME/resource/sounds" "$GAME/resource/ini/aliases"

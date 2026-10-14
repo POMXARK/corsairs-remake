@@ -7,7 +7,8 @@ and text configs, and tools that build textures and fonts from free assets (see 
 ```
 engine/   Storm Engine fork (submodule, branch miniaudio-sound)
 game/     game folder the engine runs in: engine.ini, program/ (scripts), resource/ (ini, generated textures)
-tools/    fetch_assets.sh — downloads free assets; make_assets.py — converts them to .tx textures and fonts.ini
+tools/    fetch_assets.sh — downloads free assets; make_assets.py — converts them to .tx textures and fonts.ini;
+          make_scene.py — generates the deck scene (.gm models, wood textures)
 ```
 
 ## Run (Linux)
@@ -19,3 +20,7 @@ git clone --recursive https://github.com/POMXARK/corsairs-remake.git
 ```
 
 Arrow keys / mouse select a menu item, Enter or a click activates it, Escape or «Выход» quits.
+
+«Новая игра» opens the first scene, a ship deck with cargo: the mouse looks around, W/S move
+(Shift, Ctrl to speed up). Escape returns to the menu without losing anything — the scene is only
+frozen, and «Продолжить» brings it back as it was; «Новая игра» starts it over.
