@@ -71,7 +71,7 @@ cd corsairs-remake
 
 `build.bat` (`build.ps1` → `engine/build.ps1`) enters the developer shell of Visual Studio, puts the
 Scripts folder of Python in PATH, installs by pip what is missing (Conan 2.12.2, Ninja, CMake ≥ 3.24,
-Pillow), makes the Conan profile and builds the preset; the first build downloads several GB of Conan
+Pillow, numpy), makes the Conan profile and builds the preset; the first build downloads several GB of Conan
 packages. By hand it is, in Developer PowerShell for VS:
 
 ```powershell
