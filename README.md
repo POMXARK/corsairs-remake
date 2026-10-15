@@ -168,3 +168,22 @@ The menu does not lose the scene — it is only frozen, and «Продолжит
 
 F5 in the port saves the game to `game/save/game.sav` (gold, wins, the brig, the captain's place on the quay);
 «Загрузить» in the menu, active when a save exists, brings it back. At sea the game is not saved.
+
+## Editor windows
+
+`editor/` is a module of the engine with the game's own editor windows. Configure the engine with it
+and run the game with `--editor`:
+
+```bash
+cmake ../storm-engine -DSTORM_EXTRA_MODULES=<this repo>/editor   # in the engine build directory
+cd game && <engine> --editor                                      # after run.sh has built the assets
+```
+
+**Market** (Developer Tools → Tools) shows the tables of `game/program/market.c` in the running game:
+the base prices, the price and the stock norm of every good on every island, the stock now, and what
+the market sells and buys for at this stock (the formula of `trade.c`). The tables are changed in place,
+and the next deal takes them. The numbers of `#define` (recovery, price band, the market's margin) are
+compiled into the script: the window previews the prices with them, the game takes them after a restart.
+**Save to market.c** writes the tables and the numbers back, in the layout the simulator (`economy/`) reads.
+
+![The window Market: Gull Island after the brig bought sugar and rum](media/editor-market.jpg)

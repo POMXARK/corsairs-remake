@@ -67,6 +67,6 @@ def write(data, path=MARKET_C, note=""):
                         ("MARKET_PRICE_MAX", data.price_max), ("MARKET_BUYS", data.buys)):
         text = re.sub(r"#define " + name + r" -?\d+", "#define " + name + " " + str(value), text)
     if note:
-        text = re.sub(r"// Written by economy/[^\n]*\n", "", text)
+        text = re.sub(r"// Written by [^\n]*\n\n?", "", text)
         text = text.replace("\n// the goods:", "\n// Written by economy/" + note + "\n\n// the goods:", 1)
     path.write_text(text, encoding="utf-8")

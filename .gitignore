@@ -12,3 +12,4 @@ __pycache__/
 .pytest_cache/
 # the engine logs the economy tests replay
 !economy/tests/fixtures/*.log
+game/imgui.ini
