@@ -3,7 +3,7 @@
 // and aims the guns of both, touch keeps the ships off the shore and each other, battle_interface
 // draws the navigator and the ship panel. The sea, the sky and the sound are the world's (world.c).
 // Space fires the guns that bear, R starts a new battle, Z and X zoom the minimap, Enter after the
-// battle returns to the port. A/D turn, W/S set and furl the sails, the mouse turns the camera.
+// battle returns to the port. B boards a «Ворон» the guns have half wrecked when he is close (deck.c). A/D turn, W/S set and furl the sails, the mouse turns the camera.
 
 // shared/messages.h: "lsss", the foam dir under resource\foam\, the models dir under
 // resource\models\ and the name of the island model
@@ -97,6 +97,9 @@
 #define COLLISION_DEPTH -4.0
 #define MAST_HIT_DAMAGE 0.34
 #define ENEMY_SPEED 9.0
+// B boards «Ворон» when his hull is down to this and he is this close
+#define BOARD_HULL 50.0
+#define BOARD_DISTANCE 150.0
 // what every level of «Ворон» (world.c, Raven_Level) adds: the hull takes this part less of a hit,
 // his guns hit harder and reload faster, his crew is bigger and he sails faster
 #define RAVEN_LEVEL_HULL 0.2
@@ -146,6 +149,8 @@ int shots = 0;
 int hits = 0;
 int islandHits = 0;
 int shallowsCalled = 0;
+// the log has told that «Ворон» can be boarded
+int boardHinted = 0;
 
 void Sea_MapControls()
 {
@@ -163,6 +168,7 @@ void Sea_MapControls()
 	MapKey("Sea_NewBattle", 82, 0);
 	MapKey("Sea_ToPort", 13, 0);
 	MapKey("Sea_CameraTarget", 84, 0);
+	MapKey("Sea_Board", 66, 0);
 	// the right mouse button, held
 	MapKey("Sea_Aim", 2, 0);
 	// read every frame while held: the minimap zooms smoothly
@@ -307,6 +313,7 @@ void CreateSeaAI()
 void CreateBattle()
 {
 	battleOver = 0;
+	boardHinted = 0;
 	AICameras.Crosshair.OutsideCamera = 1;
 	AICameras.Crosshair.Texture = "demo\ball.tga";
 	SendMessage(&AISea, "la", AI_MESSAGE_SET_CAMERAS_ATTRIBUTE, &AICameras);
@@ -630,6 +637,11 @@ void DamageHull(ref character, float damage, string message)
 	if (hull > 0.0)
 	{
 		Log(message + makeint(hull) + "%");
+		if (sti(character.index) == sti(Enemy.index) && hull <= BOARD_HULL && !boardHinted)
+		{
+			boardHinted = 1;
+			Log("«Ворон» еле держится! Ближе " + makeint(BOARD_DISTANCE) + " м — B, на абордаж");
+		}
 		return;
 	}
 	battleOver = 1;
@@ -1117,6 +1129,35 @@ void Sea_Control(string control)
 		}
 	}
 	if (control == "Sea_ToPort" && battleOver) { Game_GoTo("port"); }
+	if (control == "Sea_Board" && !battleOver) { Sea_Board(); }
+}
+
+float Sea_EnemyDistance()
+{
+	float dx = stf(Enemy.Ship.Pos.x) - stf(Player.Ship.Pos.x);
+	float dz = stf(Enemy.Ship.Pos.z) - stf(Player.Ship.Pos.z);
+	return sqrt(dx * dx + dz * dz);
+}
+
+// The grapnels go over: the battle ends at sea and goes on on the deck of «Ворон» with the pirates
+// the guns have left. The ships keep their state (Sea_Leave).
+void Sea_Board()
+{
+	if (stf(Enemy.Ship.HP) > BOARD_HULL)
+	{
+		Log("«Ворон» ещё крепок: сначала корпус до " + makeint(BOARD_HULL) + "%");
+		return;
+	}
+	float distance = Sea_EnemyDistance();
+	if (distance > BOARD_DISTANCE)
+	{
+		Log("До «Ворона» " + makeint(distance) + " м, нужно ближе " + makeint(BOARD_DISTANCE));
+		return;
+	}
+	battleOver = 1;
+	boardEnemyCrew = sti(Enemy.Ship.Crew.quantity);
+	Trace("SEA: boarding at " + makeint(distance) + " m, enemy crew " + boardEnemyCrew);
+	Game_GoTo("deck");
 }
 
 void Sea_ControlUp(string control)

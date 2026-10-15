@@ -9,14 +9,22 @@ are committed, so the game runs right after clone; `run.sh` rebuilds them (the o
 engine/   Storm Engine fork (submodule, branch miniaudio-sound)
 assets/   downloaded free assets: fonts, the menu background
 game/     game folder the engine runs in: engine.ini, program/ (menu.c — the menu and the scene switch,
-          world.c — the sea, sky, sound and game state, port.c — the port and Tom, sea.c — the sea battle),
+          world.c — the sea, sky, sound and game state, port.c — the port and Tom, sea.c — the sea battle,
+          deck.c — the boarding),
           resource/ (ini, built textures, models, sounds)
 tools/    fetch_assets.sh — downloads free assets; make_assets.py — converts them to .tx textures and fonts.ini;
-          make_port.py — the port: quay, pier, sailors, dialog window.
+          make_port.py — the port: quay, pier, sailors, dialog window; make_deck.py — the deck of «Ворон»,
+          the fencers and the saber for the boarding.
           The other assets come from the generators of the engine demos (engine/demos/*/make_*.py)
 ```
 
 ## Video
+
+[![Boarding: the captain and his sailors against the pirates on the deck of «Ворон»](media/boarding.jpg)](media/boarding.mp4)
+
+Boarding (70 s, with sound): Tom sends the captain out → «Ворон» comes out of the cannonade wrecked and the
+grapnels go over (the gunnery is cut from this run) → on his deck the captain and three sailors cut down four
+pirates → back in the port Tom pays the bounty and the prize money, 800 pesos.
 
 [![The third slice: Tom's shop, chain shot, grape shot and round shot against «Ворон»](media/third-slice.jpg)](media/third-slice.mp4)
 
@@ -90,11 +98,32 @@ At sea:
 | mouse | look around |
 | right mouse button, held | aim: the water the balls of the side past the ship reach (gold — the enemy is in it, red — still loading) |
 | T | the camera keeps the enemy in view past our ship (on at the start) / turns freely |
+| B | board «Ворон»: his hull at 50% or less, within 150 m |
 | Space | broadside: the loaded side that faces the enemy fires |
 | 1 / 2 / 3 | load round shot / chain shot / grape shot |
 | Z / X | zoom the minimap in / out |
 | R | new battle |
 | Enter | back to the port, when the battle is over |
+| Escape | menu |
+
+Boarding: when round shot has brought the hull of «Ворон» down to 50%, B within 150 m of him throws the
+grapnels. The fight goes on on his deck: the captain and a sailor for every 32 of the crew (up to 3) against a
+pirate for every 24 pirates the guns have left (up to 5); grape shot before the boarding pays. The pirates of
+every next «Ворон» are tougher and quicker. Every sailor who falls is 12 of the crew. The last pirate down
+takes the prize: Tom pays the bounty and the prize money (300 pesos and 100 more for every level of «Ворон»),
+and his 30 round shot go into our hold. If the captain falls, his sailors carry him back and the battle is lost.
+
+On the deck:
+
+| Key | Action |
+|---|---|
+| W / S, A / D, mouse, Shift | move as in the port |
+| E | draw / sheathe the saber (drawn at the start) |
+| left mouse button | fast attack |
+| right mouse button | force attack: through a block |
+| Space, held | block |
+| Q | parry |
+| Enter | back to the port, when the fight is over |
 | Escape | menu |
 
 The menu does not lose the scene — it is only frozen, and «Продолжить» brings it back as it was;

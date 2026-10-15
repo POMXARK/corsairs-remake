@@ -1,0 +1,130 @@
+; a fencer as a location character; times are frames of fencer.an
+animation = fencer.an
+
+[idle_1]
+start_time = 1
+end_time = 121
+loop = true
+
+[walk]
+start_time = 123
+end_time = 155
+loop = true
+data = "Walk speed", "1.312"
+
+[back walk]
+start_time = 123
+end_time = 155
+loop = true
+type = reverse
+data = "Walk speed", "-1.312"
+
+[run]
+start_time = 157
+end_time = 177
+loop = true
+data = "Walk speed", "3.600"
+
+[back run]
+start_time = 157
+end_time = 177
+loop = true
+type = reverse
+data = "Walk speed", "-3.600"
+
+[turn left]
+start_time = 179
+end_time = 203
+loop = true
+
+[turn right]
+start_time = 179
+end_time = 203
+loop = true
+
+[fight stand]
+start_time = 205
+end_time = 295
+loop = true
+
+[fight walk]
+start_time = 297
+end_time = 329
+loop = true
+data = "Walk speed", "0.938"
+
+[fight back walk]
+start_time = 297
+end_time = 329
+loop = true
+type = reverse
+data = "Walk speed", "-0.938"
+
+[fight run]
+start_time = 331
+end_time = 353
+loop = true
+data = "Walk speed", "2.727"
+
+[fight back run]
+start_time = 331
+end_time = 353
+loop = true
+type = reverse
+data = "Walk speed", "-2.727"
+
+[attack_fast_1]
+start_time = 355
+end_time = 373
+loop = false
+event = "Attack", 50%
+
+[attack_force_1]
+start_time = 375
+end_time = 402
+loop = false
+event = "Attack", 60%
+
+[block]
+start_time = 404
+end_time = 444
+loop = true
+
+[block_hit]
+start_time = 446
+end_time = 458
+loop = false
+
+[parry_1]
+start_time = 460
+end_time = 478
+loop = false
+event = "Parry start", 10%
+event = "Parry end", 60%
+
+[hit_attack_1]
+start_time = 480
+end_time = 495
+loop = false
+
+[hit_parry]
+start_time = 497
+end_time = 521
+loop = false
+
+[Normal to fight]
+start_time = 523
+end_time = 538
+loop = false
+event = "Blade to hand", 40%
+
+[Fight to normal]
+start_time = 540
+end_time = 555
+loop = false
+event = "Blade to belt", 60%
+
+[death_1]
+start_time = 557
+end_time = 602
+loop = false

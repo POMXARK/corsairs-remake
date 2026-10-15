@@ -1,4 +1,5 @@
-// Entry point: the main menu and the scenes, the port (port.c) and the sea battle (sea.c), in the
+// Entry point: the main menu and the scenes, the port (port.c), the sea battle (sea.c) and the
+// boarding (deck.c), in the
 // world they share (world.c). The menu lives in the interface layers, the scenes in their own; the
 // hidden one is frozen, so returning to either keeps its state. Escape in a scene opens the menu,
 // "Продолжить" returns, "Новая игра" starts in the port, "Выход" (or Escape in the menu) quits.
@@ -10,6 +11,7 @@
 #include "world.c"
 #include "sea.c"
 #include "port.c"
+#include "deck.c"
 
 #define MSG_INTERFACE_INIT 45010
 #define MSG_INTERFACE_SET_NODE_USING 45016
@@ -28,7 +30,7 @@ object SaveFinder;
 string savefile_info = "";
 
 int inScene = 0;
-// "port", "sea", or "" while the game goes from one to the other
+// "port", "sea", "deck", or "" while the game goes from one to the other
 string currentScene = "";
 
 void MapKey(string controlName, int keyCode, int flags)
@@ -56,6 +58,7 @@ void Main()
 	MapKey("Game_Save", 116, 0);
 	Port_MapControls();
 	Sea_MapControls();
+	Deck_MapControls();
 	Menu_Create();
 	Trace("MENU: loaded");
 }
@@ -72,6 +75,7 @@ void Menu_Create()
 	SetEventHandler("Control Activation", "Game_Control", 0);
 	SetEventHandler("Control Deactivation", "Game_ControlUp", 0);
 	SetEventHandler("Game_Enter", "Game_Enter", 0);
+	Deck_SetHandlers();
 	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\mainmenu.ini");
 	// nothing to continue yet
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "B_CONTINUE", 0);
@@ -121,6 +125,7 @@ void Game_GoTo(string scene)
 {
 	if (currentScene == "port") { Port_Leave(); }
 	if (currentScene == "sea") { Sea_Leave(); }
+	if (currentScene == "deck") { Deck_Leave(); }
 	currentScene = "";
 	PostEvent("Game_Enter", 1, "s", scene);
 }
@@ -131,6 +136,7 @@ void Game_Enter()
 	currentScene = scene;
 	if (scene == "port") { Port_Enter(); }
 	if (scene == "sea") { Sea_Enter(); }
+	if (scene == "deck") { Deck_Enter(); }
 }
 
 void Game_ShowScene()
@@ -172,6 +178,7 @@ void Game_Control()
 	}
 	if (currentScene == "port") { Port_Control(control); }
 	if (currentScene == "sea") { Sea_Control(control); }
+	if (currentScene == "deck") { Deck_Control(control); }
 }
 
 // a held control let go: only the sea aims while the button is down
@@ -239,6 +246,7 @@ void OnLoad()
 	worldCreated = 0;
 	wavesSound = 0;
 	inPort = 0;
+	inDeck = 0;
 	dialogOpen = 0;
 	castOff = 0;
 	currentScene = "";

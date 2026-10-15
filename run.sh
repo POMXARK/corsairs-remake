@@ -22,6 +22,9 @@ python3 -I "$DEMOS/island/make_island.py" "$GAME/resource"
 python3 -I "$DEMOS/hud/make_hud.py" "$DIR/assets/ptserif" "$GAME/resource"
 # the port: quay, pier, the sailors and the dialog window (generators of the location and dialog demos)
 python3 -I "$DIR/tools/make_port.py" "$GAME/resource"
+# the boarding: the deck of «Ворон», the fencers and the saber (generators of the melee demo); after
+# the port, whose sailor textures the boarder shares
+python3 -I "$DIR/tools/make_deck.py" "$GAME/resource"
 # last: the sound demo writes its own fonts.ini, the game's fonts (with Cyrillic) replace it
 python3 -I "$DIR/tools/make_assets.py" "$DIR/assets" "$GAME/resource"
 # shaders are copied next to the engine by the build

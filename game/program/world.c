@@ -53,6 +53,11 @@ int unpaidGold = 0;
 // "", "win" or "loss": how the last battle ended
 string lastBattle = "";
 int metTom = 0;
+// the boarding (deck.c): the crew of «Ворон» when it starts, the prizes Tom has not paid for yet and
+// how the last one ended ("", "won", "lost") for his words
+int boardEnemyCrew = 0;
+int unpaidPrizes = 0;
+string lastBoarding = "";
 
 // The brig between the battles: the hull in percent, the sailors and the balls in the hold. The sea
 // battle starts from them and writes them back; Tom sells repairs, sailors and balls for gold.
@@ -80,6 +85,9 @@ void Game_ResetState()
 	unpaidGold = 0;
 	lastBattle = "";
 	metTom = 0;
+	boardEnemyCrew = 0;
+	unpaidPrizes = 0;
+	lastBoarding = "";
 	shipHull = SHIP_HULL;
 	shipCrew = SHIP_CREW;
 	shipBalls = START_BALLS;
