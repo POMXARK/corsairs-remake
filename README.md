@@ -2,13 +2,16 @@
 
 Game content for a remaster of *Corsairs* on [Storm Engine](https://github.com/POMXARK/storm-engine).
 The engine lives in the `engine/` submodule; this repository holds only the game: scripts, interface
-and text configs, and tools that build textures and fonts from free assets (see [CREDITS.md](CREDITS.md)).
+and text configs, and the assets built from free sources (see [CREDITS.md](CREDITS.md)). The built assets
+are committed, so the game runs right after clone; `run.sh` rebuilds them (the output is the same).
 
 ```
 engine/   Storm Engine fork (submodule, branch miniaudio-sound)
-game/     game folder the engine runs in: engine.ini, program/ (scripts), resource/ (ini, generated textures)
-tools/    fetch_assets.sh — downloads free assets; make_assets.py — converts them to .tx textures and fonts.ini;
-          make_scene.py — generates the deck scene (.gm models, wood textures)
+assets/   downloaded free assets: fonts, the menu background
+game/     game folder the engine runs in: engine.ini, program/ (menu.c — the menu, sea.c — the sea battle),
+          resource/ (ini, built textures, models, sounds)
+tools/    fetch_assets.sh — downloads free assets; make_assets.py — converts them to .tx textures and fonts.ini.
+          The sea battle assets come from the generators of the engine demos (engine/demos/*/make_*.py)
 ```
 
 ## Run (Linux)
@@ -21,6 +24,19 @@ git clone --recursive https://github.com/POMXARK/corsairs-remake.git
 
 Arrow keys / mouse select a menu item, Enter or a click activates it, Escape or «Выход» quits.
 
-«Новая игра» opens the first scene, a ship deck with cargo: the mouse looks around, W/S move
-(Shift, Ctrl to speed up). Escape returns to the menu without losing anything — the scene is only
-frozen, and «Продолжить» brings it back as it was; «Новая игра» starts it over.
+«Новая игра» starts a sea battle built from the engine demos: our brig «Ласточка» against the AI brig
+«Ворон» near an island, with the HUD — navigator (compass, wind, speeds, the enemy on the minimap), the
+ship panel (hull, sails, crew, cannon reload) and the battle log in Russian.
+
+| Key | Action |
+|---|---|
+| W / S | raise / lower the sails |
+| A / D | turn |
+| mouse | look around |
+| Space | broadside: the loaded side that faces the enemy fires |
+| Z / X | zoom the minimap in / out |
+| R | new battle |
+| Escape | menu |
+
+The menu does not lose the battle — the scene is only frozen, and «Продолжить» brings it back as it was;
+«Новая игра» starts a new one.

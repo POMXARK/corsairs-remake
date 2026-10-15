@@ -1,10 +1,7 @@
-assets/
-game/resource/textures/
-game/resource/models/
+# shaders: run.sh links them from the engine build
 game/resource/techniques
-game/resource/ini/fonts.ini
-game/resource/sounds/
-game/resource/ini/aliases/
+# written by the engine while it runs: foam cache, logs
+*.zap
 game/engine.out
 *.log
 *.dxvk-cache

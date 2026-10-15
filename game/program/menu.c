@@ -1,9 +1,9 @@
-// Entry point: the main menu and switching between it and the scene (scene.c).
+// Entry point: the main menu and switching between it and the scene (sea.c, the sea battle).
 // The menu lives in the interface layers, the scene in its own; the hidden one is frozen,
 // so returning to either keeps its state. Escape in the scene opens the menu,
-// "Продолжить" returns, "Новая игра" restarts the scene, "Выход" (or Escape in the menu) quits.
+// "Продолжить" returns, "Новая игра" starts a new battle, "Выход" (or Escape in the menu) quits.
 
-#include "scene.c"
+#include "sea.c"
 
 #define MSG_INTERFACE_INIT 45010
 #define MSG_INTERFACE_SET_NODE_USING 45016
@@ -46,7 +46,6 @@ void Main()
 	SetEventHandler("ievnt_command", "Menu_Command", 0);
 	SetEventHandler("exitCancel", "Menu_Quit", 0);
 	SetEventHandler("Control Activation", "Game_Control", 0);
-	SetEventHandler("frame", "Game_Frame", 0);
 	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\mainmenu.ini");
 	// nothing to continue yet
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "B_CONTINUE", 0);
@@ -99,21 +98,19 @@ void Game_ShowMenu()
 	Trace("MENU: shown");
 }
 
-void Game_Frame()
-{
-	if (inScene != 0)
-	{
-		Scene_Update(GetDeltaTime() * 0.001);
-	}
-}
-
 void Game_Control()
 {
 	string control = GetEventData();
-	if (inScene != 0 && control == "Scene_Menu")
+	if (inScene == 0)
+	{
+		return;
+	}
+	if (control == "Scene_Menu")
 	{
 		Game_ShowMenu();
+		return;
 	}
+	Scene_Control(control);
 }
 
 void Menu_Quit()
