@@ -1,7 +1,7 @@
 #!/bin/bash
 # Runs the game: downloads free assets, builds the port and sea battle assets with the generators of the engine
 # demos (engine/demos), converts the menu assets (.tx textures, fonts.ini) and starts the engine in game/.
-# Usage: run.sh <path to built engine executable>
+# Usage: run.sh <path to built engine executable> [engine options, e.g. --editor]
 # The engine is built from the engine/ submodule (see engine/LINUX_BUILD or the fork README).
 set -euo pipefail
 ENGINE="$(realpath "$1")"
@@ -37,4 +37,4 @@ mkdir -p "$GAME/save"
 
 # the engine indexes resources by scanning the working directory, so it runs from game/
 cd "$GAME"
-exec "$ENGINE"
+exec "$ENGINE" "${@:2}"

@@ -54,8 +54,28 @@ port Tom pays 500 pesos → F5 → the menu → «Загрузить» brings th
 ```bash
 git clone --recursive https://github.com/POMXARK/corsairs-remake.git
 # build the engine from engine/ (Linux build notes are in the engine fork), then:
-./run.sh <path to built engine executable>
+./run.sh <path to built engine executable> [--editor]
 ```
+
+## Run (Windows 11)
+
+Visual Studio 2022 (or its Build Tools) with «Desktop development with C++», Python 3 with
+`pip install conan==2.12.2 Pillow`, then `conan profile detect`. In **Developer PowerShell for VS 2022**:
+
+```powershell
+git clone --recursive https://github.com/POMXARK/corsairs-remake.git
+cd corsairs-remake\engine
+cmake --preset=default "-DSTORM_EXTRA_MODULES=$PWD\..\editor"
+cmake --build --preset=debug
+cd ..
+.\run.bat --editor
+```
+
+The engine is the `engine/` submodule: no separate clone of storm-engine is needed. `run.bat` (or
+`run.ps1`) does what `run.sh` does and takes `engine\build\default\Debug\engine.exe` when no engine path
+is given; double-clicking it works too.
+The common errors of the first build (Conan not found, Visual Studio 2019 picked, `cmake` from the wrong
+folder) are in `engine/docs/ru/08-linux-build.md`, section 11. Not tested on Windows yet.
 
 Arrow keys / mouse select a menu item, Enter or a click activates it, Escape or «Выход» quits.
 
@@ -175,8 +195,8 @@ F5 in the port saves the game to `game/save/game.sav` (gold, wins, the brig, the
 and run the game with `--editor`:
 
 ```bash
-cmake ../storm-engine -DSTORM_EXTRA_MODULES=<this repo>/editor   # in the engine build directory
-cd game && <engine> --editor                                      # after run.sh has built the assets
+cd engine && cmake --preset=default -DSTORM_EXTRA_MODULES=$PWD/../editor   # the full path of editor/
+cd .. && ./run.sh <engine> --editor                                       # Windows: run.bat --editor
 ```
 
 **Market** (Developer Tools → Tools) shows the tables of `game/program/market.c` in the running game:
