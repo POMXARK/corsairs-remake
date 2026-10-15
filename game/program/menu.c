@@ -70,6 +70,7 @@ void Menu_Create()
 	SetEventHandler("ievnt_command", "Menu_Command", 0);
 	SetEventHandler("exitCancel", "Menu_Quit", 0);
 	SetEventHandler("Control Activation", "Game_Control", 0);
+	SetEventHandler("Control Deactivation", "Game_ControlUp", 0);
 	SetEventHandler("Game_Enter", "Game_Enter", 0);
 	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\mainmenu.ini");
 	// nothing to continue yet
@@ -171,6 +172,13 @@ void Game_Control()
 	}
 	if (currentScene == "port") { Port_Control(control); }
 	if (currentScene == "sea") { Sea_Control(control); }
+}
+
+// a held control let go: only the sea aims while the button is down
+void Game_ControlUp()
+{
+	string control = GetEventData();
+	if (currentScene == "sea") { Sea_ControlUp(control); }
 }
 
 void Menu_Quit()

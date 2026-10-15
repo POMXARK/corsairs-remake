@@ -60,6 +60,8 @@ At sea:
 | W / S | raise / lower the sails |
 | A / D | turn |
 | mouse | look around |
+| right mouse button, held | aim: the water the balls of the side past the ship reach (gold — the enemy is in it, red — still loading) |
+| T | the camera keeps the enemy in view past our ship (on at the start) / turns freely |
 | Space | broadside: the loaded side that faces the enemy fires |
 | Z / X | zoom the minimap in / out |
 | R | new battle |

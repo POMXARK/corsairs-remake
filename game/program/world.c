@@ -118,11 +118,14 @@ void World_Ambient(int on)
 	}
 }
 
-// the sea calms in the harbour, where the deck is 1.5 m over the water, and rises in the open sea
-void World_Waves(float amp1, float amp2)
+// The sea calms in the harbour, where the deck is 1.5 m over the water, and rises in the open sea.
+// The entity applies Amp1/Amp2 only when MaxSeaHeight is written, scaling them down to fit it: a
+// new amplitude alone keeps the old waves.
+void World_Waves(float amp1, float amp2, float maxHeight)
 {
 	Sea.Sea2.Amp1 = amp1;
 	Sea.Sea2.Amp2 = amp2;
+	Sea.MaxSeaHeight = maxHeight;
 }
 
 void CreateWeather()

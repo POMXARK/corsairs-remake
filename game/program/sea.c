@@ -51,6 +51,8 @@
 #define SCATTER 0.04
 #define HULL 100
 #define HULL_HIT_DAMAGE 4
+// the "Raven" is lighter built: three full broadsides of six guns sink her, the battle stays short
+#define ENEMY_HIT_DAMAGE 6
 // a blow on the shore costs this much hull per knot of the impact
 #define GROUND_DAMAGE 2.0
 // a ship resting on the shore under sail keeps touching it at ~0.5 kn: not a blow
@@ -113,6 +115,9 @@ void Sea_MapControls()
 	MapKey("Sea_Fire", 32, 0);
 	MapKey("Sea_NewBattle", 82, 0);
 	MapKey("Sea_ToPort", 13, 0);
+	MapKey("Sea_CameraTarget", 84, 0);
+	// the right mouse button, held
+	MapKey("Sea_Aim", 2, 0);
 	// read every frame while held: the minimap zooms smoothly
 	MapKey("MiniMapZoomIn", 90, 0);
 	MapKey("MiniMapZoomOut", 88, 0);
@@ -122,7 +127,7 @@ void Sea_MapControls()
 // there already; the island, the ships and the HUD are made here and deleted by Sea_Leave.
 void Sea_Enter()
 {
-	World_Waves(1.8, 0.6);
+	World_Waves(1.8, 0.6, 50.0);
 	World_Ambient(0);
 	World_Music("music\battle.wav");
 	shots = 0;
@@ -231,7 +236,8 @@ void CreateSeaAI()
 {
 	CreateEntity(&AISea, "SEA_AI");
 	LayerAddObject(EXECUTE, &AISea, 0);
-	LayerAddObject(REALIZE, &AISea, 0);
+	// after the sky and the sea: the aim lines are drawn without the depth test and would be painted over
+	LayerAddObject(REALIZE, &AISea, 65531);
 }
 
 // SEA_AI and its two groups: the player alone south of the island, the enemy north of it. A
@@ -450,12 +456,22 @@ void Sea_HullHit()
 	if (index == sti(Enemy.index))
 	{
 		hits++;
-		DamageHull(&Enemy, HULL_HIT_DAMAGE, "Попадание! Корпус врага ");
+		KillCrew(&Enemy);
+		DamageHull(&Enemy, ENEMY_HIT_DAMAGE, "Попадание! Корпус врага ");
 	}
 	else
 	{
+		KillCrew(&Player);
 		DamageHull(&Player, HULL_HIT_DAMAGE, "В нас попали! Корпус ");
 	}
+}
+
+// a ball through the hull takes 1 to 3 sailors: the number on the ship panel goes down with the bar
+void KillCrew(ref character)
+{
+	int crew = sti(character.Ship.Crew.quantity) - 1 - rand(2);
+	if (crew < 0) { crew = 0; }
+	character.Ship.Crew.quantity = crew;
 }
 
 void DamageHull(ref character, float damage, string message)
@@ -832,6 +848,8 @@ void CreateCamera()
 	ShipCamera.MaxHeightOnShip = 5.0;
 	ShipCamera.InvertMouseX = 1.0;
 	ShipCamera.InvertMouseY = -1.0;
+	// the camera swings behind our ship, away from the enemy, and keeps him in view past the stern
+	ShipCamera.Target = sti(Enemy.index);
 	SendMessage(&SeaCameras, "lia", AI_CAMERAS_SET_CAMERA, &ShipCamera, &Player);
 	SendMessage(&Scene, "si", "SetActiveCamera", &ShipCamera);
 }
@@ -877,5 +895,25 @@ void Sea_Control(string control)
 		if (playerBroadsides == before) { Log("Ни один заряженный борт не смотрит на врага"); }
 	}
 	if (control == "Sea_NewBattle") { Sea_NewBattle(); }
+	// SEA_AI tints the water the balls of the side past the ship can reach
+	if (control == "Sea_Aim") { Player.Ship.Cannons.Aim = 1; }
+	if (control == "Sea_CameraTarget")
+	{
+		if (sti(ShipCamera.Target) < 0)
+		{
+			ShipCamera.Target = sti(Enemy.index);
+			Log("Камера следит за врагом");
+		}
+		else
+		{
+			ShipCamera.Target = -1;
+			Log("Камера свободна");
+		}
+	}
 	if (control == "Sea_ToPort" && battleOver) { Game_GoTo("port"); }
+}
+
+void Sea_ControlUp(string control)
+{
+	if (control == "Sea_Aim") { Player.Ship.Cannons.Aim = 0; }
 }

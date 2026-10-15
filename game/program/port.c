@@ -84,7 +84,7 @@ void Port_MapControls()
 // quay by the warehouse, a return from the sea on the pier by the brig.
 void Port_Enter()
 {
-	World_Waves(1.0, 0.4);
+	World_Waves(0.4, 0.2, 0.6);
 	World_Ambient(1);
 	World_Music("music\calm.wav");
 
