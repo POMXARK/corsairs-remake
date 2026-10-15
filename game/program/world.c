@@ -55,9 +55,18 @@ int metTom = 0;
 #define SHIP_HULL 100
 #define SHIP_CREW 96
 #define START_BALLS 60
+#define START_KNIPPELS 12
+#define START_GRAPES 12
+// the charges: round shot breaks the hull, chain shot tears the sails, grape shot kills the crew
+#define CHARGE_BALLS 0
+#define CHARGE_KNIPPELS 1
+#define CHARGE_GRAPES 2
 int shipHull = SHIP_HULL;
 int shipCrew = SHIP_CREW;
 int shipBalls = START_BALLS;
+int shipKnippels = START_KNIPPELS;
+int shipGrapes = START_GRAPES;
+int shipCharge = CHARGE_BALLS;
 
 void Game_ResetState()
 {
@@ -69,6 +78,38 @@ void Game_ResetState()
 	shipHull = SHIP_HULL;
 	shipCrew = SHIP_CREW;
 	shipBalls = START_BALLS;
+	shipKnippels = START_KNIPPELS;
+	shipGrapes = START_GRAPES;
+	shipCharge = CHARGE_BALLS;
+}
+
+// the charges in the hold by type, and their names as AIBalls knows them and as the log says them
+int Charge_Count(int charge)
+{
+	if (charge == CHARGE_KNIPPELS) { return shipKnippels; }
+	if (charge == CHARGE_GRAPES) { return shipGrapes; }
+	return shipBalls;
+}
+
+void Charge_Add(int charge, int count)
+{
+	if (charge == CHARGE_KNIPPELS) { shipKnippels = shipKnippels + count; return; }
+	if (charge == CHARGE_GRAPES) { shipGrapes = shipGrapes + count; return; }
+	shipBalls = shipBalls + count;
+}
+
+string Charge_Type(int charge)
+{
+	if (charge == CHARGE_KNIPPELS) { return "Knippels"; }
+	if (charge == CHARGE_GRAPES) { return "Grapes"; }
+	return "Balls";
+}
+
+string Charge_Name(int charge)
+{
+	if (charge == CHARGE_KNIPPELS) { return "книппели"; }
+	if (charge == CHARGE_GRAPES) { return "картечь"; }
+	return "ядра";
 }
 
 int worldCreated = 0;

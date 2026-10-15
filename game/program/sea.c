@@ -34,12 +34,28 @@
 #define ICON_BALLS 0
 #define ICON_SAILS_FURLED 1
 #define ICON_WIND_CALM 4
+#define ICON_KNIPPELS 7
+#define ICON_GRAPES 8
 
 #define PI 3.14159265
 // the muzzle speed of a ball in m/s and the highest elevation of the guns: together they give a
 // reach of about 250 m (AICannon::CalcMaxFireDistance): after its broadside the enemy may fall
 // back well past ATTACK_DISTANCE, a shorter reach leaves the player nothing to fire at
 #define BALL_SPEED 80.0
+// chain shot and grape shot are lighter and spread: they fly slower and so not as far
+// (the reach goes with the square of the speed: about 205 and 160 m against 250)
+#define KNIPPELS_SPEED 72.0
+#define GRAPES_SPEED 64.0
+// the guns aim this high over the waterline of the target: round shot at the hull, chain shot at
+// the sails, grape shot at the deck
+#define HULL_AIM_HEIGHT 1.5
+#define SAILS_AIM_HEIGHT 6.0
+#define DECK_AIM_HEIGHT 4.0
+// a chain shot through a sail tears this much of the sails, a round shot or grape shot this much
+#define KNIPPELS_SAIL_DAMAGE 8.0
+#define SAIL_HIT_DAMAGE 2.0
+// a ship with torn sails keeps this part of her speed at the least
+#define TORN_SAILS_SPEED 0.3
 #define GUN_ELEVATION 0.2
 #define ATTACK_DISTANCE 110.0
 // the guns of a side fire within this angle around its beam
@@ -56,6 +72,10 @@
 // the "Raven" is lighter built: two full broadsides of six guns (12 hits) sink her, the battle
 // stays short
 #define ENEMY_HIT_DAMAGE 9
+// chain shot and grape shot barely scratch the hull; grape shot takes this many sailors more
+#define KNIPPELS_HIT_DAMAGE 2
+#define GRAPES_HIT_DAMAGE 1
+#define GRAPES_CREW_KILL 5
 // what is left of a sunk brig when the harbour has raised it and fished the sailors out
 #define LOSS_HULL 30
 #define LOSS_CREW 40
@@ -119,6 +139,9 @@ void Sea_MapControls()
 	MapKey("ShipCamera_Turn_H", 256, 0);
 	MapKey("ShipCamera_Turn_V", 257, 0);
 	MapKey("Sea_Fire", 32, 0);
+	MapKey("Sea_ChargeBalls", 49, 0);
+	MapKey("Sea_ChargeKnippels", 50, 0);
+	MapKey("Sea_ChargeGrapes", 51, 0);
 	MapKey("Sea_NewBattle", 82, 0);
 	MapKey("Sea_ToPort", 13, 0);
 	MapKey("Sea_CameraTarget", 84, 0);
@@ -148,7 +171,7 @@ void Sea_Enter()
 
 	SetEventHandler("Sea_StartBattle", "Sea_StartBattle", 0);
 	Log("«Ворон» на западе! Пробел — огонь");
-	Log("Корпус " + shipHull + "%, команда " + shipCrew + ", ядер " + shipBalls);
+	Log("Корпус " + shipHull + "%, команда " + shipCrew + ". Ядра " + shipBalls + ", книппели " + shipKnippels + ", картечь " + shipGrapes + " (1/2/3)");
 	Trace("SEA: scene loaded");
 }
 
@@ -186,6 +209,16 @@ void CreateEffects()
 	AIBalls.Balls.Balls.GoodIndex = 0;
 	AIBalls.Balls.Balls.Size = 0.5;
 	AIBalls.Balls.Balls.Weight = 1.0;
+	// GoodIndex comes back in AIBalls.CurrentBallType while the balls of the type are traced: the
+	// hit handlers read it there
+	AIBalls.Balls.Knippels.SubTexIndex = 0;
+	AIBalls.Balls.Knippels.GoodIndex = CHARGE_KNIPPELS;
+	AIBalls.Balls.Knippels.Size = 0.65;
+	AIBalls.Balls.Knippels.Weight = 1.0;
+	AIBalls.Balls.Grapes.SubTexIndex = 0;
+	AIBalls.Balls.Grapes.GoodIndex = CHARGE_GRAPES;
+	AIBalls.Balls.Grapes.Size = 0.3;
+	AIBalls.Balls.Grapes.Weight = 1.0;
 	AIBalls.isDone = "";
 
 	SetEventHandler("Shp_HullHit", "Sea_HullHit", 0);
@@ -263,6 +296,7 @@ void CreateBattle()
 	Player.Ship.Name = "Ласточка";
 	Player.Ship.HP = shipHull;
 	Player.Ship.Crew.quantity = shipCrew;
+	Player.Ship.Cannons.SpeedV0 = Charge_Speed(shipCharge);
 	PrepareCharacter(&Enemy, "Enemy", 1, "EnemyGroup");
 	Enemy.Ship.Name = "Ворон";
 	Enemy.Ship.Mode = "war";
@@ -345,8 +379,24 @@ int Sea_Relation()
 int Sea_BallsNum()
 {
 	aref character = GetEventData();
-	if (sti(character.index) == sti(Player.index)) { return shipBalls; }
+	if (sti(character.index) == sti(Player.index)) { return Charge_Count(shipCharge); }
 	return 100;
+}
+
+float Charge_Speed(int charge)
+{
+	if (charge == CHARGE_KNIPPELS) { return KNIPPELS_SPEED; }
+	if (charge == CHARGE_GRAPES) { return GRAPES_SPEED; }
+	return BALL_SPEED;
+}
+
+// 1/2/3: the next broadsides fire this charge; SEA_AI reads the muzzle speed for the reach and the
+// aim zone from the character
+void Sea_SetCharge(int charge)
+{
+	shipCharge = charge;
+	Player.Ship.Cannons.SpeedV0 = Charge_Speed(charge);
+	Log("Заряжаем: " + Charge_Name(charge) + ", в трюме " + Charge_Count(charge));
 }
 
 // a short-handed crew loads slower: half the sailors, twice the time
@@ -383,7 +433,10 @@ float Sea_FireHeight()
 {
 	aref character = GetEventData();
 	aref enemy = GetEventData();
-	return 1.5;
+	if (sti(character.index) != sti(Player.index)) { return HULL_AIM_HEIGHT; }
+	if (shipCharge == CHARGE_KNIPPELS) { return SAILS_AIM_HEIGHT; }
+	if (shipCharge == CHARGE_GRAPES) { return DECK_AIM_HEIGHT; }
+	return HULL_AIM_HEIGHT;
 }
 
 // 1: a ball is rammed home
@@ -429,7 +482,7 @@ void Sea_BroadsideReloaded()
 	if (sti(character.index) != sti(Player.index) || battleOver) { return; }
 	string side = "Правый";
 	if (bort == "cannonl") { side = "Левый"; }
-	Log(side + " борт заряжен, ядер в трюме: " + shipBalls);
+	Log(side + " борт заряжен, " + Charge_Name(shipCharge) + " в трюме: " + Charge_Count(shipCharge));
 }
 
 // "afffffffff": one gun goes off. SEA_AI gives the muzzle, the heading and elevation it has aimed
@@ -447,7 +500,9 @@ void Sea_CannonFire()
 	float reach = GetEventData();
 	float rawAngle = GetEventData();
 
-	AIBalls.Type = "Balls";
+	int charge = CHARGE_BALLS;
+	if (sti(character.index) == sti(Player.index)) { charge = shipCharge; }
+	AIBalls.Type = Charge_Type(charge);
 	AIBalls.CharacterIndex = character.index;
 	AIBalls.x = x;
 	AIBalls.y = y;
@@ -468,7 +523,7 @@ void Sea_CannonFire()
 	if (sti(character.index) == sti(Player.index))
 	{
 		shots++;
-		if (shipBalls > 0) { shipBalls--; }
+		if (Charge_Count(charge) > 0) { Charge_Add(charge, -1); }
 	}
 }
 
@@ -490,20 +545,36 @@ void Sea_HullHit()
 	if (index == sti(Enemy.index))
 	{
 		hits++;
-		KillCrew(&Enemy);
+		// the type of the ball that is traced now (AIBalls sets it for each type)
+		int charge = sti(AIBalls.CurrentBallType);
+		if (charge == CHARGE_GRAPES)
+		{
+			KillCrew(&Enemy, GRAPES_CREW_KILL);
+			DamageHull(&Enemy, GRAPES_HIT_DAMAGE, "Картечь косит команду! Команда врага " + Enemy.Ship.Crew.quantity + ", корпус ");
+			return;
+		}
+		KillCrew(&Enemy, 0);
+		if (charge == CHARGE_KNIPPELS)
+		{
+			// the chain that hits the hull still sweeps the rigging over it
+			TearSails(&Enemy, KNIPPELS_SAIL_DAMAGE);
+			DamageHull(&Enemy, KNIPPELS_HIT_DAMAGE, "Книппели! Паруса врага " + makeint(stf(Enemy.Ship.SP)) + "%, корпус ");
+			return;
+		}
 		DamageHull(&Enemy, ENEMY_HIT_DAMAGE, "Попадание! Корпус врага ");
 	}
 	else
 	{
-		KillCrew(&Player);
+		KillCrew(&Player, 0);
 		DamageHull(&Player, HULL_HIT_DAMAGE, "В нас попали! Корпус ");
 	}
 }
 
 // a ball through the hull takes 1 to 3 sailors: the number on the ship panel goes down with the bar
-void KillCrew(ref character)
+// grape shot takes `extra` more on top
+void KillCrew(ref character, int extra)
 {
-	int crew = sti(character.Ship.Crew.quantity) - 1 - rand(2);
+	int crew = sti(character.Ship.Crew.quantity) - 1 - rand(2) - extra;
 	if (crew < 0) { crew = 0; }
 	character.Ship.Crew.quantity = crew;
 }
@@ -754,7 +825,7 @@ void CreateHud()
 	nav.emptyTexture = "hud\frame.tga";
 	nav.windTexture = "hud\wind.tga";
 	nav.chargeTexture = "hud\icons.tga";
-	nav.chargeTextureGreed = "4,2";
+	nav.chargeTextureGreed = "4,3";
 	nav.chargePos = "-58,128";
 	nav.chargePictureSize = "36,36";
 	nav.sailstateTexture = "hud\icons.tga";
@@ -841,6 +912,8 @@ ref Hud_GetCurrentCharge()
 	if (wind > 5.0) { windIcon = ICON_WIND_CALM + 1; }
 	if (wind > 11.0) { windIcon = ICON_WIND_CALM + 2; }
 	hudIcons[0] = ICON_BALLS;
+	if (shipCharge == CHARGE_KNIPPELS) { hudIcons[0] = ICON_KNIPPELS; }
+	if (shipCharge == CHARGE_GRAPES) { hudIcons[0] = ICON_GRAPES; }
 	hudIcons[1] = sailIcon;
 	hudIcons[2] = windIcon;
 	hudIcons[3] = 0;
@@ -859,7 +932,14 @@ void Hud_SailDamage()
 	int owner = GetEventData();
 	ref character = &Enemy;
 	if (index == sti(Player.index)) { character = &Player; }
-	float sails = stf(character.Ship.SP) - 2.0;
+	float damage = SAIL_HIT_DAMAGE;
+	if (sti(AIBalls.CurrentBallType) == CHARGE_KNIPPELS) { damage = KNIPPELS_SAIL_DAMAGE; }
+	TearSails(character, damage);
+}
+
+void TearSails(ref character, float damage)
+{
+	float sails = stf(character.Ship.SP) - damage;
 	if (sails < 0.0) { sails = 0.0; }
 	character.Ship.SP = sails;
 }
@@ -896,6 +976,12 @@ void Sea_ShipLayers()
 
 // "lf": the sails of a ship have changed: SEA_AI sets them for the enemy, the keys for the player.
 // The top speed is scaled by the sails in the ship; the turn rate is given here.
+// torn sails catch less wind: the part of the speed the sails (Ship.SP) still give
+float Sea_SailsLeft(ref character)
+{
+	return TORN_SAILS_SPEED + (1.0 - TORN_SAILS_SPEED) * stf(character.Ship.SP) / 100.0;
+}
+
 void Sea_ShipParameters()
 {
 	int index = GetEventData();
@@ -904,12 +990,12 @@ void Sea_ShipParameters()
 	if (index == sti(Player.index))
 	{
 		Player.Ship.SailState = sails;
-		Player.Ship.MaxSpeedZ = stf(BaseShip.SpeedRate);
+		Player.Ship.MaxSpeedZ = stf(BaseShip.SpeedRate) * Sea_SailsLeft(&Player);
 		Player.Ship.MaxSpeedY = turn;
 		return;
 	}
 	// the enemy sails a little slower than the player, who can run or close in
-	Enemy.Ship.MaxSpeedZ = ENEMY_SPEED;
+	Enemy.Ship.MaxSpeedZ = ENEMY_SPEED * Sea_SailsLeft(&Enemy);
 	Enemy.Ship.MaxSpeedY = turn;
 }
 
@@ -924,9 +1010,9 @@ void Sea_Control(string control)
 {
 	if (control == "Sea_Fire" && !battleOver)
 	{
-		if (shipBalls < BROADSIDE_GUNS)
+		if (Charge_Count(shipCharge) < BROADSIDE_GUNS)
 		{
-			Log("Ядра кончились! Купите у Тома в порту");
+			Log("Кончились " + Charge_Name(shipCharge) + "! 1/2/3 — другой заряд, пополнить — у Тома в порту");
 			return;
 		}
 		int before = playerBroadsides;
@@ -934,6 +1020,9 @@ void Sea_Control(string control)
 		if (playerBroadsides == before) { Log("Ни один заряженный борт не смотрит на врага"); }
 	}
 	if (control == "Sea_NewBattle") { Sea_NewBattle(); }
+	if (control == "Sea_ChargeBalls") { Sea_SetCharge(CHARGE_BALLS); }
+	if (control == "Sea_ChargeKnippels") { Sea_SetCharge(CHARGE_KNIPPELS); }
+	if (control == "Sea_ChargeGrapes") { Sea_SetCharge(CHARGE_GRAPES); }
 	// SEA_AI tints the water the balls of the side past the ship can reach
 	if (control == "Sea_Aim") { Player.Ship.Cannons.Aim = 1; }
 	if (control == "Sea_CameraTarget")

@@ -397,19 +397,24 @@ void Dialog_Node(string node)
 	if (node == "shop") { Shop_Show("Что нужно, капитан?"); return; }
 	if (node == "repair" || node == "repair2") { Shop_Repair(); return; }
 	if (node == "hire" || node == "hire2") { Shop_Hire(); return; }
-	if (node == "balls" || node == "balls2") { Shop_Balls(); return; }
+	if (node == "balls" || node == "balls2") { Shop_Charge(CHARGE_BALLS); return; }
+	if (node == "knippels" || node == "knippels2") { Shop_Charge(CHARGE_KNIPPELS); return; }
+	if (node == "grapes" || node == "grapes2") { Shop_Charge(CHARGE_GRAPES); return; }
 	Trace("PORT: unknown node " + node);
 	Dialog_Leave();
 }
 
 // ---------------------------------------------------------------- Tom's shop
 
-// the prices in pesos: a percent of the hull, a sailor, a lot of balls
+// the prices in pesos: a percent of the hull, a sailor, a lot of each charge; the hold takes
+// MAX_CHARGES of all of them
 #define REPAIR_PRICE 4
 #define SAILOR_PRICE 5
-#define BALLS_LOT 30
+#define CHARGE_LOT 30
 #define BALLS_PRICE 60
-#define MAX_BALLS 180
+#define KNIPPELS_PRICE 75
+#define GRAPES_PRICE 45
+#define MAX_CHARGES 240
 
 // what the shop can still sell: a missing hull percent or sailor costs its price, the lot is whole
 int Shop_RepairCost() { return (SHIP_HULL - shipHull) * REPAIR_PRICE; }
@@ -417,11 +422,25 @@ int Shop_HireCost() { return (SHIP_CREW - shipCrew) * SAILOR_PRICE; }
 
 void Shop_Show(string reply)
 {
-	Say(reply + " Корпус " + shipHull + "%, команды " + shipCrew + " из " + SHIP_CREW + ", ядер " + shipBalls + ". В кошельке " + gold + " песо.");
+	Say(reply + " Корпус " + shipHull + "%, команды " + shipCrew + " из " + SHIP_CREW + ". В трюме ядра " + shipBalls + ", книппели " + shipKnippels + ", картечь " + shipGrapes + ". В кошельке " + gold + " песо.");
 	if (shipHull < SHIP_HULL) { Answer("l1", "Залатать корпус (" + Shop_RepairCost() + " песо)", "repair"); }
 	if (shipCrew < SHIP_CREW) { Answer("l2", "Нанять матросов (" + Shop_HireCost() + " песо)", "hire"); }
-	if (shipBalls < MAX_BALLS) { Answer("l3", BALLS_LOT + " ядер (" + BALLS_PRICE + " песо)", "balls"); }
-	Answer("l4", "Хватит.", "again");
+	if (Shop_HoldFree())
+	{
+		Answer("l3", CHARGE_LOT + " ядер — корпус (" + BALLS_PRICE + " песо)", "balls");
+		Answer("l4", CHARGE_LOT + " книппелей — паруса (" + KNIPPELS_PRICE + " песо)", "knippels");
+		Answer("l5", CHARGE_LOT + " картечи — команда (" + GRAPES_PRICE + " песо)", "grapes");
+	}
+	Answer("l6", "Хватит.", "again");
+}
+
+int Shop_HoldFree() { return shipBalls + shipKnippels + shipGrapes + CHARGE_LOT <= MAX_CHARGES; }
+
+int Shop_ChargePrice(int charge)
+{
+	if (charge == CHARGE_KNIPPELS) { return KNIPPELS_PRICE; }
+	if (charge == CHARGE_GRAPES) { return GRAPES_PRICE; }
+	return BALLS_PRICE;
 }
 
 // as much as the gold pays for: a part of the work is better than none
@@ -448,11 +467,13 @@ void Shop_Hire()
 	Shop_Show("Нанял " + sailors + " человек в таверне.");
 }
 
-void Shop_Balls()
+void Shop_Charge(int charge)
 {
-	if (gold < BALLS_PRICE) { Shop_Show("На ядра не хватает, капитан."); return; }
-	gold = gold - BALLS_PRICE;
-	shipBalls = shipBalls + BALLS_LOT;
-	Trace("PORT: balls " + shipBalls + ", gold " + gold);
-	Shop_Show("Ядра в трюме.");
+	int price = Shop_ChargePrice(charge);
+	if (gold < price) { Shop_Show("Не хватает, капитан: " + Charge_Name(charge) + " стоят " + price + " песо."); return; }
+	if (!Shop_HoldFree()) { Shop_Show("Трюм полон."); return; }
+	gold = gold - price;
+	Charge_Add(charge, CHARGE_LOT);
+	Trace("PORT: " + Charge_Type(charge) + " " + Charge_Count(charge) + ", gold " + gold);
+	Shop_Show("Погрузили: " + Charge_Name(charge) + ".");
 }

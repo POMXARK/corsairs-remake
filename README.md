@@ -42,11 +42,19 @@ an island, with the HUD — navigator (compass, wind, speeds, the enemy on the m
 (hull, sails, crew, cannon reload) and the battle log in Russian. After the battle Enter returns to the
 port, where Tom pays 500 pesos for every «Ворон» sunk: two full broadsides that hit sink her.
 
-The brig keeps her state between the battles: the hull, the crew and the balls in the hold (60 at the
-start, a broadside takes 6; with no balls left the guns are silent). A short-handed crew loads slower:
+The brig keeps her state between the battles: the hull, the crew and the charges in the hold (a
+broadside takes 6; with none of the loaded kind left the guns are silent). There are three charges,
+switched with 1 / 2 / 3, the HUD icon shows the loaded one:
+
+| Charge | Start | Reach | What it does |
+|---|---|---|---|
+| round shot | 60 | 250 m | breaks the hull: two broadsides that hit sink «Ворон» |
+| chain shot | 12 | ~205 m | aimed at the rigging, tears the sails; torn sails slow the ship down to 30% of her speed |
+| grape shot | 12 | ~160 m | aimed at the deck, kills the crew; a short-handed «Ворон» reloads slower |
+ A short-handed crew loads slower:
 half the sailors, twice the time. A sunk «Ласточка» is raised by the harbour with 30% of the hull and
 at least 40 sailors. Tom's «Корабль и припасы» sells what is missing for gold: the hull at 4 pesos a
-percent, sailors at 5 pesos each, 30 balls for 60 pesos (up to 180 in the hold); without enough gold
+percent, sailors at 5 pesos each, 30 round shot for 60 pesos, 30 chain shot for 75, 30 grape shot for 45 (up to 240 charges in the hold); without enough gold
 he repairs and hires as much as it pays for.
 
 In the port:
@@ -71,6 +79,7 @@ At sea:
 | right mouse button, held | aim: the water the balls of the side past the ship reach (gold — the enemy is in it, red — still loading) |
 | T | the camera keeps the enemy in view past our ship (on at the start) / turns freely |
 | Space | broadside: the loaded side that faces the enemy fires |
+| 1 / 2 / 3 | load round shot / chain shot / grape shot |
 | Z / X | zoom the minimap in / out |
 | R | new battle |
 | Enter | back to the port, when the battle is over |
