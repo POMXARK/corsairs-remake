@@ -22,22 +22,22 @@ tools/    fetch_assets.sh — downloads free assets; make_assets.py — converts
 
 [![Boarding: the captain and his sailors against the pirates on the deck of «Ворон»](media/boarding.jpg)](media/boarding.mp4)
 
-Boarding (70 s, with sound): Tom sends the captain out → «Ворон» comes out of the cannonade wrecked and the
+Boarding (65 s, with sound): Tom sends the captain out → «Ворон» comes out of the cannonade wrecked and the
 grapnels go over (the gunnery is cut from this run) → on his deck the captain and three sailors cut down four
 pirates → back in the port Tom pays the bounty and the prize money, 800 pesos.
 
 [![The third slice: Tom's shop, chain shot, grape shot and round shot against «Ворон»](media/third-slice.jpg)](media/third-slice.mp4)
 
-The third slice (132 s, with sound): in the port Tom sells chain shot and grape shot → out to sea → two
+The third slice (117 s, with sound): in the port Tom sells chain shot and grape shot → out to sea → two
 broadsides of chain shot tear the enemy's sails and slow her down, grape shot thins her crew, round shot
 sinks her (the battle is shown 4× faster) → back in the port Tom pays the 500 pesos → the carpenters patch
 the hull for the next fight.
 
 [![The second slice: the port, Tom, the battle with «Ворон», the reward, saving and loading](media/second-slice.jpg)](media/second-slice.mp4)
 
-A scripted run of the whole slice (130 s, with sound): «Новая игра» → the captain runs along the pier to
+A scripted run of the whole slice (91 s, with sound): «Новая игра» → the captain runs along the pier to
 Tom → the conversation → out to sea → a fair battle, both brigs led by the AI, the camera on «Ворон» and
-the aim zone on the water (shown 4× faster: three minutes of broadsides until «Ворон» sinks) → back in the
+the aim zone on the water (shown 4× faster: broadsides until «Ворон» sinks) → back in the
 port Tom pays 500 pesos → F5 → the menu → «Загрузить» brings the game back with 600 pesos.
 
 ## Run (Linux)
