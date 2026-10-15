@@ -197,3 +197,10 @@ editable. Red is an answer to no node, grey a node nothing leads to; green is th
 The editor font with Cyrillic is set in `game/engine.ini`, `[editor] font` (PT Serif, OFL).
 
 ![The window Dialog: the node "shop" on the screen](media/editor-dialog.jpg)
+
+**Map** draws the world map from above: the islands and their waters (read from the generator of the map,
+`engine/demos/worldmap/make_worldmap.py`), the ports, the start of a new game (`Map_Home` of `map.c`), and
+while the map is shown the brig, «Ворон» and the storms. A click moves the brig there, a right click the
+start; **Save to map.c** writes the start. **Now** by the timers brings «Ворон» or a storm at once.
+
+![The window Map: the brig moved off the start, «Ворон» after her, a storm](media/editor-map.jpg)
