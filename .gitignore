@@ -10,3 +10,5 @@ game/save/
 # the simulator: Python caches
 __pycache__/
 .pytest_cache/
+# the engine logs the economy tests replay
+!economy/tests/fixtures/*.log
