@@ -60,10 +60,16 @@
 #define KNIPPELS_RIGGING_DAMAGE 5.0
 // a ship with torn sails keeps this part of her speed at the least
 #define TORN_SAILS_SPEED 0.3
+// SAIL punches one visible hole per this many torn percent (msg_control.h: the script processing
+// message of SAIL, its "RandomSailsDmg" asks evntRandomSailDmg how much a hole takes)
+#define SAIL_HOLE_STEP 4.0
+#define MSG_SAIL_SCRIPT_PROCESSING 40099
 #define GUN_ELEVATION 0.2
 #define ATTACK_DISTANCE 110.0
 // the guns of a side fire within this angle around its beam
 #define FIRE_ZONE 1.4
+// the two chasers at the bow and at the stern (make_ship.py) fire in a narrow arc along the keel
+#define CHASER_ZONE 0.6
 #define RELOAD_TIME 8.0
 // the guns of a side (the locators of make_ship.py): a broadside takes this many balls
 #define BROADSIDE_GUNS 6
@@ -128,8 +134,9 @@ object Enemy;
 object SailTextures;
 // the HUD: the navigator and the ship panel
 object BattleInterface;
-// what GetCurrentCharge returns: the icons of the charge, the sails and the wind, the powder
-int hudIcons[5];
+// what GetCurrentCharge returns: the icons of the charge, the sails and the wind, the powder, and
+// the charges left, printed under the charge icon
+int hudIcons[6];
 
 int battleOver = 0;
 // the broadsides of the player; Ship_Bort_Fire comes inside the fire message, so a key press that
@@ -336,6 +343,7 @@ void PrepareCharacter(ref character, string id, int index, string group)
 	character.Ship.HP = HULL;
 	character.Ship.SP = 100;
 	character.Ship.Torn = 0;
+	character.Ship.Holes = 0;
 	character.Ship.SailState = 1.0;
 	character.Ship.Crew.quantity = SHIP_CREW;
 	character.Ship.Grounded = 0;
@@ -481,14 +489,13 @@ void Sea_BroadsideFired()
 	int index = GetEventData();
 	int ship = GetEventData();
 	string bort = GetEventData();
-	string side = "правым";
-	if (bort == "cannonl") { side = "левым"; }
+	string side = Bort_Name(bort, "правым бортом", "левым бортом", "с носа", "с кормы");
 	if (index == sti(Player.index))
 	{
 		playerBroadsides++;
-		Log("Залп " + side + " бортом!");
+		Log("Залп " + side + "!");
 	}
-	else { Log("Враг даёт залп " + side + " бортом!"); }
+	else { Log("Враг даёт залп " + side + "!"); }
 	Trace("SEA: " + index + " fires " + bort);
 }
 
@@ -498,9 +505,17 @@ void Sea_BroadsideReloaded()
 	aref character = GetEventData();
 	string bort = GetEventData();
 	if (sti(character.index) != sti(Player.index) || battleOver) { return; }
-	string side = "Правый";
-	if (bort == "cannonl") { side = "Левый"; }
-	Log(side + " борт заряжен, " + Charge_Name(shipCharge) + " в трюме: " + Charge_Count(shipCharge));
+	string side = Bort_Name(bort, "Правый борт", "Левый борт", "Нос", "Корма");
+	Log(side + " заряжен, " + Charge_Name(shipCharge) + " в трюме: " + Charge_Count(shipCharge));
+}
+
+// the name of a side in the log, by the label group of its guns
+string Bort_Name(string bort, string right, string left, string bow, string stern)
+{
+	if (bort == "cannonl") { return left; }
+	if (bort == "cannonf") { return bow; }
+	if (bort == "cannonb") { return stern; }
+	return right;
 }
 
 // "afffffffff": one gun goes off. SEA_AI gives the muzzle, the heading and elevation it has aimed
@@ -785,6 +800,14 @@ void CreateSail()
 	BaseShip.Cannons.Borts.cannonr.FireDir = PI * 0.5;
 	BaseShip.Cannons.Borts.cannonr.FireAngMin = -0.1;
 	BaseShip.Cannons.Borts.cannonr.FireAngMax = GUN_ELEVATION;
+	BaseShip.Cannons.Borts.cannonf.FireZone = CHASER_ZONE;
+	BaseShip.Cannons.Borts.cannonf.FireDir = 0.0;
+	BaseShip.Cannons.Borts.cannonf.FireAngMin = -0.1;
+	BaseShip.Cannons.Borts.cannonf.FireAngMax = GUN_ELEVATION;
+	BaseShip.Cannons.Borts.cannonb.FireZone = CHASER_ZONE;
+	BaseShip.Cannons.Borts.cannonb.FireDir = PI;
+	BaseShip.Cannons.Borts.cannonb.FireAngMin = -0.1;
+	BaseShip.Cannons.Borts.cannonb.FireAngMax = GUN_ELEVATION;
 
 	SetEventHandler("SeaGetLayers", "Sea_ShipLayers", 0);
 	SetEventHandler("Shp_UpdParams", "Sea_ShipParameters", 0);
@@ -833,15 +856,15 @@ void CreateHud()
 	nav.argbReadyCannonColor = argb(255, 90, 220, 90);
 	nav.argbChargeCannonColor = argb(255, 230, 170, 40);
 	nav.argbDamageCannonColor = argb(255, 200, 40, 30);
-	// the sides of the ship: port and starboard, no guns at the bow and the stern
+	// the sides of the ship: port and starboard, and the narrow arcs of the bow and stern chasers
 	nav.leftChargeBegAngle = 220;
 	nav.leftChargeEndAngle = 320;
 	nav.rightChargeBegAngle = 140;
 	nav.rightChargeEndAngle = 40;
-	nav.forwardChargeBegAngle = 0;
-	nav.forwardChargeEndAngle = 0;
-	nav.backwardChargeBegAngle = 0;
-	nav.backwardChargeEndAngle = 0;
+	nav.forwardChargeBegAngle = -25;
+	nav.forwardChargeEndAngle = 25;
+	nav.backwardChargeBegAngle = 155;
+	nav.backwardChargeEndAngle = 205;
 	nav.speedShowFont = "interface_normal";
 	nav.fontScale = 0.8;
 	// the speeds go in the row of the icons, outside the rim the compass letters turn on
@@ -925,6 +948,7 @@ void CreateHud()
 
 	SetEventHandler("GetCurrentCharge", "Hud_GetCurrentCharge", 0);
 	SetEventHandler("ShpSailDamage", "Hud_SailDamage", 0);
+	SetEventHandler("evntRandomSailDmg", "Sea_RandomSailHole", 0);
 }
 
 // Asked by the navigator every frame: the cells of the icons of the charge, the sails and the wind
@@ -948,6 +972,7 @@ ref Hud_GetCurrentCharge()
 	hudIcons[2] = windIcon;
 	hudIcons[3] = 0;
 	hudIcons[4] = 0;
+	hudIcons[5] = Charge_Count(shipCharge);
 	return &hudIcons;
 }
 
@@ -975,6 +1000,20 @@ void TearSails(ref character, float damage)
 	if (torn > 100.0) { torn = 100.0; }
 	character.Ship.Torn = torn;
 	character.Ship.SP = 100.0 - torn;
+	// the holes SAIL draws follow the torn part
+	int holes = sti(character.Ship.Holes);
+	while (holes < makeint(torn / SAIL_HOLE_STEP))
+	{
+		SendMessage(&Sail, "lslf", MSG_SAIL_SCRIPT_PROCESSING, "RandomSailsDmg", sti(character.index), 1.0);
+		holes++;
+	}
+	character.Ship.Holes = holes;
+}
+
+// "lslfflll" from RandomSailsDmg: the whole damage goes into one hole
+float Sea_RandomSailHole()
+{
+	return 1.0;
 }
 
 // every frame, after SAIL: the panel draws Ship.SP

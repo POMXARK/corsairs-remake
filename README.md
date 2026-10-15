@@ -54,7 +54,9 @@ more for him (the fifth and the later ones — 1500).
 
 The brig keeps her state between the battles: the hull, the crew and the charges in the hold (a
 broadside takes 6; with none of the loaded kind left the guns are silent). There are three charges,
-switched with 1 / 2 / 3, the HUD icon shows the loaded one:
+switched with 1 / 2 / 3, the HUD icon shows the loaded one and the number left under it.
+Both brigs carry guns on four sides: port and starboard broadsides and two narrow arcs of the bow and
+stern chasers. Torn sails show holes, one for every 4% of the damage:
 
 | Charge | Start | Reach | What it does |
 |---|---|---|---|
