@@ -43,17 +43,21 @@
 // back well past ATTACK_DISTANCE, a shorter reach leaves the player nothing to fire at
 #define BALL_SPEED 80.0
 // chain shot and grape shot are lighter and spread: they fly slower and so not as far
-// (the reach goes with the square of the speed: about 205 and 160 m against 250)
+// (the reach goes with the square of the speed: about 205 and 180 m against 250)
 #define KNIPPELS_SPEED 72.0
-#define GRAPES_SPEED 64.0
+#define GRAPES_SPEED 68.0
 // the guns aim this high over the waterline of the target: round shot at the hull, chain shot at
-// the sails, grape shot at the deck
+// the bulwark under the sails, grape shot at the deck. Aimed higher, at a long distance the balls
+// pass over the hull and seldom catch a sail: a chain shot at 6 m hit 0 of 48 times
 #define HULL_AIM_HEIGHT 1.5
-#define SAILS_AIM_HEIGHT 6.0
-#define DECK_AIM_HEIGHT 4.0
+#define SAILS_AIM_HEIGHT 3.0
+#define DECK_AIM_HEIGHT 2.5
 // a chain shot through a sail tears this much of the sails, a round shot or grape shot this much
-#define KNIPPELS_SAIL_DAMAGE 8.0
-#define SAIL_HIT_DAMAGE 2.0
+// (a ball passes several sails, each is a hit); a chain shot that hits the hull sweeps the rigging
+// over it for KNIPPELS_RIGGING_DAMAGE
+#define KNIPPELS_SAIL_DAMAGE 2.5
+#define SAIL_HIT_DAMAGE 0.5
+#define KNIPPELS_RIGGING_DAMAGE 5.0
 // a ship with torn sails keeps this part of her speed at the least
 #define TORN_SAILS_SPEED 0.3
 #define GUN_ELEVATION 0.2
@@ -331,6 +335,7 @@ void PrepareCharacter(ref character, string id, int index, string group)
 	character.SeaAI.Group.Name = group;
 	character.Ship.HP = HULL;
 	character.Ship.SP = 100;
+	character.Ship.Torn = 0;
 	character.Ship.SailState = 1.0;
 	character.Ship.Crew.quantity = SHIP_CREW;
 	character.Ship.Grounded = 0;
@@ -570,8 +575,8 @@ void Sea_HullHit()
 		if (charge == CHARGE_KNIPPELS)
 		{
 			// the chain that hits the hull still sweeps the rigging over it
-			TearSails(&Enemy, KNIPPELS_SAIL_DAMAGE);
-			DamageHull(&Enemy, KNIPPELS_HIT_DAMAGE, "Книппели! Паруса врага " + makeint(stf(Enemy.Ship.SP)) + "%, корпус ");
+			TearSails(&Enemy, KNIPPELS_RIGGING_DAMAGE);
+			DamageHull(&Enemy, KNIPPELS_HIT_DAMAGE, "Книппели! Паруса врага " + makeint(100.0 - stf(Enemy.Ship.Torn)) + "%, корпус ");
 			return;
 		}
 		DamageHull(&Enemy, ENEMY_HIT_DAMAGE / (1.0 + RAVEN_LEVEL_HULL * Raven_Level()), "Попадание! Корпус врага ");
@@ -926,6 +931,8 @@ void CreateHud()
 // and the powder. The array is global: the engine reads it after the function returns.
 ref Hud_GetCurrentCharge()
 {
+	Sea_KeepSails(&Player);
+	Sea_KeepSails(&Enemy);
 	float sails = stf(Player.Ship.SailState);
 	int sailIcon = ICON_SAILS_FURLED;
 	if (sails > 0.25) { sailIcon = ICON_SAILS_FURLED + 1; }
@@ -960,11 +967,20 @@ void Hud_SailDamage()
 	TearSails(character, damage);
 }
 
+// The torn part of the sails is kept in Ship.Torn: SAIL rewrites Ship.SP from the holes of its
+// meshes whenever the sails are set or furled (sail.cpp), which would wipe the damage out.
 void TearSails(ref character, float damage)
 {
-	float sails = stf(character.Ship.SP) - damage;
-	if (sails < 0.0) { sails = 0.0; }
-	character.Ship.SP = sails;
+	float torn = stf(character.Ship.Torn) + damage;
+	if (torn > 100.0) { torn = 100.0; }
+	character.Ship.Torn = torn;
+	character.Ship.SP = 100.0 - torn;
+}
+
+// every frame, after SAIL: the panel draws Ship.SP
+void Sea_KeepSails(ref character)
+{
+	character.Ship.SP = 100.0 - stf(character.Ship.Torn);
 }
 
 void CreateCamera()
@@ -1002,7 +1018,7 @@ void Sea_ShipLayers()
 // torn sails catch less wind: the part of the speed the sails (Ship.SP) still give
 float Sea_SailsLeft(ref character)
 {
-	return TORN_SAILS_SPEED + (1.0 - TORN_SAILS_SPEED) * stf(character.Ship.SP) / 100.0;
+	return TORN_SAILS_SPEED + (1.0 - TORN_SAILS_SPEED) * (100.0 - stf(character.Ship.Torn)) / 100.0;
 }
 
 void Sea_ShipParameters()

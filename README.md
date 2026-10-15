@@ -18,6 +18,13 @@ tools/    fetch_assets.sh — downloads free assets; make_assets.py — converts
 
 ## Video
 
+[![The third slice: Tom's shop, chain shot, grape shot and round shot against «Ворон»](media/third-slice.jpg)](media/third-slice.mp4)
+
+The third slice (132 s, with sound): in the port Tom sells chain shot and grape shot → out to sea → two
+broadsides of chain shot tear the enemy's sails and slow her down, grape shot thins her crew, round shot
+sinks her (the battle is shown 4× faster) → back in the port Tom pays the 500 pesos → the carpenters patch
+the hull for the next fight.
+
 [![The second slice: the port, Tom, the battle with «Ворон», the reward, saving and loading](media/second-slice.jpg)](media/second-slice.mp4)
 
 A scripted run of the whole slice (130 s, with sound): «Новая игра» → the captain runs along the pier to
@@ -52,8 +59,8 @@ switched with 1 / 2 / 3, the HUD icon shows the loaded one:
 | Charge | Start | Reach | What it does |
 |---|---|---|---|
 | round shot | 60 | 250 m | breaks the hull: two broadsides that hit sink «Ворон» |
-| chain shot | 12 | ~205 m | aimed at the rigging, tears the sails; torn sails slow the ship down to 30% of her speed |
-| grape shot | 12 | ~160 m | aimed at the deck, kills the crew; a short-handed «Ворон» reloads slower |
+| chain shot | 12 | ~205 m | tears the sails (two broadsides that hit — about half of them); torn sails slow the ship down, to 30% of her speed at the least |
+| grape shot | 12 | ~180 m | aimed at the deck, kills the crew; a short-handed «Ворон» reloads slower |
  A short-handed crew loads slower:
 half the sailors, twice the time. A sunk «Ласточка» is raised by the harbour with 30% of the hull and
 at least 40 sailors. Tom's «Корабль и припасы» sells what is missing for gold: the hull at 4 pesos a
