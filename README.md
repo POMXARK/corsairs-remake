@@ -15,6 +15,8 @@ game/     game folder the engine runs in: engine.ini, program/ (menu.c — the m
 tools/    fetch_assets.sh — downloads free assets; make_assets.py — converts them to .tx textures and fonts.ini;
           make_port.py — the port: quay, pier, sailors, dialog window; make_deck.py — the deck of «Ворон»,
           the fencers and the saber for the boarding.
+economy/  the economy simulator: sim.py — the markets and the voyages, tune.py — Optuna writes market.c,
+          replay.py — checks a game log against the model, report.py — docs/ECONOMY.md
           The other assets come from the generators of the engine demos (engine/demos/*/make_*.py)
 ```
 
@@ -91,12 +93,15 @@ he repairs and hires as much as it pays for.
 Trade: every port has a market of four goods, and the brig carries up to 50 units of them besides the
 charges. Tom trades on Остров Чаек; on Утёс the merchant is Гарри Коул, on Пальмовый Диего Варгас.
 Each island makes something and lacks something else (Остров Чаек weaves cloth and grinds gunpowder, Утёс
-distils rum, Пальмовый grows sugar), so cloth bought from Tom for 42 sells on Утёс for 78. Every unit
+distils rum, Пальмовый grows sugar), so cloth bought from Tom for 39 sells on Утёс for 68. Every unit
 bought takes from the stock of the market and makes the good dearer there, every unit sold makes it
 cheaper; a day of the map clock (two seconds of sailing make an hour) brings each stock a fifth of the way
 back to its norm. A loaded brig draws «Ворон» out twice as soon, and when he wins the pirates take the
 whole cargo. The prices and stocks are plain tables in `game/program/market.c`, kept apart from the rules
-so that an economy simulator can write them; every deal is traced (`TRADE: crag sell cloth 5 for 312 …`).
+and written by the economy simulator in `economy/`: an agent-based model of the archipelago in Python
+that repeats `trade.c` to the peso (checked by replaying the `TRADE: …` lines of the engine log) and
+tunes the tables with Optuna — a trader who knows the prices makes 20–40 % a voyage, all three ports
+matter, random trade loses a little. The goals, the results and the plots: [docs/ECONOMY.md](docs/ECONOMY.md).
 For now the other ports reuse the quay of Остров Чаек.
 
 In the port:

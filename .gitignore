@@ -7,3 +7,6 @@ game/engine.out
 *.dxvk-cache
 # the player's saves
 game/save/
+# the simulator: Python caches
+__pycache__/
+.pytest_cache/

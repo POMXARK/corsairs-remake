@@ -1,7 +1,9 @@
-// The markets of the archipelago: the data alone, the rules are in trade.c. Written by hand for now;
-// the economy simulator (docs/PLAN.md, phase 5) is to write this file instead, so it keeps to plain
-// tables. A market is a port island, a good is one of four; a table of the markets lists the four
-// goods of Gull Island, then of the Crag, then of Palm Key (index market * 4 + good).
+// The markets of the archipelago: the data alone, the rules are in trade.c. The economy simulator
+// (economy/, its tune.py) reads and writes the tables, so they keep to plain lines. A market is a
+// port island, a good is one of four; a table of the markets lists the four goods of Gull Island,
+// then of the Crag, then of Palm Key (index market * 4 + good).
+
+// Written by economy/tune.py, 400 trials of Optuna: the goals are in its comment.
 
 // the goods: sugar, rum, cloth, gunpowder
 #define GOODS 4
@@ -22,15 +24,15 @@ int goodBase[4] = {20, 40, 60, 80};
 // dear. Gull Island is a town of weavers with a powder mill, the Crag a fort with a rum distillery,
 // Palm Key a sugar plantation.
 int marketPrice[12] = {
-	140, 130, 70, 80,
-	120, 70, 130, 140,
-	60, 110, 140, 120};
+	160, 110, 65, 80,
+	110, 65, 120, 135,
+	75, 130, 125, 120};
 
 // the stock at which the market sells at its price, units: more makes the good cheaper, less dearer
 int marketNorm[12] = {
-	40, 40, 120, 100,
-	50, 120, 40, 40,
-	150, 60, 30, 50};
+	70, 40, 120, 165,
+	130, 125, 25, 60,
+	170, 60, 25, 55};
 
 // a day of the map brings the stock this percent of the way back to its norm
 #define MARKET_RECOVERY 20
@@ -38,7 +40,7 @@ int marketNorm[12] = {
 #define MARKET_PRICE_MIN 50
 #define MARKET_PRICE_MAX 150
 // the market buys at this percent of what it sells for
-#define MARKET_BUYS 85
+#define MARKET_BUYS 95
 
 string Market_Island(int market)
 {
