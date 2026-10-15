@@ -7,7 +7,12 @@ linked and open from Developer Tools → Tools in `engine --editor`.
 | Window | File | What it does |
 |---|---|---|
 | Market | `src/market_tool.cpp` | the tables of `game/program/market.c` live, the prices of `trade.c`, save back to `market.c` |
+| Dialog | `src/dialog_tool.cpp`, `src/dialog_graph.cpp` | the dialog of `port.c`/`trade.c` as a graph: nodes, texts, links to no node, unreached nodes; opens a node in the game, writes the texts back |
 
 The window reads the script variables by name (`goodBase`, `marketPrice`, `marketNorm`, `marketStock`,
 `gold`, `cargo`, `portIsland`) and the `#define` numbers from `program/market.c` in the working
 directory (the engine runs from `game/`). Opened windows are kept in `game/imgui.ini`.
+
+The window Dialog parses the scripts (`program/port.c`, `program/trade.c`) and sends the event
+`Editor_DialogNode` with a node name; `port.c` handles it (`Dialog_EditorNode`). It marks the node of the
+script variable `dialogNode` and shows the attributes of the object `Dialog`.

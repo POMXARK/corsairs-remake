@@ -187,3 +187,13 @@ compiled into the script: the window previews the prices with them, the game tak
 **Save to market.c** writes the tables and the numbers back, in the layout the simulator (`economy/`) reads.
 
 ![The window Market: Gull Island after the brig bought sugar and rum](media/editor-market.jpg)
+
+**Dialog** reads the dialog of the port from `port.c` and `trade.c` as a graph: every node (a branch
+`if (node == "...")`), what it says and where its answers lead, also through the functions it calls
+(`Shop_Show`, `Trade_Good`). A text built of an expression shows as that expression, with its literals
+editable. Red is an answer to no node, grey a node nothing leads to; green is the node on the screen.
+**Show in game** opens the dialog on the picked node, in the port (the event `Editor_DialogNode`).
+**Save texts** writes the changed literals back into the scripts; the game takes them after a restart.
+The editor font with Cyrillic is set in `game/engine.ini`, `[editor] font` (PT Serif, OFL).
+
+![The window Dialog: the node "shop" on the screen](media/editor-dialog.jpg)

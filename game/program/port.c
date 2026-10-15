@@ -146,6 +146,8 @@ void Port_Enter()
 	SetEventHandler("DialogCancel", "Dialog_Cancel", 0);
 	SetEventHandler("EmergencyDialogExit", "Dialog_Cancel", 0);
 	SetEventHandler("Port_DialogClose", "Dialog_Close", 0);
+	// the window Dialog of the editor (corsairs-remake/editor) opens a node by its name
+	SetEventHandler("Editor_DialogNode", "Dialog_EditorNode", 0);
 	SetEventHandler("Port_Tick", "Port_Tick", 0);
 
 	inPort = 1;
@@ -260,6 +262,13 @@ void Port_Control(string control)
 void Dialog_Open()
 {
 	if (dialogOpen) { return; }
+	Dialog_Create();
+	Dialog_Node(Dialog_FirstNode());
+	Trace("PORT: dialog opened");
+}
+
+void Dialog_Create()
+{
 	// the entity pauses the game (time scale 0) and lets it run again over a second
 	CreateEntity(&Dialog, "dialog");
 	lastGo = "";
@@ -268,8 +277,17 @@ void Dialog_Open()
 	// drawn over everything else
 	LayerAddObject(REALIZE, &Dialog, -256);
 	dialogOpen = 1;
-	Dialog_Node(Dialog_FirstNode());
-	Trace("PORT: dialog opened");
+}
+
+// the editor shows a node: the dialog opens on it, without the greeting of Dialog_FirstNode; the
+// node runs as in the game (a reward pays, a purchase buys)
+void Dialog_EditorNode()
+{
+	string node = GetEventData();
+	if (!inPort) { return; }
+	if (!dialogOpen) { Dialog_Create(); }
+	lastGo = node;
+	Dialog_Node(node);
 }
 
 // a merchant greets; Tom pays first, then hears of the loss
@@ -337,9 +355,13 @@ void Answer(string id, string text, string go)
 
 // ---------------------------------------------------------------- Tom
 
+// the node on the screen, for the window Dialog of the editor
+string dialogNode = "";
+
 void Dialog_Node(string node)
 {
 	Trace("PORT: node " + node);
+	dialogNode = node;
 	if (node == "start")
 	{
 		metTom = 1;
