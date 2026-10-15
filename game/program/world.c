@@ -43,9 +43,13 @@ object Sound;
 // the state of the game: the sea battle writes the result, Tom in the port pays for the wins
 #define START_GOLD 100
 #define RAVEN_REWARD 500
+// every next «Ворон» is tougher and the governor pays this much more for him, up to RAVEN_MAX_LEVEL
+#define RAVEN_LEVEL_REWARD 250
+#define RAVEN_MAX_LEVEL 4
 int gold = START_GOLD;
 int wins = 0;
 int unpaidWins = 0;
+int unpaidGold = 0;
 // "", "win" or "loss": how the last battle ended
 string lastBattle = "";
 int metTom = 0;
@@ -73,6 +77,7 @@ void Game_ResetState()
 	gold = START_GOLD;
 	wins = 0;
 	unpaidWins = 0;
+	unpaidGold = 0;
 	lastBattle = "";
 	metTom = 0;
 	shipHull = SHIP_HULL;
@@ -110,6 +115,20 @@ string Charge_Name(int charge)
 	if (charge == CHARGE_KNIPPELS) { return "книппели"; }
 	if (charge == CHARGE_GRAPES) { return "картечь"; }
 	return "ядра";
+}
+
+// how many «Воронов» are sunk already: the next one is built and manned better
+int Raven_Level()
+{
+	int level = wins + unpaidWins;
+	if (level > RAVEN_MAX_LEVEL) { level = RAVEN_MAX_LEVEL; }
+	return level;
+}
+
+int Raven_Bounty()
+{
+	int level = Raven_Level();
+	return RAVEN_REWARD + level * RAVEN_LEVEL_REWARD;
 }
 
 int worldCreated = 0;

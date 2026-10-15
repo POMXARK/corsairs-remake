@@ -87,6 +87,13 @@
 #define COLLISION_DEPTH -4.0
 #define MAST_HIT_DAMAGE 0.34
 #define ENEMY_SPEED 9.0
+// what every level of «Ворон» (world.c, Raven_Level) adds: the hull takes this part less of a hit,
+// his guns hit harder and reload faster, his crew is bigger and he sails faster
+#define RAVEN_LEVEL_HULL 0.2
+#define RAVEN_LEVEL_HIT_DAMAGE 0.5
+#define RAVEN_LEVEL_RELOAD 0.05
+#define RAVEN_LEVEL_CREW 12
+#define RAVEN_LEVEL_SPEED 0.4
 // the player south of the island, heading for it; the enemy west of the player, within the map of
 // the navigator, so the fight starts at once
 #define PLAYER_START_X -150.0
@@ -171,7 +178,9 @@ void Sea_Enter()
 
 	SetEventHandler("Sea_StartBattle", "Sea_StartBattle", 0);
 	Log("«Ворон» на западе! Пробел — огонь");
-	Log("Корпус " + shipHull + "%, команда " + shipCrew + ". Ядра " + shipBalls + ", книппели " + shipKnippels + ", картечь " + shipGrapes + " (1/2/3)");
+	Raven_Intro();
+	Log("Корпус " + shipHull + "%, команда " + shipCrew);
+	Log("1 ядра " + shipBalls + ", 2 книппели " + shipKnippels + ", 3 картечь " + shipGrapes);
 	Trace("SEA: scene loaded");
 }
 
@@ -301,6 +310,7 @@ void CreateBattle()
 	Enemy.Ship.Name = "Ворон";
 	Enemy.Ship.Mode = "war";
 	Enemy.Ship.SeaAI.Init.AttackDistance = ATTACK_DISTANCE;
+	Enemy.Ship.Crew.quantity = SHIP_CREW + Raven_Level() * RAVEN_LEVEL_CREW;
 
 	CreateTouch();
 	AddShip(&Player, "PlayerGroup", PLAYER_START_X, PLAYER_START_Z, 0.0);
@@ -363,6 +373,7 @@ void Sea_StartBattle()
 	SendMessage(&SeaCameras, "lia", AI_CAMERAS_SET_CAMERA, &ShipCamera, &Player);
 	CreateHud();
 	Log("Новый бой");
+	Raven_Intro();
 	Trace("SEA: new battle");
 }
 
@@ -406,7 +417,9 @@ float Sea_ReloadTime()
 	int crew = sti(character.Ship.Crew.quantity);
 	if (crew > SHIP_CREW) { crew = SHIP_CREW; }
 	if (crew < SHIP_CREW / 2) { crew = SHIP_CREW / 2; }
-	return (RELOAD_TIME + frnd() * 1.0) * SHIP_CREW / crew;
+	float time = (RELOAD_TIME + frnd() * 1.0) * SHIP_CREW / crew;
+	if (sti(character.index) == sti(Enemy.index)) { time = time * (1.0 - RAVEN_LEVEL_RELOAD * Raven_Level()); }
+	return time;
 }
 
 // the brig after the battle, for the port: a sunk one is raised by the harbour, barely afloat
@@ -561,17 +574,26 @@ void Sea_HullHit()
 			DamageHull(&Enemy, KNIPPELS_HIT_DAMAGE, "Книппели! Паруса врага " + makeint(stf(Enemy.Ship.SP)) + "%, корпус ");
 			return;
 		}
-		DamageHull(&Enemy, ENEMY_HIT_DAMAGE, "Попадание! Корпус врага ");
+		DamageHull(&Enemy, ENEMY_HIT_DAMAGE / (1.0 + RAVEN_LEVEL_HULL * Raven_Level()), "Попадание! Корпус врага ");
 	}
 	else
 	{
 		KillCrew(&Player, 0);
-		DamageHull(&Player, HULL_HIT_DAMAGE, "В нас попали! Корпус ");
+		DamageHull(&Player, HULL_HIT_DAMAGE + RAVEN_LEVEL_HIT_DAMAGE * Raven_Level(), "В нас попали! Корпус ");
 	}
 }
 
 // a ball through the hull takes 1 to 3 sailors: the number on the ship panel goes down with the bar
 // grape shot takes `extra` more on top
+// from the second «Ворон» on: how strong this one is
+void Raven_Intro()
+{
+	int level = Raven_Level();
+	if (level == 0) { return; }
+	int bounty = Raven_Bounty();
+	Log("Пиратов на «Вороне»: " + Enemy.Ship.Crew.quantity + ", награда " + bounty + " песо");
+}
+
 void KillCrew(ref character, int extra)
 {
 	int crew = sti(character.Ship.Crew.quantity) - 1 - rand(2) - extra;
@@ -599,6 +621,7 @@ void DamageHull(ref character, float damage, string message)
 	{
 		// Tom pays for every «Ворон» sunk when the player is back in the port
 		lastBattle = "win";
+		unpaidGold = unpaidGold + Raven_Bounty();
 		unpaidWins++;
 		Log("Враг тонет! Попаданий " + hits + " из " + shots + ". Enter — в порт, R — новый бой");
 		Trace("SEA: enemy sinks after " + hits + " hits of " + shots + " shots");
@@ -995,7 +1018,7 @@ void Sea_ShipParameters()
 		return;
 	}
 	// the enemy sails a little slower than the player, who can run or close in
-	Enemy.Ship.MaxSpeedZ = ENEMY_SPEED * Sea_SailsLeft(&Enemy);
+	Enemy.Ship.MaxSpeedZ = (ENEMY_SPEED + RAVEN_LEVEL_SPEED * Raven_Level()) * Sea_SailsLeft(&Enemy);
 	Enemy.Ship.MaxSpeedY = turn;
 }
 
