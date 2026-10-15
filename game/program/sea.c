@@ -73,9 +73,9 @@
 #define SCATTER 0.04
 #define HULL 100
 #define HULL_HIT_DAMAGE 4
-// the "Raven" is lighter built: two full broadsides of six guns (12 hits) sink her, the battle
-// stays short
-#define ENEMY_HIT_DAMAGE 9
+// the "Raven" is lighter built: two broadsides sink her even when only half of the balls hit
+// (6 hits of 12), the battle stays short
+#define ENEMY_HIT_DAMAGE 17
 // chain shot and grape shot barely scratch the hull; grape shot takes this many sailors more
 #define KNIPPELS_HIT_DAMAGE 2
 #define GRAPES_HIT_DAMAGE 1

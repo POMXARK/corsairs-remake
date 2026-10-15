@@ -47,7 +47,7 @@ the pier. Tom tells about the pirate brig «Ворон» guarding the bay, and �
 captain's brig «Ласточка» out to sea. The battle is built from the engine demos: the AI brig «Ворон» near
 an island, with the HUD — navigator (compass, wind, speeds, the enemy on the minimap), the ship panel
 (hull, sails, crew, cannon reload) and the battle log in Russian. After the battle Enter returns to the
-port, where Tom pays 500 pesos for the first «Ворон» sunk: two full broadsides that hit sink her.
+port, where Tom pays 500 pesos for the first «Ворон» sunk: two broadsides sink her even when only half of the balls hit.
 The pirates learn: every next «Ворон», up to the fifth, takes a hit 20% better, carries 12 pirates
 more, takes 0.5% more of our hull with a hit, reloads 5% faster and sails 0.4 kn faster, and the governor pays 250 pesos
 more for him (the fifth and the later ones — 1500).
@@ -58,7 +58,7 @@ switched with 1 / 2 / 3, the HUD icon shows the loaded one:
 
 | Charge | Start | Reach | What it does |
 |---|---|---|---|
-| round shot | 60 | 250 m | breaks the hull: two broadsides that hit sink «Ворон» |
+| round shot | 60 | 250 m | breaks the hull: two broadsides sink «Ворон» (6 hits) |
 | chain shot | 12 | ~205 m | tears the sails (two broadsides that hit — about half of them); torn sails slow the ship down, to 30% of her speed at the least |
 | grape shot | 12 | ~180 m | aimed at the deck, kills the crew; a short-handed «Ворон» reloads slower |
  A short-handed crew loads slower:
