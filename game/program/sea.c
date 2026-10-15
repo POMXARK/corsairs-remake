@@ -45,14 +45,20 @@
 // the guns of a side fire within this angle around its beam
 #define FIRE_ZONE 1.4
 #define RELOAD_TIME 8.0
+// the guns of a side (the locators of make_ship.py): a broadside takes this many balls
+#define BROADSIDE_GUNS 6
 // the guns of a broadside go off one after another within this time
 #define FIRE_SPREAD 0.6
 // the aim point is scattered around the target in a circle growing with the distance
 #define SCATTER 0.04
 #define HULL 100
 #define HULL_HIT_DAMAGE 4
-// the "Raven" is lighter built: three full broadsides of six guns sink her, the battle stays short
-#define ENEMY_HIT_DAMAGE 6
+// the "Raven" is lighter built: two full broadsides of six guns (12 hits) sink her, the battle
+// stays short
+#define ENEMY_HIT_DAMAGE 9
+// what is left of a sunk brig when the harbour has raised it and fished the sailors out
+#define LOSS_HULL 30
+#define LOSS_CREW 40
 // a blow on the shore costs this much hull per knot of the impact
 #define GROUND_DAMAGE 2.0
 // a ship resting on the shore under sail keeps touching it at ~0.5 kn: not a blow
@@ -142,6 +148,7 @@ void Sea_Enter()
 
 	SetEventHandler("Sea_StartBattle", "Sea_StartBattle", 0);
 	Log("«Ворон» на западе! Пробел — огонь");
+	Log("Корпус " + shipHull + "%, команда " + shipCrew + ", ядер " + shipBalls);
 	Trace("SEA: scene loaded");
 }
 
@@ -149,6 +156,7 @@ void Sea_Enter()
 // Game_GoTo). SEA_AI deletes its ships with it.
 void Sea_Leave()
 {
+	Sea_KeepShip();
 	DeleteClass(&BattleInterface);
 	DeleteClass(&AISea);
 	DeleteClass(&Touch);
@@ -253,6 +261,8 @@ void CreateBattle()
 	PrepareCharacter(&Player, "Player", 0, "PlayerGroup");
 	Player.MainCharacter = 1;
 	Player.Ship.Name = "Ласточка";
+	Player.Ship.HP = shipHull;
+	Player.Ship.Crew.quantity = shipCrew;
 	PrepareCharacter(&Enemy, "Enemy", 1, "EnemyGroup");
 	Enemy.Ship.Name = "Ворон";
 	Enemy.Ship.Mode = "war";
@@ -278,7 +288,7 @@ void PrepareCharacter(ref character, string id, int index, string group)
 	character.Ship.HP = HULL;
 	character.Ship.SP = 100;
 	character.Ship.SailState = 1.0;
-	character.Ship.Crew.quantity = 96;
+	character.Ship.Crew.quantity = SHIP_CREW;
 	character.Ship.Grounded = 0;
 	character.Ship.Touched = 0;
 	character.Ship.Cannons.Type = 0;
@@ -301,6 +311,7 @@ void AddShip(ref character, string group, float x, float z, float heading)
 // in the same frame, the new ships would be deleted with the old ones, so they wait a frame.
 void Sea_NewBattle()
 {
+	Sea_KeepShip();
 	// the HUD keeps pointers to the ships SEA_AI is about to delete: it goes first and is made again
 	DeleteClass(&BattleInterface);
 	DeleteClass(&AISea);
@@ -329,17 +340,35 @@ int Sea_Relation()
 	return RELATION_ENEMY;
 }
 
-// the balls in the hold; a side fires only when there is a ball for each of its guns
+// the balls in the hold; a side fires only when there is a ball for each of its guns. The enemy
+// never runs out.
 int Sea_BallsNum()
 {
 	aref character = GetEventData();
+	if (sti(character.index) == sti(Player.index)) { return shipBalls; }
 	return 100;
 }
 
+// a short-handed crew loads slower: half the sailors, twice the time
 float Sea_ReloadTime()
 {
 	aref character = GetEventData();
-	return RELOAD_TIME + frnd() * 1.0;
+	int crew = sti(character.Ship.Crew.quantity);
+	if (crew > SHIP_CREW) { crew = SHIP_CREW; }
+	if (crew < SHIP_CREW / 2) { crew = SHIP_CREW / 2; }
+	return (RELOAD_TIME + frnd() * 1.0) * SHIP_CREW / crew;
+}
+
+// the brig after the battle, for the port: a sunk one is raised by the harbour, barely afloat
+void Sea_KeepShip()
+{
+	shipHull = makeint(stf(Player.Ship.HP));
+	shipCrew = sti(Player.Ship.Crew.quantity);
+	if (lastBattle == "loss")
+	{
+		shipHull = LOSS_HULL;
+		if (shipCrew < LOSS_CREW) { shipCrew = LOSS_CREW; }
+	}
 }
 
 // the delay between the order and the shot, different for every gun: the broadside rolls along
@@ -398,8 +427,9 @@ void Sea_BroadsideReloaded()
 	aref character = GetEventData();
 	string bort = GetEventData();
 	if (sti(character.index) != sti(Player.index) || battleOver) { return; }
-	if (bort == "cannonl") { Log("Левый борт заряжен"); }
-	else { Log("Правый борт заряжен"); }
+	string side = "Правый";
+	if (bort == "cannonl") { side = "Левый"; }
+	Log(side + " борт заряжен, ядер в трюме: " + shipBalls);
 }
 
 // "afffffffff": one gun goes off. SEA_AI gives the muzzle, the heading and elevation it has aimed
@@ -435,7 +465,11 @@ void Sea_CannonFire()
 	AIBalls.add = "";
 
 	SendMessage(&Sound, "lsllllllfff", MSG_SOUND_PLAY, "cannon", PCM_3D, VOLUME_FX, false, false, false, 0, x, y, z);
-	if (sti(character.index) == sti(Player.index)) { shots++; }
+	if (sti(character.index) == sti(Player.index))
+	{
+		shots++;
+		if (shipBalls > 0) { shipBalls--; }
+	}
 }
 
 // "illffflf": the ship hit, the owner of the ball, the index of the ship hit and the point.
@@ -890,6 +924,11 @@ void Sea_Control(string control)
 {
 	if (control == "Sea_Fire" && !battleOver)
 	{
+		if (shipBalls < BROADSIDE_GUNS)
+		{
+			Log("Ядра кончились! Купите у Тома в порту");
+			return;
+		}
 		int before = playerBroadsides;
 		SendMessage(&AISea, "lal", AI_MESSAGE_CANNON_FIRE, &Player, 1);
 		if (playerBroadsides == before) { Log("Ни один заряженный борт не смотрит на врага"); }

@@ -50,6 +50,15 @@ int unpaidWins = 0;
 string lastBattle = "";
 int metTom = 0;
 
+// The brig between the battles: the hull in percent, the sailors and the balls in the hold. The sea
+// battle starts from them and writes them back; Tom sells repairs, sailors and balls for gold.
+#define SHIP_HULL 100
+#define SHIP_CREW 96
+#define START_BALLS 60
+int shipHull = SHIP_HULL;
+int shipCrew = SHIP_CREW;
+int shipBalls = START_BALLS;
+
 void Game_ResetState()
 {
 	gold = START_GOLD;
@@ -57,6 +66,9 @@ void Game_ResetState()
 	unpaidWins = 0;
 	lastBattle = "";
 	metTom = 0;
+	shipHull = SHIP_HULL;
+	shipCrew = SHIP_CREW;
+	shipBalls = START_BALLS;
 }
 
 int worldCreated = 0;

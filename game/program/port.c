@@ -247,6 +247,7 @@ void Dialog_Open()
 	if (dialogOpen) { return; }
 	// the entity pauses the game (time scale 0) and lets it run again over a second
 	CreateEntity(&Dialog, "dialog");
+	lastGo = "";
 	// message 1: the speaker, whose name/lastname the window shows, and his model
 	SendMessage(&Dialog, "lii", 1, &Tom, &Tom);
 	// drawn over everything else
@@ -288,6 +289,7 @@ void Dialog_Leave()
 // an answer was chosen: its "go" is in Dialog.CurrentNode
 void Dialog_Event()
 {
+	lastGo = Dialog.CurrentNode;
 	Dialog_Node(Dialog.CurrentNode);
 }
 
@@ -304,9 +306,15 @@ void Say(string text)
 	DeleteAttribute(&Dialog, "Links");
 }
 
-// The answers are shown in the order they are added; the text must be set before "go".
+// The answers are shown in the order they are added; the text must be set before "go". The entity
+// closes the dialog when an answer leads where the answer before it led (it takes that for a loop
+// in the tree): an answer that may be chosen twice in a row, "buy more", gets a twin name ending
+// in "2" while its name is the last one chosen.
+string lastGo = "";
+
 void Answer(string id, string text, string go)
 {
+	if (go == lastGo) { go = go + "2"; }
 	Dialog.Links.(id) = text;
 	Dialog.Links.(id).go = go;
 }
@@ -322,7 +330,8 @@ void Dialog_Node(string node)
 		Say("А, капитан! Я Том Бакстер, боцман «Ласточки». Бриг готов, команда на борту. Одна беда: у входа в бухту крутится «Ворон» и не выпускает ни одного судна.");
 		Answer("l1", "Что за «Ворон»?", "raven");
 		Answer("l2", "В море!", "sail");
-		Answer("l3", "Позже, Том.", "exit");
+		Answer("l3", "Корабль и припасы", "shop");
+		Answer("l4", "Позже, Том.", "exit");
 		return;
 	}
 	if (node == "again")
@@ -330,7 +339,8 @@ void Dialog_Node(string node)
 		Say("Ну что, капитан? В кошельке " + gold + " песо, «Воронов» на дне: " + wins + ".");
 		Answer("l1", "Что за «Ворон»?", "raven");
 		Answer("l2", "В море!", "sail");
-		Answer("l3", "Позже, Том.", "exit");
+		Answer("l3", "Корабль и припасы", "shop");
+		Answer("l4", "Позже, Том.", "exit");
 		return;
 	}
 	if (node == "raven")
@@ -364,16 +374,18 @@ void Dialog_Node(string node)
 		metTom = 1;
 		Say("Видал я с пирса, как «Ворон» пошёл ко дну! Губернатор слово держит: вот " + reward + " песо. Теперь у тебя " + gold + ".");
 		Answer("l1", "Ещё в море!", "sail");
-		Answer("l2", "Отдохну пока.", "exit");
+		Answer("l2", "Корабль и припасы", "shop");
+		Answer("l3", "Отдохну пока.", "exit");
 		return;
 	}
 	if (node == "lost")
 	{
 		lastBattle = "";
 		metTom = 1;
-		Say("Ничего, капитан. Пробоины залатали, команду выловили. «Ворон» никуда не делся — попробуем ещё?");
-		Answer("l1", "В море!", "sail");
-		Answer("l2", "Позже, Том.", "exit");
+		Say("Ничего, капитан. Бриг подняли и кое-как залатали: корпус " + shipHull + "%, команды " + shipCrew + ". «Ворон» никуда не делся. Сначала бы в док...");
+		Answer("l1", "Корабль и припасы", "shop");
+		Answer("l2", "В море!", "sail");
+		Answer("l3", "Позже, Том.", "exit");
 		return;
 	}
 	if (node == "exit")
@@ -381,6 +393,66 @@ void Dialog_Node(string node)
 		Dialog_Leave();
 		return;
 	}
+	// a twin of an answer chosen twice in a row (Answer)
+	if (node == "shop") { Shop_Show("Что нужно, капитан?"); return; }
+	if (node == "repair" || node == "repair2") { Shop_Repair(); return; }
+	if (node == "hire" || node == "hire2") { Shop_Hire(); return; }
+	if (node == "balls" || node == "balls2") { Shop_Balls(); return; }
 	Trace("PORT: unknown node " + node);
 	Dialog_Leave();
+}
+
+// ---------------------------------------------------------------- Tom's shop
+
+// the prices in pesos: a percent of the hull, a sailor, a lot of balls
+#define REPAIR_PRICE 4
+#define SAILOR_PRICE 5
+#define BALLS_LOT 30
+#define BALLS_PRICE 60
+#define MAX_BALLS 180
+
+// what the shop can still sell: a missing hull percent or sailor costs its price, the lot is whole
+int Shop_RepairCost() { return (SHIP_HULL - shipHull) * REPAIR_PRICE; }
+int Shop_HireCost() { return (SHIP_CREW - shipCrew) * SAILOR_PRICE; }
+
+void Shop_Show(string reply)
+{
+	Say(reply + " Корпус " + shipHull + "%, команды " + shipCrew + " из " + SHIP_CREW + ", ядер " + shipBalls + ". В кошельке " + gold + " песо.");
+	if (shipHull < SHIP_HULL) { Answer("l1", "Залатать корпус (" + Shop_RepairCost() + " песо)", "repair"); }
+	if (shipCrew < SHIP_CREW) { Answer("l2", "Нанять матросов (" + Shop_HireCost() + " песо)", "hire"); }
+	if (shipBalls < MAX_BALLS) { Answer("l3", BALLS_LOT + " ядер (" + BALLS_PRICE + " песо)", "balls"); }
+	Answer("l4", "Хватит.", "again");
+}
+
+// as much as the gold pays for: a part of the work is better than none
+void Shop_Repair()
+{
+	int points = SHIP_HULL - shipHull;
+	if (points * REPAIR_PRICE > gold) { points = gold / REPAIR_PRICE; }
+	if (points <= 0) { Shop_Show("Без денег плотники не работают."); return; }
+	gold = gold - points * REPAIR_PRICE;
+	shipHull = shipHull + points;
+	Trace("PORT: repair " + points + ", gold " + gold);
+	if (shipHull < SHIP_HULL) { Shop_Show("На все пробоины не хватило, залатали " + points + "%."); return; }
+	Shop_Show("Плотники справились, корпус как новый.");
+}
+
+void Shop_Hire()
+{
+	int sailors = SHIP_CREW - shipCrew;
+	if (sailors * SAILOR_PRICE > gold) { sailors = gold / SAILOR_PRICE; }
+	if (sailors <= 0) { Shop_Show("Задаром в таверне никто не нанимается."); return; }
+	gold = gold - sailors * SAILOR_PRICE;
+	shipCrew = shipCrew + sailors;
+	Trace("PORT: hire " + sailors + ", gold " + gold);
+	Shop_Show("Нанял " + sailors + " человек в таверне.");
+}
+
+void Shop_Balls()
+{
+	if (gold < BALLS_PRICE) { Shop_Show("На ядра не хватает, капитан."); return; }
+	gold = gold - BALLS_PRICE;
+	shipBalls = shipBalls + BALLS_LOT;
+	Trace("PORT: balls " + shipBalls + ", gold " + gold);
+	Shop_Show("Ядра в трюме.");
 }

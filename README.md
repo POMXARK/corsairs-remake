@@ -40,7 +40,14 @@ the pier. Tom tells about the pirate brig «Ворон» guarding the bay, and �
 captain's brig «Ласточка» out to sea. The battle is built from the engine demos: the AI brig «Ворон» near
 an island, with the HUD — navigator (compass, wind, speeds, the enemy on the minimap), the ship panel
 (hull, sails, crew, cannon reload) and the battle log in Russian. After the battle Enter returns to the
-port, where Tom pays 500 pesos for every «Ворон» sunk.
+port, where Tom pays 500 pesos for every «Ворон» sunk: two full broadsides that hit sink her.
+
+The brig keeps her state between the battles: the hull, the crew and the balls in the hold (60 at the
+start, a broadside takes 6; with no balls left the guns are silent). A short-handed crew loads slower:
+half the sailors, twice the time. A sunk «Ласточка» is raised by the harbour with 30% of the hull and
+at least 40 sailors. Tom's «Корабль и припасы» sells what is missing for gold: the hull at 4 pesos a
+percent, sailors at 5 pesos each, 30 balls for 60 pesos (up to 180 in the hold); without enough gold
+he repairs and hires as much as it pays for.
 
 In the port:
 
@@ -72,5 +79,5 @@ At sea:
 The menu does not lose the scene — it is only frozen, and «Продолжить» brings it back as it was;
 «Новая игра» starts a new one.
 
-F5 in the port saves the game to `game/save/game.sav` (gold, wins, the captain's place on the quay);
+F5 in the port saves the game to `game/save/game.sav` (gold, wins, the brig, the captain's place on the quay);
 «Загрузить» in the menu, active when a save exists, brings it back. At sea the game is not saved.
