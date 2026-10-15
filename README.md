@@ -20,9 +20,10 @@ tools/    fetch_assets.sh — downloads free assets; make_assets.py — converts
 
 [![The second slice: the port, Tom, the battle with «Ворон», the reward, saving and loading](media/second-slice.jpg)](media/second-slice.mp4)
 
-A scripted run of the whole slice (90 s, with sound): «Новая игра» → the captain runs along the pier to
-Tom → the conversation → out to sea → «Ворон» sinks → back in the port Tom pays 500 pesos → F5 → the menu
-→ «Загрузить» brings the game back with 600 pesos.
+A scripted run of the whole slice (130 s, with sound): «Новая игра» → the captain runs along the pier to
+Tom → the conversation → out to sea → a fair battle, both brigs led by the AI, the camera on «Ворон» and
+the aim zone on the water (shown 4× faster: three minutes of broadsides until «Ворон» sinks) → back in the
+port Tom pays 500 pesos → F5 → the menu → «Загрузить» brings the game back with 600 pesos.
 
 ## Run (Linux)
 
