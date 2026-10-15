@@ -2,7 +2,8 @@
 // the pier and the old boatswain Tom at its end. Built from the engine demos location and dialog:
 // the "location" entity loads the model and the floor the characters walk on, "player" walks on it
 // driven by the controls, "locationcamera" follows him, "dialog" draws the conversation with Tom.
-// Talking to Tom takes the player out to sea (sea.c) and pays for the «Ворон» sunk there.
+// Talking to Tom takes the player out to sea (sea.c) and pays for the «Ворон» sunk there. The other
+// ports of the map (trade.c) are the same quay with a merchant in Tom's place.
 // W/S walk, A/D or the mouse turn, Shift walks instead of running, E talks to Tom; in the dialog
 // Up/Down pick an answer, Enter or Space says it, Escape leaves.
 
@@ -117,7 +118,7 @@ void Port_Enter()
 	if (portSpawn == "save") { SendMessage(&Hero, "lffff", MSG_CHARACTER_TELEPORT_AY, heroX, heroY, heroZ, heroAY); }
 	else
 	{
-		if (lastBattle == "") { SendMessage(&Hero, "lffff", MSG_CHARACTER_TELEPORT_AY, 0.0, PORT_DECK, -24.0, 0.0); }
+		if (!metTom) { SendMessage(&Hero, "lffff", MSG_CHARACTER_TELEPORT_AY, 0.0, PORT_DECK, -24.0, 0.0); }
 		else { SendMessage(&Hero, "lffff", MSG_CHARACTER_TELEPORT_AY, 0.0, PORT_DECK, 1.0, 0.0); }
 	}
 
@@ -131,8 +132,7 @@ void Port_Enter()
 	SendMessage(&Tom, "ls", MSG_MODEL_LOAD_ANI, "demo\sailor");
 	SendMessage(&Tom, "lls", MSG_MODEL_PLAY_ACTION, 0, "idle");
 	PlaceModel(&Tom, TOM_X, PORT_DECK, TOM_Z, PI);
-	Tom.name = "Том";
-	Tom.lastname = "Бакстер";
+	Port_Speaker();
 	// the brig moored along the pier, its bow to the sea
 	LoadModel(&PortBrig, "ships\Brig\Brig");
 	PlaceModel(&PortBrig, 6.5, 0.0, -2.0, 0.0);
@@ -153,11 +153,16 @@ void Port_Enter()
 	castOff = 0;
 	portVisit++;
 	PostEvent("Port_Tick", TICK_MS, "l", portVisit);
+	if (portSpawn != "save") { Trade_Arrive(); }
 	if (portSpawn == "save") { Log("Игра загружена: " + gold + " песо, побед: " + wins); }
 	else
 	{
-		if (lastBattle == "") { Log("Порт. Том ждёт на краю пирса. W/S — идти, A/D — поворот, F5 — сохранить"); }
-		else { Log("Снова в порту. Том ждёт на пирсе"); }
+		if (!metTom) { Log("Порт. Том ждёт на краю пирса. W/S — идти, A/D — поворот, F5 — сохранить"); }
+		else
+		{
+			if (Trade_Here() == MARKET_GULL) { Log("Снова в порту. Том ждёт на пирсе"); }
+			else { Log(Market_PortName(Trade_Here()) + ". Торговец " + Tom.name + " ждёт на пирсе"); }
+		}
 	}
 	portSpawn = "";
 	Trace("PORT: scene loaded");
@@ -194,6 +199,16 @@ void PlaceModel(ref model, float x, float y, float z, float angle)
 	SendMessage(model, "lffffffffffff", MSG_MODEL_SET_POSITION, x, y, z, c, 0.0, 0.0 - s, 0.0, 1.0, 0.0, s, 0.0, c);
 }
 
+// Tom on Gull Island, a merchant in the other ports: the dialog window shows "name lastname"
+void Port_Speaker()
+{
+	int market = Trade_Here();
+	if (market == MARKET_CRAG) { Tom.name = "Гарри"; Tom.lastname = "Коул"; return; }
+	if (market == MARKET_PALM) { Tom.name = "Диего"; Tom.lastname = "Варгас"; return; }
+	Tom.name = "Том";
+	Tom.lastname = "Бакстер";
+}
+
 ref Port_ShadowDensity()
 {
 	return &shadowDensity;
@@ -227,7 +242,7 @@ void Port_Tick()
 	if (!inPort || visit != portVisit) { return; }
 	int close = 0;
 	if (Port_TomDistance() < TALK_DISTANCE) { close = 1; }
-	if (close && !nearTom && !dialogOpen) { Log("E — поговорить с Томом"); }
+	if (close && !nearTom && !dialogOpen) { Log("E — поговорить: " + Tom.name); }
 	nearTom = close;
 	PostEvent("Port_Tick", TICK_MS, "l", visit);
 }
@@ -253,17 +268,18 @@ void Dialog_Open()
 	// drawn over everything else
 	LayerAddObject(REALIZE, &Dialog, -256);
 	dialogOpen = 1;
-	if (unpaidWins > 0) { Dialog_Node("reward"); }
-	else
-	{
-		if (lastBattle == "loss") { Dialog_Node("lost"); }
-		else
-		{
-			if (metTom) { Dialog_Node("again"); }
-			else { Dialog_Node("start"); }
-		}
-	}
+	Dialog_Node(Dialog_FirstNode());
 	Trace("PORT: dialog opened");
+}
+
+// a merchant greets; Tom pays first, then hears of the loss
+string Dialog_FirstNode()
+{
+	if (Trade_Here() != MARKET_GULL) { return "hello"; }
+	if (unpaidWins > 0) { return "reward"; }
+	if (lastBattle == "loss") { return "lost"; }
+	if (metTom) { return "again"; }
+	return "start";
 }
 
 // Closing the dialog from its own event would delete the entity while it is drawing, so the
@@ -331,6 +347,7 @@ void Dialog_Node(string node)
 		Answer("l1", "Что за «Ворон»?", "raven");
 		Answer("l2", "В море!", "sail");
 		Answer("l3", "Корабль и припасы", "shop");
+		Answer("l5", "Торговля", "trade");
 		Answer("l4", "Позже, Том.", "exit");
 		return;
 	}
@@ -340,6 +357,7 @@ void Dialog_Node(string node)
 		Answer("l1", "Что за «Ворон»?", "raven");
 		Answer("l2", "В море!", "sail");
 		Answer("l3", "Корабль и припасы", "shop");
+		Answer("l5", "Торговля", "trade");
 		Answer("l4", "Позже, Том.", "exit");
 		return;
 	}
@@ -353,7 +371,8 @@ void Dialog_Node(string node)
 	}
 	if (node == "sail")
 	{
-		Say("Есть, капитан! Ветер попутный. Отдаём швартовы?");
+		if (Trade_Here() != MARKET_GULL) { Say("Попутного ветра, капитан! Заходи ещё."); }
+		else { Say("Есть, капитан! Ветер попутный. Отдаём швартовы?"); }
 		Answer("l1", "Отдать швартовы!", "cast_off");
 		Answer("l2", "Погоди.", "exit");
 		return;
@@ -379,6 +398,7 @@ void Dialog_Node(string node)
 		lastBoarding = "";
 		Answer("l1", "Ещё в море!", "sail");
 		Answer("l2", "Корабль и припасы", "shop");
+		Answer("l4", "Торговля", "trade");
 		Answer("l3", "Отдохну пока.", "exit");
 		return;
 	}
@@ -388,6 +408,8 @@ void Dialog_Node(string node)
 		metTom = 1;
 		if (lastBoarding == "lost") { Say("Живой, капитан! Пираты отбили абордаж, ребята еле вынесли тебя. Команды осталось " + shipCrew + ", корпус " + shipHull + "%. Сначала бы людей набрать..."); }
 		else { Say("Ничего, капитан. Бриг подняли и кое-как залатали: корпус " + shipHull + "%, команды " + shipCrew + ". «Ворон» никуда не делся. Сначала бы в док..."); }
+		if (cargoLost > 0) { Dialog.Text = Dialog.Text + " А груз, " + cargoLost + " мест, пираты забрали."; }
+		cargoLost = 0;
 		lastBoarding = "";
 		Answer("l1", "Корабль и припасы", "shop");
 		Answer("l2", "В море!", "sail");
@@ -399,6 +421,21 @@ void Dialog_Node(string node)
 		Dialog_Leave();
 		return;
 	}
+	// the merchant of another port: trade, or out to sea; the reward is the governor's, on Gull Island
+	if (node == "hello")
+	{
+		metTom = 1;
+		string merchant = "Добро пожаловать, капитан! Я " + Tom.name + " " + Tom.lastname + ", здесь всё через меня.";
+		if (Trade_Here() == MARKET_CRAG) { merchant = merchant + " На Утёсе гонят лучший ром, а форт вечно просит пороха и сукна."; }
+		if (Trade_Here() == MARKET_PALM) { merchant = merchant + " Сахар с плантаций — дешевле нигде не найдёшь, а вот ткани и пороха не хватает."; }
+		if (unpaidWins > 0) { merchant = merchant + " Награду за «Ворона» платит губернатор на Острове Чаек."; }
+		Say(merchant);
+		Answer("l1", "Торговать", "trade");
+		Answer("l2", "В море!", "sail");
+		Answer("l3", "Прощай.", "exit");
+		return;
+	}
+	if (Trade_Node(node)) { return; }
 	// a twin of an answer chosen twice in a row (Answer)
 	if (node == "shop") { Shop_Show("Что нужно, капитан?"); return; }
 	if (node == "repair" || node == "repair2") { Shop_Repair(); return; }

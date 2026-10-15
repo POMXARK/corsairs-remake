@@ -1,8 +1,8 @@
 // The world map between the port and the battle: «Ласточка» sails the archipelago of the WORLDMAP
 // entity (the engine demo worldmap, its make_worldmap.py builds the islands, the ships, the clouds
-// and the interface). The home port is on Gull Island: Enter in its waters goes to the port. Out at
-// sea «Ворон» comes after the brig, and when he catches her (or Enter is pressed with him near) the
-// sea battle begins. Storms batter the hull. The entity draws its own sea and sky, so the world's
+// and the interface). Gull Island, the Crag and Palm Key have ports (trade.c): Enter in their waters
+// goes ashore. Out at sea «Ворон» comes after the brig, sooner when she carries cargo, and when he
+// catches her (or Enter is pressed with him near) the sea battle begins. Storms batter the hull. The entity draws its own sea and sky, so the world's
 // (world.c) leave the layers while the map is shown.
 // W / S raise and lower the sails, A / D turn, the mouse turns the camera, the wheel zooms.
 
@@ -15,6 +15,7 @@
 #define HOME_ISLAND "gull"
 // «Ворон» comes this many seconds after the brig is out (and again after he is lost from sight)
 #define RAVEN_DELAY 6.0
+#define RAVEN_DELAY_CARGO 3.0
 #define RAVEN_LIFE 60.0
 #define STORM_PERIOD 45.0
 // a storm takes this much of the hull every STORM_HIT_PERIOD seconds, down to STORM_HULL_MIN
@@ -49,9 +50,7 @@ void Map_MapControls()
 void Map_Reset()
 {
 	DeleteAttribute(&worldMap, "");
-	worldMap.playerShipX = -150.0;
-	worldMap.playerShipZ = 220.0;
-	worldMap.playerShipAY = PI / 2.0;
+	Map_Home();
 	worldMap.wdmCameraY = 250.0;
 	worldMap.wdmCameraAY = 0.0;
 	worldMap.date.hour = 9;
@@ -59,6 +58,14 @@ void Map_Reset()
 	worldMap.date.day = 15;
 	worldMap.date.month = 6;
 	worldMap.date.year = 1665;
+}
+
+// a sunk brig is towed home: she sails out again where a new game starts
+void Map_Home()
+{
+	worldMap.playerShipX = -150.0;
+	worldMap.playerShipZ = 220.0;
+	worldMap.playerShipAY = PI / 2.0;
 }
 
 void Map_Enter()
@@ -114,11 +121,12 @@ void Map_Enter()
 	SetEventHandler("WorldMap_GetRum", "Map_GetRum", 0);
 
 	ravenTimer = RAVEN_DELAY;
+	if (Cargo_Total() > 0) { ravenTimer = RAVEN_DELAY_CARGO; }
 	stormHitTimer = 0.0;
 	mapIsland = "";
 	if (lastBattle == "win") { Log("Курс на Остров Чаек: Том ждёт с наградой. Enter у острова — в порт"); }
-	else { Log("В море. W/S — паруса, A/D — поворот, Enter у Острова Чаек — в порт"); }
-	Log("Корпус " + shipHull + "%, команда " + shipCrew);
+	else { Log("В море. W/S — паруса, A/D — поворот, Enter у острова с портом — в порт"); }
+	Log("Корпус " + shipHull + "%, команда " + shipCrew + ", в трюме: " + Cargo_List());
 	Trace("MAP: scene loaded");
 }
 
@@ -148,11 +156,14 @@ void Map_Label(string id, string text)
 	worldMap.(attr).heightView = 400.0;
 }
 
-string Map_IslandName(string id)
+// "Воды Утёса": the names in the genitive
+string Map_Waters(string id)
 {
-	string attr = "labels." + id;
-	if (!CheckAttribute(&worldMap, attr)) { return id; }
-	return worldMap.(attr).text;
+	if (id == "gull") { return "Воды Острова Чаек"; }
+	if (id == "crag") { return "Воды Утёса"; }
+	if (id == "palm") { return "Воды Пальмового"; }
+	if (id == "reef") { return "Воды Рифа"; }
+	return "Воды острова";
 }
 
 // every second: the time since the last call and where the brig is
@@ -167,10 +178,10 @@ void Map_EncounterCreate()
 	string island = worldMap.island;
 	if (island != mapIsland)
 	{
-		if (island == HOME_ISLAND) { Log("Воды Острова Чаек. Enter — в порт"); }
+		if (Trade_Market(island) >= 0) { Log(Map_Waters(island) + ". Enter — в порт"); }
 		else
 		{
-			if (island != "") { Log("Воды острова " + Map_IslandName(island)); }
+			if (island != "") { Log(Map_Waters(island) + ". Порта здесь нет"); }
 		}
 		mapIsland = island;
 	}
@@ -190,7 +201,8 @@ void Map_EncounterCreate()
 	if (ravenTimer > 0.0) { return; }
 	ravenTimer = RAVEN_LIFE;
 	SendMessage(&worldMap, "lsff", MSG_WORLDMAP_CREATEENC_FLW, "pirate", 0.9, RAVEN_LIFE);
-	Log("Чёрные паруса на горизонте: «Ворон» идёт за нами");
+	if (Cargo_Total() > 0) { Log("Чёрные паруса на горизонте: «Ворон» почуял груз"); }
+	else { Log("Чёрные паруса на горизонте: «Ворон» идёт за нами"); }
 	Trace("MAP: raven");
 }
 
@@ -227,13 +239,14 @@ void Map_Exit()
 {
 	if (!inMap) { return; }
 	string island = worldMap.island;
-	if (island == HOME_ISLAND)
+	if (Trade_Market(island) >= 0)
 	{
-		Trace("MAP: to port");
+		portIsland = island;
+		Trace("MAP: to port " + island);
 		Game_GoTo("port");
 		return;
 	}
-	Log("Порт — на Острове Чаек");
+	Log("Порты — на Острове Чаек, Утёсе и Пальмовом");
 }
 
 // the plate under the clock: morale by the crew, food by the round shot in the hold

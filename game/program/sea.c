@@ -1133,10 +1133,14 @@ void Sea_Control(string control)
 	if (control == "Sea_Board" && !battleOver) { Sea_Board(); }
 }
 
+// a sunk brig is towed home to Gull Island, the pirates keep her cargo (trade.c)
 void Sea_AfterBattle()
 {
-	if (lastBattle == "win") { Game_GoTo("map"); }
-	else { Game_GoTo("port"); }
+	if (lastBattle == "win") { Game_GoTo("map"); return; }
+	Cargo_Lose();
+	portIsland = HOME_ISLAND;
+	Map_Home();
+	Game_GoTo("port");
 }
 
 float Sea_EnemyDistance()

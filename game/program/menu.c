@@ -1,5 +1,5 @@
-// Entry point: the main menu and the scenes, the port (port.c), the world map (map.c), the sea
-// battle (sea.c) and the boarding (deck.c), in the
+// Entry point: the main menu and the scenes, the port (port.c) with its market (trade.c), the world
+// map (map.c), the sea battle (sea.c) and the boarding (deck.c), in the
 // world they share (world.c). The menu lives in the interface layers, the scenes in their own; the
 // hidden one is frozen, so returning to either keeps its state. Escape in a scene opens the menu,
 // "Продолжить" returns, "Новая игра" starts in the port, "Выход" (or Escape in the menu) quits.
@@ -13,6 +13,7 @@
 #include "port.c"
 #include "deck.c"
 #include "map.c"
+#include "trade.c"
 
 #define MSG_INTERFACE_INIT 45010
 #define MSG_INTERFACE_SET_NODE_USING 45016
@@ -119,6 +120,7 @@ void Game_New()
 {
 	World_Create();
 	Game_ResetState();
+	Trade_Reset();
 	Map_Reset();
 	Game_ShowScene();
 	Game_GoTo("port");
@@ -234,7 +236,7 @@ void Game_Save()
 void OnSave()
 {
 	Port_RememberHero();
-	savefile_info = "Порт, " + gold + " песо, побед: " + wins;
+	savefile_info = Market_PortName(Trade_Here()) + ", " + gold + " песо, побед: " + wins;
 }
 
 // the load itself happens at the start of the next frame, then OnLoad continues
