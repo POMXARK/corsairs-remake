@@ -1,0 +1,7 @@
+; sailor skeleton and its actions; times are frames of sailor.an
+animation = demo\sailor.an
+
+[idle]
+start_time = 1
+end_time = 121
+loop = true

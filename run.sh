@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runs the game: downloads free assets, builds the sea battle assets with the generators of the engine
+# Runs the game: downloads free assets, builds the port and sea battle assets with the generators of the engine
 # demos (engine/demos), converts the menu assets (.tx textures, fonts.ini) and starts the engine in game/.
 # Usage: run.sh <path to built engine executable>
 # The engine is built from the engine/ submodule (see engine/LINUX_BUILD or the fork README).
@@ -20,6 +20,8 @@ python3 -I "$DEMOS/sound/make_sound.py" "$DIR/assets/ptserif" "$GAME/resource"
 python3 -I "$DEMOS/battle/make_battle.py" "$GAME/resource"
 python3 -I "$DEMOS/island/make_island.py" "$GAME/resource"
 python3 -I "$DEMOS/hud/make_hud.py" "$DIR/assets/ptserif" "$GAME/resource"
+# the port: quay, pier, the sailors and the dialog window (generators of the location and dialog demos)
+python3 -I "$DIR/tools/make_port.py" "$GAME/resource"
 # last: the sound demo writes its own fonts.ini, the game's fonts (with Cyrillic) replace it
 python3 -I "$DIR/tools/make_assets.py" "$DIR/assets" "$GAME/resource"
 # shaders are copied next to the engine by the build

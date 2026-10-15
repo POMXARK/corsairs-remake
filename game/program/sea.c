@@ -1,19 +1,9 @@
-// The sea battle, the first scene of the game: the player's brig «Ласточка» against the brig «Ворон»
-// at an island, with the HUD over it. Built from the engine demos (sea, ship, island, enemy ship,
-// HUD): SEA_AI steers the enemy and aims the guns of both, touch keeps the ships off the shore and
-// each other, battle_interface draws the navigator and the ship panel.
-// The scene lives in layers EXECUTE/REALIZE (and the sea reflection ones). Going to the menu only
-// freezes them, so the battle stays as it was until the player continues.
-// Space fires the guns that bear, R starts a new battle, Z and X zoom the minimap. A/D turn, W/S set
-// and furl the sails, the mouse turns the camera, Escape opens the menu.
-
-#define EXECUTE 0
-#define REALIZE 1
-// shared/layers.h: mirrored into the sea reflection (sky in the first, ships in the second)
-#define SEA_REFLECTION 15
-#define SEA_REFLECTION2 16
-// shared/layers.h: what the cannon balls and cameras trace against
-#define SAILS_TRACE 19
+// The sea battle: the player's brig «Ласточка» against the brig «Ворон» at an island, with the HUD
+// over it. Built from the engine demos (sea, ship, island, enemy ship, HUD): SEA_AI steers the enemy
+// and aims the guns of both, touch keeps the ships off the shore and each other, battle_interface
+// draws the navigator and the ship panel. The sea, the sky and the sound are the world's (world.c).
+// Space fires the guns that bear, R starts a new battle, Z and X zoom the minimap, Enter after the
+// battle returns to the port. A/D turn, W/S set and furl the sails, the mouse turns the camera.
 
 // shared/messages.h: "lsss", the foam dir under resource\foam\, the models dir under
 // resource\models\ and the name of the island model
@@ -35,16 +25,6 @@
 #define RELATION_ENEMY 3
 #define SHIP_MAST_TOUCH_BALL 2
 
-// "lsffffffl": name, position, angles, lifetime in ms (0 burns until the system ends itself)
-#define PS_CREATE 10000
-
-#define MSG_SOUND_PLAY 77003
-#define MSG_SOUND_SET_MASTER_VOLUME 77021
-#define PCM_3D 1
-#define MP3_STEREO 2
-#define VOLUME_FX 1
-#define VOLUME_MUSIC 2
-
 // shared/battle_interface/msg_control.h
 #define BI_IN_CREATE_SHIP 46011
 #define BI_IN_DEAD_SHIP 46009
@@ -54,9 +34,6 @@
 #define ICON_BALLS 0
 #define ICON_SAILS_FURLED 1
 #define ICON_WIND_CALM 4
-
-#define LOG_ADD_STRING 45020
-#define LOG_AND_ACTIONS_INIT 45022
 
 #define PI 3.14159265
 // the muzzle speed of a ball in m/s and the highest elevation of the guns: together they give a
@@ -92,17 +69,9 @@
 int iShipPriorityExecute = 2;
 int iShipPriorityRealize = 31;
 
-object Render;
-object Scene;
-object Weather;
-object Sky;
-object Sea;
 object Sail;
 object SeaCameras;
 object ShipCamera;
-object ScreenLog;
-object Particles;
-object Sound;
 // the land, its sea floor and the depth map of the waters around
 object Island;
 // pushes the ships off the shore and off each other
@@ -132,11 +101,7 @@ int hits = 0;
 int islandHits = 0;
 int shallowsCalled = 0;
 
-float fogHeight = 150.0;
-
-int sceneCreated = 0;
-
-void Scene_MapControls()
+void Sea_MapControls()
 {
 	// key codes are Windows virtual keys, 256/257 are the mouse axes
 	MapKey("Ship_TurnLeft", 65, 0);
@@ -147,59 +112,52 @@ void Scene_MapControls()
 	MapKey("ShipCamera_Turn_V", 257, 0);
 	MapKey("Sea_Fire", 32, 0);
 	MapKey("Sea_NewBattle", 82, 0);
+	MapKey("Sea_ToPort", 13, 0);
 	// read every frame while held: the minimap zooms smoothly
 	MapKey("MiniMapZoomIn", 90, 0);
 	MapKey("MiniMapZoomOut", 88, 0);
-	MapKey("Scene_Menu", 27, 0);
 }
 
-// a new game: builds the scene once, later starts a new battle in it
-void Scene_Start()
+// Out of the harbour: the open sea rises and the battle music comes in. The world (world.c) is
+// there already; the island, the ships and the HUD are made here and deleted by Sea_Leave.
+void Sea_Enter()
 {
-	if (sceneCreated != 0)
-	{
-		Sea_NewBattle();
-		return;
-	}
-	sceneCreated = 1;
-	Weather.Wind.Angle = 0.0;
-	Weather.Wind.Speed = 12.0;
-
-	Render.BackColor = argb(255, 0, 0, 0);
-	CreateEntity(&Scene, "Scene");
-	LayerAddObject(EXECUTE, &Scene, 0);
-	CreateWorld();
+	World_Waves(1.8, 0.6);
+	World_Ambient(0);
+	World_Music("music\battle.wav");
+	shots = 0;
+	hits = 0;
+	islandHits = 0;
 	CreateIsland();
 	CreateSail();
-	CreateLog();
 	CreateEffects();
 	CreateBattle();
 	CreateCamera();
 	CreateHud();
 
 	SetEventHandler("Sea_StartBattle", "Sea_StartBattle", 0);
-	Log("Враг на западе. Пробел — огонь, R — новый бой");
+	Log("«Ворон» на западе! Пробел — огонь");
 	Trace("SEA: scene loaded");
 }
 
-void Scene_Freeze(int freeze)
+// The entities go at the end of the frame, so the port is made in the next one (menu.c,
+// Game_GoTo). SEA_AI deletes its ships with it.
+void Sea_Leave()
 {
-	LayerFreeze(EXECUTE, freeze);
-	LayerFreeze(REALIZE, freeze);
-	LayerFreeze(SEA_REFLECTION, freeze);
-	LayerFreeze(SEA_REFLECTION2, freeze);
+	DeleteClass(&BattleInterface);
+	DeleteClass(&AISea);
+	DeleteClass(&Touch);
+	DeleteClass(&AIBalls);
+	DeleteClass(&Island);
+	DeleteClass(&Sail);
+	DeleteClass(&ShipCamera);
+	DeleteClass(&SeaCameras);
+	Trace("SEA: left");
 }
 
-// Sounds, particles and the cannonballs. AIBalls reads the ball types once, on isDone.
+// SEA_AI and the cannonballs. AIBalls reads the ball types once, on isDone.
 void CreateEffects()
 {
-	CreateEntity(&Particles, "particles");
-
-	CreateEntity(&Sound, "Sound");
-	SendMessage(&Sound, "lfff", MSG_SOUND_SET_MASTER_VOLUME, 1.0, 0.5, 1.0);
-	SendMessage(&Sound, "lslllllllf", MSG_SOUND_PLAY, "music\battle.wav", MP3_STEREO, VOLUME_MUSIC,
-		false, true, false, 3000, 0, 1.0);
-
 	// AIBalls takes the renderer from the helper of SEA_AI: SEA_AI comes first
 	CreateSeaAI();
 	CreateEntity(&AIBalls, "AIBalls");
@@ -518,11 +476,15 @@ void DamageHull(ref character, float damage, string message)
 	SendMessage(&BattleInterface, "ll", BI_IN_DEAD_SHIP, sti(character.index));
 	if (sti(character.index) == sti(Enemy.index))
 	{
-		Log("Враг тонет! Попаданий " + hits + " из " + shots + ", R — новый бой");
+		// Tom pays for every «Ворон» sunk when the player is back in the port
+		lastBattle = "win";
+		unpaidWins++;
+		Log("Враг тонет! Попаданий " + hits + " из " + shots + ". Enter — в порт, R — новый бой");
 		Trace("SEA: enemy sinks after " + hits + " hits of " + shots + " shots");
 		return;
 	}
-	Log("Мы тонем! R — новый бой");
+	lastBattle = "loss";
+	Log("Мы тонем! Enter — в порт, R — новый бой");
 	Trace("SEA: player sinks");
 }
 
@@ -631,74 +593,6 @@ float Sea_MastDamage()
 	float damage = GetEventData();
 	if (touch != SHIP_MAST_TOUCH_BALL) { return damage; }
 	return damage + MAST_HIT_DAMAGE;
-}
-
-void CreateWorld()
-{
-	CreateEntity(&Weather, "weather");
-	Weather.Fog.Enable = 1;
-	Weather.Fog.Start = 0.0;
-	Weather.Fog.Density = 0.002;
-	Weather.Fog.Color = argb(0, 150, 185, 215);
-	Weather.Sun.Color = argb(0, 230, 220, 205);
-	Weather.Sun.Ambient = argb(0, 95, 100, 105);
-	Weather.Sun.HeightAngle = 0.7;
-	Weather.Sun.AzimuthAngle = 2.618;
-	// the entity takes the wind only when it is assigned after its creation (AttributeChanged)
-	Weather.Wind.Angle = stf(Weather.Wind.Angle);
-	Weather.Wind.Speed = stf(Weather.Wind.Speed);
-	Weather.isDone = "";
-
-	SetEventHandler("WhrCalcFogColor", "Sea_FogColor", 0);
-	CreateEntity(&Sky, "Sky");
-	Sky.Size = 2048.0;
-	Sky.Angle = 0.0;
-	Sky.RotateSpeed = 0.0;
-	Sky.techSky = "Sky";
-	Sky.techSkyBlend = "SkyBlend";
-	Sky.techSkyAlpha = "skyblend_alpha";
-	Sky.techSkyFog = "SkyFog";
-	LayerAddObject(EXECUTE, &Sky, 2);
-	LayerAddObject(REALIZE, &Sky, 3);
-	LayerAddObject(SEA_REFLECTION, &Sky, 1);
-	Sky.Dir.d0 = "weather\skies\day\";
-	Sky.Dir = "12";
-	Sky.Color = argb(0, 255, 255, 255);
-	Sky.isDone = "";
-
-	CreateEntity(&Sea, "sea");
-	LayerAddObject(EXECUTE, &Sea, 4);
-	LayerAddObject(REALIZE, &Sea, 65530);
-	Sea.Sea2.WaterColor = argb(0, 30, 90, 115);
-	Sea.Sea2.SkyColor = argb(0, 205, 255, 255);
-	Sea.Sea2.Amp1 = 1.8;
-	Sea.Sea2.AnimSpeed1 = 1.5;
-	Sea.Sea2.Scale1 = 0.6;
-	Sea.Sea2.MoveSpeed1 = "2.0, 0.0, 0.0";
-	Sea.Sea2.Amp2 = 0.6;
-	Sea.Sea2.AnimSpeed2 = 15.0;
-	Sea.Sea2.Scale2 = 3.8;
-	Sea.Sea2.MoveSpeed2 = "1.0, 0.0, 1.0";
-	Sea.Sea2.PosShift = 1.0;
-	Sea.Sea2.BumpScale = 0.05;
-	Sea.Sea2.Reflection = 0.6;
-	Sea.Sea2.Transparency = 0.45;
-	Sea.Sea2.Frenel = 0.45;
-	Sea.Sea2.Attenuation = 0.3;
-	Sea.Sea2.LodScale = 0.5;
-	Sea.Sea2.GridStep = 0.1;
-	Sea.Sea2.FoamEnable = 1;
-	Sea.Sea2.FoamK = 0.2;
-	Sea.Sea2.FoamV = 2.0;
-	Sea.Sea2.FoamUV = 0.5;
-	Sea.Sea2.FoamTexDisturb = 0.7;
-	Sea.Sea2.SimpleSea = 0;
-	Sea.Fog.Enable = 1;
-	Sea.Fog.Start = 0.0;
-	Sea.Fog.Color = argb(0, 150, 185, 215);
-	Sea.Fog.SeaDensity = 0.001;
-	Sea.MaxSeaHeight = 50.0;
-	Sea.isDone = "";
 }
 
 // The sail entity serves the sails of every ship; the ship type is shared by both brigs. Its sides
@@ -942,30 +836,6 @@ void CreateCamera()
 	SendMessage(&Scene, "si", "SetActiveCamera", &ShipCamera);
 }
 
-void CreateLog()
-{
-	ScreenLog.Log.left = 16;
-	ScreenLog.Log.up = 12;
-	// narrower than the screen: the navigator takes the top right corner
-	ScreenLog.Log.width = 540;
-	ScreenLog.Log.height = 140;
-	ScreenLog.Log.font = "interface_normal";
-	ScreenLog.Log.fontscale = 1.0;
-	ScreenLog.Log.color = argb(0, 255, 245, 215);
-	ScreenLog.Log.offsetString = 26;
-	ScreenLog.Log.speed = 0.1;
-	ScreenLog.Log.color_speed = 0.03;
-	CreateEntity(&ScreenLog, "ILogAndActions");
-	LayerAddObject(EXECUTE, &ScreenLog, 100);
-	LayerAddObject(REALIZE, &ScreenLog, 65535);
-	SendMessage(&ScreenLog, "lll", LOG_AND_ACTIONS_INIT, 0, 1);
-}
-
-void Log(string text)
-{
-	SendMessage(&ScreenLog, "lls", LOG_ADD_STRING, 0, text);
-}
-
 void Sea_ShipLayers()
 {
 	aref ship = GetEventData();
@@ -997,20 +867,8 @@ ref Sea_SailTextures()
 	return &SailTextures;
 }
 
-int Sea_FogColor()
-{
-	float x = GetEventData();
-	float y = GetEventData();
-	float z = GetEventData();
-	float k = y / fogHeight;
-	if (k < 0.0) { k = 0.0; }
-	if (k > 1.0) { k = 1.0; }
-	int alpha = 255 - makeint(255.0 * k);
-	return or(shl(alpha, 24), sti(Weather.Fog.Color));
-}
-
-// called by menu.c for the controls pressed while the scene is shown
-void Scene_Control(string control)
+// called by menu.c for the controls pressed while the sea is shown
+void Sea_Control(string control)
 {
 	if (control == "Sea_Fire" && !battleOver)
 	{
@@ -1019,4 +877,5 @@ void Scene_Control(string control)
 		if (playerBroadsides == before) { Log("Ни один заряженный борт не смотрит на врага"); }
 	}
 	if (control == "Sea_NewBattle") { Sea_NewBattle(); }
+	if (control == "Sea_ToPort" && battleOver) { Game_GoTo("port"); }
 }

@@ -8,10 +8,12 @@ are committed, so the game runs right after clone; `run.sh` rebuilds them (the o
 ```
 engine/   Storm Engine fork (submodule, branch miniaudio-sound)
 assets/   downloaded free assets: fonts, the menu background
-game/     game folder the engine runs in: engine.ini, program/ (menu.c — the menu, sea.c — the sea battle),
+game/     game folder the engine runs in: engine.ini, program/ (menu.c — the menu and the scene switch,
+          world.c — the sea, sky, sound and game state, port.c — the port and Tom, sea.c — the sea battle),
           resource/ (ini, built textures, models, sounds)
-tools/    fetch_assets.sh — downloads free assets; make_assets.py — converts them to .tx textures and fonts.ini.
-          The sea battle assets come from the generators of the engine demos (engine/demos/*/make_*.py)
+tools/    fetch_assets.sh — downloads free assets; make_assets.py — converts them to .tx textures and fonts.ini;
+          make_port.py — the port: quay, pier, sailors, dialog window.
+          The other assets come from the generators of the engine demos (engine/demos/*/make_*.py)
 ```
 
 ## Run (Linux)
@@ -24,9 +26,25 @@ git clone --recursive https://github.com/POMXARK/corsairs-remake.git
 
 Arrow keys / mouse select a menu item, Enter or a click activates it, Escape or «Выход» quits.
 
-«Новая игра» starts a sea battle built from the engine demos: our brig «Ласточка» against the AI brig
-«Ворон» near an island, with the HUD — navigator (compass, wind, speeds, the enemy on the minimap), the
-ship panel (hull, sails, crew, cannon reload) and the battle log in Russian.
+«Новая игра» starts in the port: the captain walks along the quay to the old boatswain Tom at the end of
+the pier. Tom tells about the pirate brig «Ворон» guarding the bay, and «Отдать швартовы!» takes the
+captain's brig «Ласточка» out to sea. The battle is built from the engine demos: the AI brig «Ворон» near
+an island, with the HUD — navigator (compass, wind, speeds, the enemy on the minimap), the ship panel
+(hull, sails, crew, cannon reload) and the battle log in Russian. After the battle Enter returns to the
+port, where Tom pays 500 pesos for every «Ворон» sunk.
+
+In the port:
+
+| Key | Action |
+|---|---|
+| W / S | walk forward / back |
+| A / D, mouse | turn |
+| Shift | walk instead of running |
+| E | talk to Tom (next to him) |
+| Up / Down, Enter or Space | pick and say an answer; Escape leaves the conversation |
+| Escape | menu |
+
+At sea:
 
 | Key | Action |
 |---|---|
@@ -36,7 +54,8 @@ ship panel (hull, sails, crew, cannon reload) and the battle log in Russian.
 | Space | broadside: the loaded side that faces the enemy fires |
 | Z / X | zoom the minimap in / out |
 | R | new battle |
+| Enter | back to the port, when the battle is over |
 | Escape | menu |
 
-The menu does not lose the battle — the scene is only frozen, and «Продолжить» brings it back as it was;
+The menu does not lose the scene — it is only frozen, and «Продолжить» brings it back as it was;
 «Новая игра» starts a new one.

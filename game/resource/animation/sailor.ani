@@ -1,0 +1,43 @@
+; the sailor as a location character; times are frames of sailor.an
+animation = sailor.an
+
+[idle_1]
+start_time = 1
+end_time = 121
+loop = true
+
+[walk]
+start_time = 123
+end_time = 155
+loop = true
+data = "Walk speed", "1.312"
+
+[back walk]
+start_time = 123
+end_time = 155
+loop = true
+type = reverse
+data = "Walk speed", "-1.312"
+
+[run]
+start_time = 157
+end_time = 177
+loop = true
+data = "Walk speed", "3.600"
+
+[back run]
+start_time = 157
+end_time = 177
+loop = true
+type = reverse
+data = "Walk speed", "-3.600"
+
+[turn left]
+start_time = 179
+end_time = 203
+loop = true
+
+[turn right]
+start_time = 179
+end_time = 203
+loop = true
