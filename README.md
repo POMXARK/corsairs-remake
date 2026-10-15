@@ -20,6 +20,13 @@ tools/    fetch_assets.sh — downloads free assets; make_assets.py — converts
 
 ## Video
 
+[![The voyage: the world map between the port and the sea battle](media/voyage.jpg)](media/voyage.mp4)
+
+The voyage (105 s, with sound): «Новая игра» → the brig casts off onto the world map, clouds over the
+archipelago, the date under the clock → black sails: «Ворон» comes after her and catches her → the sea
+battle (cut short in this run, the win is set by the script) → back on the map the brig makes for Gull
+Island → Enter in its waters → the port.
+
 [![Boarding: the captain and his sailors against the pirates on the deck of «Ворон»](media/boarding.jpg)](media/boarding.mp4)
 
 Boarding (65 s, with sound): Tom sends the captain out → «Ворон» comes out of the cannonade wrecked and the
