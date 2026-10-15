@@ -5,3 +5,5 @@ game/resource/techniques
 game/engine.out
 *.log
 *.dxvk-cache
+# the player's saves
+game/save/

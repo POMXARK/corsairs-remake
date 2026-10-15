@@ -26,6 +26,8 @@ python3 -I "$DIR/tools/make_port.py" "$GAME/resource"
 python3 -I "$DIR/tools/make_assets.py" "$DIR/assets" "$GAME/resource"
 # shaders are copied next to the engine by the build
 ln -sfn "$(dirname "$ENGINE")/resource/techniques" "$GAME/resource/techniques"
+# the saves: on Linux the engine finds only files whose folder existed when it started
+mkdir -p "$GAME/save"
 
 # the engine indexes resources by scanning the working directory, so it runs from game/
 cd "$GAME"

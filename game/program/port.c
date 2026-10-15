@@ -12,6 +12,7 @@
 #define MSG_LOCATION_TEXTURESPATH 30141
 #define MSG_CHARACTER_SETMODEL 30200
 #define MSG_CHARACTER_GETPOS 30202
+#define MSG_CHARACTER_GETAY 30203
 #define MSG_CHARACTER_TELEPORT_AY 30211
 #define MSG_CAMERA_SETTARGET 30500
 #define MSG_CAMERA_FOLLOW 30510
@@ -48,6 +49,12 @@ int nearTom = 0;
 int dialogOpen = 0;
 // "Отдать швартовы!": the port is left when the dialog has closed
 int castOff = 0;
+// "save": the hero comes back where he was saved
+string portSpawn = "";
+float heroX = 0.0;
+float heroY = 0.0;
+float heroZ = 0.0;
+float heroAY = 0.0;
 
 void Port_MapControls()
 {
@@ -61,6 +68,7 @@ void Port_MapControls()
 	MapKey("ChrTurnH", 256, 0);
 	MapKey("ChrCamTurnV", 257, 0);
 	MapKey("Port_Talk", 69, 0);
+	// F5 saves (menu.c)
 	// polled by the dialog entity every frame while it is open
 	MapKey("DlgUp", 38, 0);
 	MapKey("DlgDown", 40, 0);
@@ -106,8 +114,12 @@ void Port_Enter()
 	// character read the action names again
 	Hero.actions.idle.i1 = "idle_1";
 	Hero.actions = "";
-	if (lastBattle == "") { SendMessage(&Hero, "lffff", MSG_CHARACTER_TELEPORT_AY, 0.0, PORT_DECK, -24.0, 0.0); }
-	else { SendMessage(&Hero, "lffff", MSG_CHARACTER_TELEPORT_AY, 0.0, PORT_DECK, 1.0, 0.0); }
+	if (portSpawn == "save") { SendMessage(&Hero, "lffff", MSG_CHARACTER_TELEPORT_AY, heroX, heroY, heroZ, heroAY); }
+	else
+	{
+		if (lastBattle == "") { SendMessage(&Hero, "lffff", MSG_CHARACTER_TELEPORT_AY, 0.0, PORT_DECK, -24.0, 0.0); }
+		else { SendMessage(&Hero, "lffff", MSG_CHARACTER_TELEPORT_AY, 0.0, PORT_DECK, 1.0, 0.0); }
+	}
 
 	CreateEntity(&PortCamera, "locationcamera");
 	SendMessage(&PortCamera, "li", MSG_CAMERA_SETTARGET, &Hero);
@@ -141,8 +153,13 @@ void Port_Enter()
 	castOff = 0;
 	portVisit++;
 	PostEvent("Port_Tick", TICK_MS, "l", portVisit);
-	if (lastBattle == "") { Log("Порт. Том ждёт на краю пирса. W/S — идти, A/D — поворот"); }
-	else { Log("Снова в порту. Том ждёт на пирсе"); }
+	if (portSpawn == "save") { Log("Игра загружена: " + gold + " песо, побед: " + wins); }
+	else
+	{
+		if (lastBattle == "") { Log("Порт. Том ждёт на краю пирса. W/S — идти, A/D — поворот, F5 — сохранить"); }
+		else { Log("Снова в порту. Том ждёт на пирсе"); }
+	}
+	portSpawn = "";
 	Trace("PORT: scene loaded");
 }
 
@@ -185,6 +202,13 @@ ref Port_ShadowDensity()
 float Port_FogDensity()
 {
 	return stf(Weather.Fog.Density);
+}
+
+// for the save: the hero entity keeps his position to itself
+void Port_RememberHero()
+{
+	SendMessage(&Hero, "leee", MSG_CHARACTER_GETPOS, &heroX, &heroY, &heroZ);
+	SendMessage(&Hero, "le", MSG_CHARACTER_GETAY, &heroAY);
 }
 
 float Port_TomDistance()

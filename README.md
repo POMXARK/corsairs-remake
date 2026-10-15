@@ -41,6 +41,7 @@ In the port:
 | A / D, mouse | turn |
 | Shift | walk instead of running |
 | E | talk to Tom (next to him) |
+| F5 | save the game (out of a conversation) |
 | Up / Down, Enter or Space | pick and say an answer; Escape leaves the conversation |
 | Escape | menu |
 
@@ -59,3 +60,6 @@ At sea:
 
 The menu does not lose the scene — it is only frozen, and «Продолжить» brings it back as it was;
 «Новая игра» starts a new one.
+
+F5 in the port saves the game to `game/save/game.sav` (gold, wins, the captain's place on the quay);
+«Загрузить» in the menu, active when a save exists, brings it back. At sea the game is not saved.

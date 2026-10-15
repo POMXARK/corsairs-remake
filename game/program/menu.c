@@ -3,6 +3,9 @@
 // hidden one is frozen, so returning to either keeps its state. Escape in a scene opens the menu,
 // "Продолжить" returns, "Новая игра" starts in the port, "Выход" (or Escape in the menu) quits.
 // Going from one scene to the other deletes the first and makes the second in the next frame.
+// F5 in the port saves the game, «Загрузить» loads it: SaveEngineState writes every script variable,
+// LoadEngineState deletes all entities, restores the variables and calls OnLoad, which makes the
+// menu, the world and the port again.
 
 #include "world.c"
 #include "sea.c"
@@ -15,7 +18,14 @@
 #define INTERFACE_REALIZE 5
 #define INVERSE_CONTROL 4
 
+// the file is looked up through the resource paths: the folder must exist when the engine starts
+#define SAVE_FILE "save\game.sav"
+
 object GameInterface;
+// lists the files of a folder into its attributes when created
+object SaveFinder;
+// written into the header of the save file
+string savefile_info = "";
 
 int inScene = 0;
 // "port", "sea", or "" while the game goes from one to the other
@@ -43,9 +53,16 @@ void Main()
 	MapKey("IAction", 13, 0);
 	MapKey("ICancel", 27, 0);
 	MapKey("Scene_Menu", 27, 0);
+	MapKey("Game_Save", 116, 0);
 	Port_MapControls();
 	Sea_MapControls();
+	Menu_Create();
+	Trace("MENU: loaded");
+}
 
+// the controls stay after a load, the entities and the event handlers are made again
+void Menu_Create()
+{
 	CreateEntity(&GameInterface, "xinterface");
 	LayerAddObject(INTERFACE_EXECUTE, &GameInterface, -100);
 	LayerAddObject(INTERFACE_REALIZE, &GameInterface, -100);
@@ -57,7 +74,7 @@ void Main()
 	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\mainmenu.ini");
 	// nothing to continue yet
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "B_CONTINUE", 0);
-	Trace("MENU: loaded");
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "B_LOAD", SaveExists());
 }
 
 void Menu_Command()
@@ -70,6 +87,10 @@ void Menu_Command()
 		if (node == "B_NEWGAME")
 		{
 			Game_New();
+		}
+		if (node == "B_LOAD")
+		{
+			Game_Load();
 		}
 		if (node == "B_CONTINUE")
 		{
@@ -137,6 +158,11 @@ void Game_Control()
 	{
 		return;
 	}
+	if (control == "Game_Save")
+	{
+		Game_Save();
+		return;
+	}
 	// Escape in the dialog only leaves the conversation
 	if (control == "Scene_Menu" && !dialogOpen)
 	{
@@ -151,4 +177,67 @@ void Menu_Quit()
 {
 	Trace("MENU: quit");
 	ExitProgram();
+}
+
+// ---------------------------------------------------------------- save and load
+
+// FINDFILESINTODIRECTORY fills filelist with the files of dir matching mask when it is created
+int SaveExists()
+{
+	DeleteAttribute(&SaveFinder, "");
+	SaveFinder.dir = "save";
+	SaveFinder.mask = "game.sav";
+	CreateEntity(&SaveFinder, "FINDFILESINTODIRECTORY");
+	DeleteClass(&SaveFinder);
+	aref files;
+	makearef(files, SaveFinder.filelist);
+	if (GetAttributesNum(files) > 0) { return 1; }
+	return 0;
+}
+
+// The battle lives in entities the save does not keep (SEA_AI, the balls in flight): the game is
+// saved in the port only.
+void Game_Save()
+{
+	if (currentScene != "port" || dialogOpen)
+	{
+		Log("Сохраниться можно только в порту");
+		return;
+	}
+	SaveEngineState(SAVE_FILE);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "B_LOAD", 1);
+	Log("Игра сохранена: " + gold + " песо, побед: " + wins);
+	Trace("SAVE: saved, gold " + gold + " wins " + wins);
+}
+
+// called by SaveEngineState before the variables are written
+void OnSave()
+{
+	Port_RememberHero();
+	savefile_info = "Порт, " + gold + " песо, побед: " + wins;
+}
+
+// the load itself happens at the start of the next frame, then OnLoad continues
+void Game_Load()
+{
+	if (!SaveExists()) { return; }
+	Trace("SAVE: loading");
+	LoadEngineState(SAVE_FILE);
+}
+
+// The variables are back as they were saved, the entities and the event handlers are gone.
+void OnLoad()
+{
+	worldCreated = 0;
+	wavesSound = 0;
+	inPort = 0;
+	dialogOpen = 0;
+	castOff = 0;
+	currentScene = "";
+	Menu_Create();
+	World_Create();
+	portSpawn = "save";
+	Game_ShowScene();
+	PostEvent("Game_Enter", 1, "s", "port");
+	Trace("SAVE: loaded, gold " + gold + " wins " + wins);
 }
