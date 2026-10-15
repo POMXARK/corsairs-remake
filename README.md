@@ -59,8 +59,20 @@ git clone --recursive https://github.com/POMXARK/corsairs-remake.git
 
 ## Run (Windows 11)
 
-Visual Studio 2022 (or its Build Tools) with «Desktop development with C++», Python 3 with
-`pip install conan==2.12.2 Pillow`, then `conan profile detect`. In **Developer PowerShell for VS 2022**:
+Visual Studio 2022 or 2019 (Build Tools are enough) with «Desktop development with C++» and Python 3.
+In any PowerShell (or double-click the `.bat` files):
+
+```powershell
+git clone --recursive https://github.com/POMXARK/corsairs-remake.git
+cd corsairs-remake
+.\build.bat             # the engine with the game's editor windows: engine\build\default\Debug\engine.exe
+.\run.bat --editor
+```
+
+`build.bat` (`build.ps1` → `engine/build.ps1`) enters the developer shell of Visual Studio, puts the
+Scripts folder of Python in PATH, installs by pip what is missing (Conan 2.12.2, Ninja, CMake ≥ 3.24,
+Pillow), makes the Conan profile and builds the preset; the first build downloads several GB of Conan
+packages. By hand it is, in Developer PowerShell for VS:
 
 ```powershell
 git clone --recursive https://github.com/POMXARK/corsairs-remake.git
