@@ -392,7 +392,7 @@ void Deck_End(int won)
 		unpaidWins++;
 		unpaidPrizes++;
 		Charge_Add(CHARGE_BALLS, PRIZE_BALLS);
-		Log("«Ворон» наш! В его трюме " + PRIZE_BALLS + " ядер, приз — " + prize + " песо. Enter — в порт");
+		Log("«Ворон» наш! В его трюме " + PRIZE_BALLS + " ядер, приз — " + prize + " песо. Enter — на карту");
 		Trace("DECK: won, sailors lost " + sailorsLost + ", crew " + shipCrew);
 		return;
 	}
@@ -458,5 +458,5 @@ void Deck_Regen(ref chr)
 // called by menu.c for the controls pressed while the deck is shown
 void Deck_Control(string control)
 {
-	if (control == "Sea_ToPort" && deckOver) { Game_GoTo("port"); }
+	if (control == "Sea_ToPort" && deckOver) { Sea_AfterBattle(); }
 }

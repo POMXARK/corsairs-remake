@@ -1,5 +1,5 @@
-// Entry point: the main menu and the scenes, the port (port.c), the sea battle (sea.c) and the
-// boarding (deck.c), in the
+// Entry point: the main menu and the scenes, the port (port.c), the world map (map.c), the sea
+// battle (sea.c) and the boarding (deck.c), in the
 // world they share (world.c). The menu lives in the interface layers, the scenes in their own; the
 // hidden one is frozen, so returning to either keeps its state. Escape in a scene opens the menu,
 // "Продолжить" returns, "Новая игра" starts in the port, "Выход" (or Escape in the menu) quits.
@@ -12,6 +12,7 @@
 #include "sea.c"
 #include "port.c"
 #include "deck.c"
+#include "map.c"
 
 #define MSG_INTERFACE_INIT 45010
 #define MSG_INTERFACE_SET_NODE_USING 45016
@@ -30,7 +31,7 @@ object SaveFinder;
 string savefile_info = "";
 
 int inScene = 0;
-// "port", "sea", "deck", or "" while the game goes from one to the other
+// "port", "map", "sea", "deck", or "" while the game goes from one to the other
 string currentScene = "";
 
 void MapKey(string controlName, int keyCode, int flags)
@@ -59,6 +60,7 @@ void Main()
 	Port_MapControls();
 	Sea_MapControls();
 	Deck_MapControls();
+	Map_MapControls();
 	Menu_Create();
 	Trace("MENU: loaded");
 }
@@ -117,6 +119,7 @@ void Game_New()
 {
 	World_Create();
 	Game_ResetState();
+	Map_Reset();
 	Game_ShowScene();
 	Game_GoTo("port");
 }
@@ -126,6 +129,7 @@ void Game_GoTo(string scene)
 	if (currentScene == "port") { Port_Leave(); }
 	if (currentScene == "sea") { Sea_Leave(); }
 	if (currentScene == "deck") { Deck_Leave(); }
+	if (currentScene == "map") { Map_Leave(); }
 	currentScene = "";
 	PostEvent("Game_Enter", 1, "s", scene);
 }
@@ -137,6 +141,7 @@ void Game_Enter()
 	if (scene == "port") { Port_Enter(); }
 	if (scene == "sea") { Sea_Enter(); }
 	if (scene == "deck") { Deck_Enter(); }
+	if (scene == "map") { Map_Enter(); }
 }
 
 void Game_ShowScene()
@@ -247,6 +252,7 @@ void OnLoad()
 	wavesSound = 0;
 	inPort = 0;
 	inDeck = 0;
+	inMap = 0;
 	dialogOpen = 0;
 	castOff = 0;
 	currentScene = "";

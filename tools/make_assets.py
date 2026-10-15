@@ -21,6 +21,9 @@ FONTS = {
     "dialog_text": ("ptserif/PT_Serif-Web-Regular.ttf", 19, 1),
     "dialog_links": ("ptserif/PT_Serif-Web-Regular.ttf", 18, 1),
     "dialog_name": ("ptserif/PT_Serif-Web-Bold.ttf", 18, 1),
+    # the world map (map.c): the island names and the date under the clock
+    "wdm_label": ("ptserif/PT_Serif-Web-Bold.ttf", 20, 2),
+    "wdm_date": ("ptserif/PT_Serif-Web-Bold.ttf", 15, 1),
 }
 CHARS = [chr(c) for c in range(33, 127)] + [chr(c) for c in range(0x410, 0x450)] + ["Ё", "ё", "—", "«", "»", "·"]
 SKIP_KEYS = {";", "[", "]"}  # would break the ini syntax

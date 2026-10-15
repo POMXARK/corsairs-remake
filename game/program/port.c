@@ -163,7 +163,7 @@ void Port_Enter()
 	Trace("PORT: scene loaded");
 }
 
-// The entities go at the end of the frame: the sea is made in the next one (menu.c, Game_GoTo).
+// The entities go at the end of the frame: the map is made in the next one (menu.c, Game_GoTo).
 void Port_Leave()
 {
 	if (dialogOpen) { Dialog_Close(); }
@@ -277,7 +277,7 @@ void Dialog_Close()
 	if (castOff)
 	{
 		castOff = 0;
-		Game_GoTo("sea");
+		Game_GoTo("map");
 	}
 }
 

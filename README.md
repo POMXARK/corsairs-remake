@@ -9,7 +9,7 @@ are committed, so the game runs right after clone; `run.sh` rebuilds them (the o
 engine/   Storm Engine fork (submodule, branch miniaudio-sound)
 assets/   downloaded free assets: fonts, the menu background
 game/     game folder the engine runs in: engine.ini, program/ (menu.c — the menu and the scene switch,
-          world.c — the sea, sky, sound and game state, port.c — the port and Tom, sea.c — the sea battle,
+          world.c — the sea, sky, sound and game state, port.c — the port and Tom, map.c — the world map, sea.c — the sea battle,
           deck.c — the boarding),
           resource/ (ini, built textures, models, sounds)
 tools/    fetch_assets.sh — downloads free assets; make_assets.py — converts them to .tx textures and fonts.ini;
@@ -52,10 +52,14 @@ Arrow keys / mouse select a menu item, Enter or a click activates it, Escape or 
 
 «Новая игра» starts in the port: the captain walks along the quay to the old boatswain Tom at the end of
 the pier. Tom tells about the pirate brig «Ворон» guarding the bay, and «Отдать швартовы!» takes the
-captain's brig «Ласточка» out to sea. The battle is built from the engine demos: the AI brig «Ворон» near
+captain's brig «Ласточка» out to the world map (the engine demo `worldmap`): an archipelago of four islands,
+the port on Остров Чаек, the clock with the sky of the day, the wind, clouds and storms. Out at sea «Ворон» comes
+after the brig, and when he catches her (or Enter is pressed with him near) the battle begins; a storm takes
+2% of the hull every 5 s, down to 20%. Enter in the waters of Остров Чаек returns to the port. The battle is built from the engine demos: the AI brig «Ворон» near
 an island, with the HUD — navigator (compass, wind, speeds, the enemy on the minimap), the ship panel
-(hull, sails, crew, cannon reload) and the battle log in Russian. After the battle Enter returns to the
-port, where Tom pays 500 pesos for the first «Ворон» sunk: two broadsides sink her even when only half of the balls hit.
+(hull, sails, crew, cannon reload) and the battle log in Russian. After a win Enter returns to the
+map, and the brig sails back to the port (no «Ворон» comes until Tom has paid); after a loss she is
+towed straight to the port. Tom pays 500 pesos for the first «Ворон» sunk: two broadsides sink her even when only half of the balls hit.
 The pirates learn: every next «Ворон», up to the fifth, takes a hit 20% better, carries 12 pirates
 more, takes 0.5% more of our hull with a hit, reloads 5% faster and sails 0.4 kn faster, and the governor pays 250 pesos
 more for him (the fifth and the later ones — 1500).
@@ -89,6 +93,16 @@ In the port:
 | Up / Down, Enter or Space | pick and say an answer; Escape leaves the conversation |
 | Escape | menu |
 
+On the world map:
+
+| Key | Action |
+|---|---|
+| W / S | raise / lower the sails |
+| A / D | turn |
+| mouse, wheel | turn the camera, zoom |
+| Enter | in the waters of Остров Чаек — into the port; with «Ворон» near — the battle |
+| Escape | menu |
+
 At sea:
 
 | Key | Action |
@@ -103,7 +117,7 @@ At sea:
 | 1 / 2 / 3 | load round shot / chain shot / grape shot |
 | Z / X | zoom the minimap in / out |
 | R | new battle |
-| Enter | back to the port, when the battle is over |
+| Enter | when the battle is over: to the map after a win, to the port after a loss |
 | Escape | menu |
 
 Boarding: when round shot has brought the hull of «Ворон» down to 50%, B within 150 m of him throws the
@@ -123,7 +137,7 @@ On the deck:
 | right mouse button | force attack: through a block |
 | Space, held | block |
 | Q | parry |
-| Enter | back to the port, when the fight is over |
+| Enter | when the fight is over: to the map after a win, to the port after a loss |
 | Escape | menu |
 
 The menu does not lose the scene — it is only frozen, and «Продолжить» brings it back as it was;

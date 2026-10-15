@@ -3,7 +3,7 @@
 // and aims the guns of both, touch keeps the ships off the shore and each other, battle_interface
 // draws the navigator and the ship panel. The sea, the sky and the sound are the world's (world.c).
 // Space fires the guns that bear, R starts a new battle, Z and X zoom the minimap, Enter after the
-// battle returns to the port. B boards a «Ворон» the guns have half wrecked when he is close (deck.c). A/D turn, W/S set and furl the sails, the mouse turns the camera.
+// battle goes on over the world map (map.c) after a win, to the port after a loss. B boards a «Ворон» the guns have half wrecked when he is close (deck.c). A/D turn, W/S set and furl the sails, the mouse turns the camera.
 
 // shared/messages.h: "lsss", the foam dir under resource\foam\, the models dir under
 // resource\models\ and the name of the island model
@@ -655,7 +655,7 @@ void DamageHull(ref character, float damage, string message)
 		lastBattle = "win";
 		unpaidGold = unpaidGold + Raven_Bounty();
 		unpaidWins++;
-		Log("Враг тонет! Попаданий " + hits + " из " + shots + ". Enter — в порт, R — новый бой");
+		Log("Враг тонет! Попаданий " + hits + " из " + shots + ". Enter — на карту, R — новый бой");
 		Trace("SEA: enemy sinks after " + hits + " hits of " + shots + " shots");
 		return;
 	}
@@ -1128,8 +1128,15 @@ void Sea_Control(string control)
 			Log("Камера свободна");
 		}
 	}
-	if (control == "Sea_ToPort" && battleOver) { Game_GoTo("port"); }
+	// a win sails on over the map to the port, a sunk brig is towed there
+	if (control == "Sea_ToPort" && battleOver) { Sea_AfterBattle(); }
 	if (control == "Sea_Board" && !battleOver) { Sea_Board(); }
+}
+
+void Sea_AfterBattle()
+{
+	if (lastBattle == "win") { Game_GoTo("map"); }
+	else { Game_GoTo("port"); }
 }
 
 float Sea_EnemyDistance()

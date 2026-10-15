@@ -208,6 +208,25 @@ void World_Waves(float amp1, float amp2, float maxHeight)
 	Sea.MaxSeaHeight = maxHeight;
 }
 
+// The world map (map.c) draws its own sea and sky: the world's leave the layers while it is shown.
+void World_ShowSea(int show)
+{
+	if (show)
+	{
+		LayerAddObject(EXECUTE, &Sky, 2);
+		LayerAddObject(REALIZE, &Sky, 3);
+		LayerAddObject(SEA_REFLECTION, &Sky, 1);
+		LayerAddObject(EXECUTE, &Sea, 4);
+		LayerAddObject(REALIZE, &Sea, 65530);
+		return;
+	}
+	LayerDelObject(EXECUTE, &Sky);
+	LayerDelObject(REALIZE, &Sky);
+	LayerDelObject(SEA_REFLECTION, &Sky);
+	LayerDelObject(EXECUTE, &Sea);
+	LayerDelObject(REALIZE, &Sea);
+}
+
 void CreateWeather()
 {
 	CreateEntity(&Weather, "weather");

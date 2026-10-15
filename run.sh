@@ -16,6 +16,9 @@ DEMOS="$DIR/engine/demos"
 python3 -I "$DEMOS/sea/make_sea.py" "$GAME/resource"
 python3 -I "$DEMOS/ship/make_ship.py" "$GAME/resource"
 python3 -I "$DEMOS/particles/make_particles.py" "$GAME/resource"
+# the world map between the port and the battle: islands, ships, clouds, its interface (before the sound
+# demo, whose demo_log font the game keeps)
+python3 -I "$DEMOS/worldmap/make_worldmap.py" "$DIR/assets/ptserif" "$GAME/resource"
 python3 -I "$DEMOS/sound/make_sound.py" "$DIR/assets/ptserif" "$GAME/resource"
 python3 -I "$DEMOS/battle/make_battle.py" "$GAME/resource"
 python3 -I "$DEMOS/island/make_island.py" "$GAME/resource"
