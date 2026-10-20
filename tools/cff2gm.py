@@ -104,6 +104,10 @@ def _parse_meshes_at(data: bytes, off: int, lod_count: int, vert_size: int):
                     a, b, c = r.u8(), r.u8(), r.u8()
                 faces.append((a, b, c))
 
+            # frame 0 places the part: translation 3f, rotation 3f (radians), frame number
+            frame0 = None
+            if anim_key_count:
+                frame0 = struct.unpack_from("<6f", data, r.off)
             r.skip(anim_key_count * 28)
 
             raw = mesh_name.rstrip(b'\x00')
@@ -117,6 +121,7 @@ def _parse_meshes_at(data: bytes, off: int, lod_count: int, vert_size: int):
                 "tex_index": tex_index,
                 "vertices": vertices,
                 "faces": faces,
+                "frame0": frame0,
             })
         lods.append(meshes)
     return lods, True
@@ -151,7 +156,8 @@ def parse_cff(path: Path):
 
     mesh_section_start = r.off
 
-    # Determine vertex size: try 13B first (most common), fall back to 12B
+    # Vertex size: 13B (pos, uv, rgb) in most files; 26 older PDM files (torus, Shlop, tavern_new...)
+    # have 12B vertices, checked by the mesh headers landing exactly after vertices + faces
     lods, ok = _parse_meshes_at(data, mesh_section_start, lod_count, 13)
     if not ok:
         lods, ok = _parse_meshes_at(data, mesh_section_start, lod_count, 12)
@@ -159,6 +165,24 @@ def parse_cff(path: Path):
         raise ValueError(f"Cannot parse mesh data (tried 13B and 12B vertices)")
 
     return origin, scale, textures, lods
+
+
+def frame_matrix(rx: float, ry: float, rz: float):
+    """Rotation of an animated part: Ry * Rx * Rz (D3DX yaw-pitch-roll).
+
+    Picked on the 84 PDM characters: with this order parts join at the joints best
+    (65 wins, the next order 8); the Noesis plugin turns Y the other way.
+    """
+    cx, sx = math.cos(rx), math.sin(rx)
+    cy, sy = math.cos(ry), math.sin(ry)
+    cz, sz = math.cos(rz), math.sin(rz)
+    mx = ((1, 0, 0), (0, cx, -sx), (0, sx, cx))
+    my = ((cy, 0, sy), (0, 1, 0), (-sy, 0, cy))
+    mz = ((cz, -sz, 0), (sz, cz, 0), (0, 0, 1))
+
+    def mul(a, b):
+        return tuple(tuple(sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)) for i in range(3))
+    return mul(my, mul(mx, mz))
 
 
 def compute_normals(positions, faces):
@@ -222,6 +246,13 @@ def cff_to_gm(cff_path: Path, gm_path: Path) -> bool:
             positions.append((px, py, pz))
             uvs.append((u / uv_delim, v / uv_delim))
 
+        # animated parts (characters, cut-scenes) are stored in local space, frame 0 puts them in place
+        if mdata["frame0"]:
+            tx, ty, tz, rx, ry, rz = mdata["frame0"]
+            m3 = frame_matrix(rx, ry, rz)
+            positions = [tuple(m3[i][0] * p[0] + m3[i][1] * p[1] + m3[i][2] * p[2] + t
+                               for i, t in enumerate((tx, ty, tz))) for p in positions]
+
         # CFF stores back-facing winding; reverse to CCW front-facing
         faces = [(a, c, b) for a, b, c in mdata["faces"]]
 
@@ -256,7 +287,8 @@ def main():
         dst.mkdir(parents=True, exist_ok=True)
         ok = 0
         fail = 0
-        for cff_file in sorted(src.rglob("*.cff")):
+        # PDM mixes .cff, .CfF and .Cff
+        for cff_file in sorted(f for f in src.rglob("*") if f.suffix.lower() == ".cff"):
             rel = cff_file.relative_to(src)
             gm_file = dst / (rel.with_suffix(".gm"))
             gm_file.parent.mkdir(parents=True, exist_ok=True)
