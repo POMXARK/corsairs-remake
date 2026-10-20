@@ -1,0 +1,20 @@
+# Главный виновник переполнения контекста
+engine_disasm.txt
+crash_stack.txt
+crash.dmp
+
+# Папки сборки и временные логи MSVC
+build/
+bin/
+CMakeFiles/
+Debug/
+Release/
+
+# Расширения тяжелых файлов
+*.txt
+*.md
+*.log
+*.dmp
+*.tlog
+*.tga
+*.gm

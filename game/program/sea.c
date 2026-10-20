@@ -152,6 +152,20 @@ int shallowsCalled = 0;
 // the log has told that «Ворон» can be boarded
 int boardHinted = 0;
 
+void MapKey(string controlName, int keyCode, int flags)
+{
+	int control = CreateControl(controlName);
+	MapControl(control, keyCode);
+	if (flags != 0)
+		SetControlFlags(control, flags);
+}
+
+void Main()
+{
+	Sea_MapControls();
+	Sea_StartBattle();
+}
+
 void Sea_MapControls()
 {
 	// key codes are Windows virtual keys, 256/257 are the mouse axes

@@ -1,0 +1,203 @@
+//------------------------------------------------
+//--- 010 Editor v8.0.1 Binary Template
+//
+//      File: CFF.bt
+//   Authors: Alexander Evdokimov
+//   Version: 0.2
+//   Purpose: Sea Dogs game CFF files
+// File Mask: *.cff
+//
+//   History: 
+//
+// 2018.07 v0.2 add computing vertex and texture coordinates, update texture properties section
+// 2018.06 v0.1 Initial release
+//
+//------------------------------------------------
+
+local float P_X,P_Y, P_Z, S_X, S_Y, S_Z, UVDel;
+local uint i, k, n = 0;
+
+typedef struct {
+  UBYTE Length;
+  char FileName[Length];
+} TEXTURE_FILE <name=texFileName>;
+   
+typedef struct (uint size) {
+  TEXTURE_FILE array[size] <optimize=false>;
+} FILE_LIST;
+
+typedef struct {
+  UINT Unknown;
+  UINT Unknown;
+  UINT Unknown;
+  UINT Unknown;
+  UINT Unknown;
+  UINT Unknown;
+  UINT Unknown;
+  UINT Unknown;
+  UINT Unknown;
+  UINT Count;
+  struct {
+    UINT TextureIndex;
+    FLOAT Unknown;
+    UINT Unknown;
+    UINT Unknown;
+    UINT Unknown;
+  } TEXTURE[Count];
+} MATERIALS <optimize=false>;
+
+typedef struct {   
+   UINT16 X;     
+   UINT16 Y;     
+   UINT16 Z;
+   UINT16 U;     
+   UINT16 V;
+   struct {
+     UBYTE R; 
+     UBYTE G;   
+     UBYTE B;
+   } COLOR;  
+
+   // Computing coordinates
+   // local float pos_x, pos_y, pos_z, coor_u, coor_v, R, G, B;
+   // pos_x = P_X + X*S_X/32767.0; 
+   // pos_y = P_Y + Y*S_Y/32767.0;  
+   // pos_z = P_Z + Z*S_Z/32767.0;
+   // coor_u = U/UVDel;
+   // coor_v = V/UVDel;
+   // R = COLOR.R/127;
+   // G = COLOR.G/127;
+   // B = COLOR.B/127;
+} VERTEX;
+
+typedef struct {
+
+  struct {
+    struct {
+      FLOAT X;
+      FLOAT Y;
+      FLOAT Z;
+    } MESH_ORIGIN;
+    FLOAT UVDelim;
+    UVDel = UVDelim;
+    FLOAT Radius;
+    UINT TextureIndex;
+    UINT VertexCount <name="Number of vertexes">;
+    UINT FaceCount <name="Number of faces">;
+    UINT Unknown; // always 1 
+    UINT AnimationKeyCount;
+    char Name[4];
+  } HEADER <name="Mesh header">;
+
+  VERTEX VERTEXES[HEADER.VertexCount];
+
+  struct {
+    if (HEADER.VertexCount <= 256) {
+      UBYTE I1;
+      UBYTE I2;
+      UBYTE I3;
+    } else {
+      UINT16 I1;
+      UINT16 I2;
+      UINT16 I3;
+    };
+  } FACE_INDEXES[HEADER.FaceCount] <name="Face Indexes">;
+
+  struct {
+    struct {
+      FLOAT X;
+      FLOAT Y;
+      FLOAT Z;
+    } TRANSLATION;
+    struct {
+      FLOAT X;
+      FLOAT Y;
+      FLOAT Z;
+    } ROTATION;
+    FLOAT Frame; //
+  } ANIMATIONS[HEADER.AnimationKeyCount];
+
+} MESH <name=meshName>;
+
+
+typedef struct (uint size) {
+  MESH array[size] <optimize=false>;
+} MESH_ARRAY;
+
+struct {
+  struct {
+    FLOAT X;
+    FLOAT Y;
+    FLOAT Z;
+  } OBJECT_ORIGIN <name="Origin">;
+  struct {
+    FLOAT X;
+    FLOAT Y;
+    FLOAT Z;
+  } OBJECT_SCALE <name="Scale">;
+  UINT TextureCount <name="Number of textures">;
+  UINT MaterialCount <name="Number of materials">;
+  UINT LOD <name="Number of objects (LOD)"> 
+  UINT SectionOffset <name="BSP section Offset">; 
+  FLOAT LODSwitchDistance <name="Distance to switch LOD models">;
+  P_X = OBJECT_ORIGIN.X;
+  P_Y = OBJECT_ORIGIN.Y;
+  P_Z = OBJECT_ORIGIN.Z; 
+  S_X = OBJECT_SCALE.X;  
+  S_Y = OBJECT_SCALE.Y;  
+  S_Z = OBJECT_SCALE.Z; 
+} FILE_HEADER <name="File Header">;
+
+FILE_LIST Textures(FILE_HEADER.TextureCount) <name="Textures List">;
+
+struct {  
+  MATERIALS TexProperties[FILE_HEADER.MaterialCount] <name="Materials">;
+} MATS;
+
+typedef struct {    
+    UINT MeshCount;
+    UINT Zero; // not used
+    MESH_ARRAY Meshes(MeshCount); 
+} LOD_MODEL;
+
+LOD_MODEL LODModels[FILE_HEADER.LOD] <optimize=false>;
+
+if (FILE_HEADER.SectionOffset > 0) {
+  struct {
+    struct {
+       UINT Type;
+       UINT Count1;
+       UINT Count2;
+       UINT Count3;
+       UINT DataSize;
+    } HEADER; 
+    if (HEADER.Type == 1) 
+    { 
+      for (i = 0; i < HEADER.Count1 + HEADER.Count2; ++i)
+      {
+        struct {
+          INT Index;
+          INT Index;
+          do 
+          {
+            INT16 Index;
+            INT16 Index;
+          } while (Index >= 0);
+        } NODE;
+      };
+    } 
+      else 
+    {
+
+    };  
+  } BSP_Tree;
+};
+
+
+string texFileName(TEXTURE_FILE &file) {
+  return file.FileName;
+}
+
+string meshName(MESH &mesh) {
+  return mesh.HEADER.Name;
+}
