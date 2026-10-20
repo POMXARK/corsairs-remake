@@ -3,7 +3,8 @@
 # of the game and are converted on the first run; the game logic is the scripts in program/.
 # Usage: run.sh <path to built engine executable> [engine options]
 # PDM=<Sea Dogs install dir with RESOURCE> (default: ../../Корсары next to the repository)
-# RECONVERT=1 converts everything again. SCENE=review starts with the fleet review.
+# RECONVERT=1 converts everything again. SCENE=review starts with the fleet review,
+# SCENE=story runs the self-test of the story machine (every action of the original) and quits.
 set -euo pipefail
 ENGINE="$(realpath "$1")"
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -29,7 +30,8 @@ if [ ! -f "$DIR/resource/.converted" ]; then
     touch "$DIR/resource/.converted"
 fi
 python3 -I "$TOOLS/pdm_data2c.py" "$DIR/data" "$DIR/program"
-# the scene to start with: sea (the hero on his ship) or review (all ship types side by side)
+python3 -I "$TOOLS/pdm_logic2c.py" "$DIR/data" "$DIR/program"
+# the scene to start with: sea (the hero on his ship), review (all ship types side by side) or story
 echo "string StartScene = \"${SCENE:-sea}\";" > "$DIR/program/data/start.c"
 ln -sfn "$(dirname "$ENGINE")/resource/techniques" "$DIR/resource/techniques"
 

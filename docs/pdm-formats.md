@@ -222,6 +222,25 @@ count × {
 
 Как это связано: действие `.a` запускает линию (`LAUNCH Story_line "X"`) или переключает её квест (`SET_FOR Story_line "Mullen_check_1000" Quest "void"`). Движок проверяет условие текущего квеста, а когда оно выполнено, запускает его `action`. Тот, в свою очередь, двигает линию дальше, выдаёт предметы, меняет диалоги персонажей (`SET_FOR Person "X" Dialog "Y"`).
 
+## Конвертер логики (`tools/pdm_logic2c.py`)
+
+`run.sh` переводит всю сюжетную логику в `program/data/pdm_logic.c`, а исполняет её `program/story.c`. Сводка: 715 действий (2461 команда), 76 линий, 554 диалога (2887 ссылок), 12 пропусков. Все пропуски — битые ссылки самого оригинала: нет `Quest_1`/`Quest_6`.ql, персонажей Friend и Stranger with an accent, узлов Roberto Gorrando `No_yet`/`Ready_to_action`, квеста `French_line:Capture_Ballena`, предметов Brin's letter и `money2000`.
+
+Шаблон:
+- каждое `.a` превращается в функцию `PdmA_<имя>()`; каждая из 30 видов команд — это вызов одного из 24 примитивов (`Pdm_SetQuest`, `Pdm_SetDLink`, `Pdm_AddItem`, `Pdm_SetDialog`, `Pdm_OpenLocation` …);
+- линия хранится в `PdmLines.<линия>`: `launched`, `current` и квесты `q<i>` с полями `action`, `enter`, `cond`, `kind`, `target`, `value`, `to`;
+- диалог хранится в `PdmDialogs.<диалог>.<узел>.<ссылка>`: `text`, `to`, `on`, `action`; `Pdm_DialogChoose` выполняет действие включённой ссылки;
+- `story_lines.idf` задаёт линии, открытые в новой игре (`PdmLogic_NewGame`).
+
+Семантика `CORE.dll`:
+- `action_alt` выполняется при входе в квест (`SET_FOR Story_line … Quest …`): так в новой игре выдаётся медальон;
+- когда условие выполнено, выполняется `action`; если действие не сдвинуло линию, она переходит к следующему квесту (сообщение 9001), а после последнего закрывается; каскад ограничен 5000 шагами;
+- `SET_FOR Person … Item N` задаёт количество, а не прибавляет: в данных встречаются зарплаты -700 и 0;
+- имена сравниваются без учёта регистра, `_` равно пробелу (`add_medallion` = `add medallion`);
+- копия `RESOURCE/INI/DIALOGS` не используется, только `RESOURCE/DIALOGS`.
+
+Проверка: `SCENE=story pdm-game/run.sh build/Debug/engine` — новая игра, цепочка каперского свидетельства Англии и запуск всех 715 действий; в `compile.log` строки `PDM story test: ok …`.
+
 ## Логика игры — в DLL
 
 В `MODULES/` 104 модуля Storm 1 (PE32 i386). Каждый экспортирует только `?CreateEntity@@YAPAVEntity@@PAD@Z`. Скриптов на C, как в Storm 2, нет. Логика — это DLL плюс данные: ACTIONS, QUESTS, DIALOGS (сюжетная машина описана выше в разделе QL). Поэтому скрипты TEHO оригинал не запустят — нужен свой `program/*.c`, который читает данные PDM.

@@ -1,6 +1,7 @@
 // The original Sea Dogs (PDM 1.061) on Storm Engine. The original has no scripts: its logic is C++
 // in the DLLs of MODULES. These scripts play the role of those DLLs on the data of the original,
-// which run.sh converts: data\pdm_data.c (written by tools/pdm_data2c.py) holds its tables and cards.
+// which run.sh converts: data\pdm_data.c (written by tools/pdm_data2c.py) holds its tables and cards,
+// data\pdm_logic.c (tools/pdm_logic2c.py) its actions, story lines and dialogs, run by story.c.
 // Stages of the port: docs/port-plan.md.
 
 #define EXECUTE 0
@@ -17,6 +18,8 @@ aref PlayerShipType;
 
 #include "data\pdm_data.c"
 #include "data\start.c"
+#include "data\pdm_logic.c"
+#include "story.c"
 #include "sea.c"
 #include "review.c"
 
@@ -29,6 +32,7 @@ void MapKey(string controlName, int keyCode)
 void Main()
 {
 	PdmData_Init();
+	PdmLogic_Init();
 	makearef(PlayerCard, PdmCharacters.Nicolas_Sharp);
 	// an attribute name in .(...) has to be a variable
 	string shipKey = PlayerCard.ship_key;
@@ -46,6 +50,13 @@ void Main()
 	CreateEntity(&Scene, "Scene");
 	LayerAddObject(EXECUTE, &Scene, 0);
 	// run.sh writes the scene to start with (SCENE=…) into data\start.c
+	if (StartScene == "story")
+	{
+		Story_SelfTest();
+		ExitProgram();
+		return;
+	}
+	Pdm_NewGame();
 	if (StartScene == "review") { Review_Start(); }
 	else { Sea_Start(); }
 }
