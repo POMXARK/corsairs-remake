@@ -20,6 +20,19 @@ economy/  the economy simulator: sim.py — the markets and the voyages, tune.py
           The other assets come from the generators of the engine demos (engine/demos/*/make_*.py)
 ```
 
+## The original game on Storm Engine (`pdm-game/`)
+
+The port of the original *Corsairs* (PDM 1.061) itself: its ships, islands, characters, dialogs and
+story from an installed copy of the game, converted on the first run (nothing of it is committed). The
+original has no scripts, its logic is C++ in DLLs, so `pdm-game/program/` plays their role on the
+converted data. The stages and their status: [docs/port-plan.md](docs/port-plan.md).
+
+```bash
+PDM=<Sea Dogs install dir> pdm-game/run.sh <path to built engine executable>
+```
+
+[![P1: the hero of the original, Nicolas Sharp, on his pink Principio](pdm-game/media/pdm-game.jpg)](pdm-game/media/pdm-game.mp4)
+
 ## Video
 
 [![The voyage: the world map between the port and the sea battle](media/voyage.jpg)](media/voyage.mp4)

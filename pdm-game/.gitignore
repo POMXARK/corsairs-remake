@@ -1,0 +1,9 @@
+# all written by run.sh from the original game and the engine build
+resource
+data
+program/data
+convert-report.json
+engine.out
+*.log
+*.dxvk-cache
+save
