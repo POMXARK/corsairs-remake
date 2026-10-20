@@ -21,21 +21,37 @@ def decode_rgb565(data_16bit):
     return bytes(out)
 
 
-def decode_rgba5551(data_16bit):
-    """Decode 16-bit RGBA5551 pixel data to RGBA8 (B,G,R,A order for D3D9)."""
+def decode_argb1555(data_16bit):
+    """Decode 16-bit A1R5G5B5 (alpha in bit 15, as Noesis b5g5r5a1) to RGBA8 (B,G,R,A order for D3D9).
+
+    Checked on the 388 type-1 textures of PDM 1.061: neighbour pixels differ 3.4 per channel on average,
+    with alpha in bit 0 (R5G5B5A1) they differ 12.3, i.e. the image turns into noise.
+    The alpha bit is inverted: set means transparent (the zigzag edge of Dama_Body, the gaps of mf_takelag).
+    """
     out = bytearray()
     for i in range(0, len(data_16bit), 2):
         v = data_16bit[i] | (data_16bit[i + 1] << 8)
-        r5 = (v >> 11) & 0x1F
-        g5 = (v >> 6) & 0x1F
-        b5 = (v >> 1) & 0x1F
-        a1 = v & 1
+        r5 = (v >> 10) & 0x1F
+        g5 = (v >> 5) & 0x1F
+        b5 = v & 0x1F
         r8 = (r5 << 3) | (r5 >> 2)
         g8 = (g5 << 3) | (g5 >> 2)
         b8 = (b5 << 3) | (b5 >> 2)
-        a8 = 255 if a1 else 0
+        a8 = 0 if v & 0x8000 else 255
         out += bytes([b8, g8, r8, a8])
     return bytes(out)
+
+
+def decode_argb4444(data_16bit):
+    """Decode 16-bit A4R4G4B4 (type 2: rigging, blob, pointer) to RGBA8 (B,G,R,A order); alpha is inverted as in type 1."""
+    out = bytearray()
+    for i in range(0, len(data_16bit), 2):
+        v = data_16bit[i] | (data_16bit[i + 1] << 8)
+        out += bytes([(v & 0xF) * 17, ((v >> 4) & 0xF) * 17, ((v >> 8) & 0xF) * 17, (15 - (v >> 12)) * 17])
+    return bytes(out)
+
+
+DECODERS = {0: decode_rgb565, 1: decode_argb1555, 2: decode_argb4444}
 
 
 def decode_palette_indexed(indices, palette):
@@ -80,11 +96,9 @@ def convert_tf_to_tx(tf_path, tx_path):
         raw = data[offset:offset + size]
         offset += size
 
-        if type_ == 1:
-            rgba8 = decode_rgba5551(raw)
-        else:
-            rgba8 = decode_rgb565(raw)
-        mips_rgba8.append(rgba8)
+        if type_ not in DECODERS:
+            return False, f"unknown pixel type {type_}"
+        mips_rgba8.append(DECODERS[type_](raw))
 
         w //= 2
         h //= 2
