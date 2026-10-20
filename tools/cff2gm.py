@@ -216,10 +216,20 @@ def compute_normals(positions, faces):
 
 def cff_to_gm(cff_path: Path, gm_path: Path) -> bool:
     """Convert one .cff to .gm. Returns True on success."""
+    meshes = cff_to_meshes(cff_path)
+    if not meshes:
+        return False
+    write_gm(meshes, gm_path)
+    return True
+
+
+def cff_to_meshes(cff_path: Path, place=None, texture=lambda name: name):
+    """LOD 0 of a .cff as Mesh objects; place(pos) moves vertices (assembling a ship from parts),
+    texture(name) maps the stem of a CFF texture name to the one written into the .gm."""
     origin, scale, textures, lods = parse_cff(cff_path)
 
     if not lods or not lods[0]:
-        return False
+        return []
 
     # Use LOD 0 (highest detail)
     cff_meshes = lods[0]
@@ -231,6 +241,7 @@ def cff_to_gm(cff_path: Path, gm_path: Path) -> bool:
             tex_name = textures[tex_idx].split(".")[0]
         else:
             tex_name = "default"
+        tex_name = texture(tex_name)
 
         uv_delim = mdata["uv_delim"]
         if uv_delim == 0.0:
@@ -253,8 +264,15 @@ def cff_to_gm(cff_path: Path, gm_path: Path) -> bool:
             positions = [tuple(m3[i][0] * p[0] + m3[i][1] * p[1] + m3[i][2] * p[2] + t
                                for i, t in enumerate((tx, ty, tz))) for p in positions]
 
-        # CFF stores back-facing winding; reverse to CCW front-facing
-        faces = [(a, c, b) for a, b, c in mdata["faces"]]
+        if place:
+            positions = [place(p) for p in positions]
+
+        # CFF mostly keeps the D3D winding (clockwise seen from outside), so the faces go as they are.
+        # Reversing it turned every model inside out (the far side of the PDM brig's hull showed through
+        # the near one). But mirrored halves are often stored with the winding of the original: the
+        # brig's left bow half faces inwards and the original engine, drawing without culling, hid it.
+        # So every face also gets a back copy with the opposite normal (a hole in the brig's bow)
+        faces = list(mdata["faces"])
 
         # Compute smooth normals
         normals = compute_normals(positions, faces)
@@ -264,13 +282,14 @@ def cff_to_gm(cff_path: Path, gm_path: Path) -> bool:
         m = Mesh(name, tex_name)
         for pos, normal, uv in zip(positions, normals, uvs):
             m.vertex(pos, normal, uv)
-        for a, b, c in faces:
-            m.triangle(a, b, c)
+        m.triangles += [tuple(f) for f in faces]
+        back = len(m.vertices)
+        for pos, normal, uv in zip(positions, normals, uvs):
+            m.vertex(pos, tuple(-v for v in normal), uv)
+        m.triangles += [(back + a, back + c, back + b) for a, b, c in faces]
 
         meshes.append(m)
-
-    write_gm(meshes, gm_path)
-    return True
+    return meshes
 
 
 def main():

@@ -1,0 +1,297 @@
+// A ship of the original Sea Dogs (PDM 1.061) on the Storm 2 sea: the brig ABrig assembled by
+// tools/pdm_ship.py from its DESC/ABrig.def and MODELS/*.cff (hull, masts, rigging, cannons).
+// Built on the ship demo of the engine (engine/demos/ship): the "ship" entity rocks it on the waves
+// and moves it, SHIP_CAMERA follows it. The sails of PDM (.sls) are not converted yet, so the ship
+// sails without them; the camera flies round it. A/D turn, W/S sails, the mouse turns the camera, Escape quits.
+
+#define EXECUTE 0
+#define REALIZE 1
+// shared/layers.h: mirrored into the sea reflection (sky in the first, ships in the second)
+#define SEA_REFLECTION 15
+#define SEA_REFLECTION2 16
+// shared/layers.h: what the cannon balls and cameras trace against
+#define SAILS_TRACE 19
+
+// shared/messages.h and shared/sea_ai/script_defines.h
+#define MSG_SHIP_CREATE 50300
+#define AI_MESSAGE_SET_LAYERS 51015
+#define AI_CAMERAS_SET_CAMERA 55001
+
+// priorities of the ship in the execute and realize layers; the ship entity reads these globals
+// by name and its sails, blots and camera are placed right after it
+int iShipPriorityExecute = 2;
+int iShipPriorityRealize = 31;
+
+object Render;
+object Scene;
+object Weather;
+object Sky;
+object Sea;
+object Sail;
+object SeaCameras;
+object ShipCamera;
+// the ship type: the engine reads its parameters and the model name, ships\<Name>\<Name>.gm
+object BaseShip;
+// the character the ship entity lives on
+object Player;
+// textures of the sails, returned to the sail entity by GetSailTextureData
+object SailTextures;
+
+float fogHeight = 150.0;
+#define TICK_MS 40
+float cameraAngle = 1.6;
+
+void MapKey(string controlName, int keyCode)
+{
+	int control = CreateControl(controlName);
+	MapControl(control, keyCode);
+}
+
+void Main()
+{
+	// read by the ship entity itself for the main character
+	MapKey("Ship_TurnLeft", 65);
+	MapKey("Ship_TurnRight", 68);
+	MapKey("Ship_SailUp", 87);
+	MapKey("Ship_SailDown", 83);
+	// read by SHIP_CAMERA; 256/257 are the mouse axes
+	MapKey("ShipCamera_Turn_H", 256);
+	MapKey("ShipCamera_Turn_V", 257);
+	MapKey("ShipCamera_Forward", 81);
+	MapKey("ShipCamera_Backward", 69);
+	MapKey("Demo_WindLeft", 37);
+	MapKey("Demo_WindRight", 39);
+	MapKey("Demo_Quit", 27);
+
+	Render.BackColor = argb(255, 0, 0, 0);
+	CreateEntity(&Scene, "Scene");
+	LayerAddObject(EXECUTE, &Scene, 0);
+
+	CreateWorld();
+	CreateShip();
+	CreateCamera();
+
+	SetEventHandler("Control Activation", "Demo_Control", 0);
+	// the camera flies round the ship by itself, so the run needs no input (and records unattended)
+	SetEventHandler("Demo_Tick", "Demo_Tick", 0);
+	PostEvent("Demo_Tick", TICK_MS);
+	Trace("PDM_SEA: scene loaded");
+}
+
+// Sea, sky and weather as in the sea demo, with the day preset; the wind blows the sails.
+void CreateWorld()
+{
+	CreateEntity(&Weather, "weather");
+	Weather.Fog.Enable = 1;
+	Weather.Fog.Start = 0.0;
+	Weather.Fog.Density = 0.002;
+	Weather.Fog.Color = argb(0, 150, 185, 215);
+	Weather.Sun.Color = argb(0, 230, 220, 205);
+	Weather.Sun.Ambient = argb(0, 95, 100, 105);
+	Weather.Sun.HeightAngle = 0.7;
+	Weather.Sun.AzimuthAngle = 2.618;
+	// the direction the wind blows to, about y from +z, and its speed in m/s; the sails take
+	// 12 m/s as full wind
+	Weather.Wind.Angle = 0.0;
+	Weather.Wind.Speed = 10.0;
+	Weather.isDone = "";
+
+	SetEventHandler("WhrCalcFogColor", "Demo_FogColor", 0);
+	CreateEntity(&Sky, "Sky");
+	Sky.Size = 2048.0;
+	Sky.Angle = 0.0;
+	Sky.RotateSpeed = 0.0;
+	Sky.techSky = "Sky";
+	Sky.techSkyBlend = "SkyBlend";
+	Sky.techSkyAlpha = "skyblend_alpha";
+	Sky.techSkyFog = "SkyFog";
+	LayerAddObject(EXECUTE, &Sky, 2);
+	LayerAddObject(REALIZE, &Sky, 3);
+	LayerAddObject(SEA_REFLECTION, &Sky, 1);
+	Sky.Dir.d0 = "weather\skies\day\";
+	Sky.Dir = "12";
+	Sky.Color = argb(0, 255, 255, 255);
+	Sky.isDone = "";
+
+	CreateEntity(&Sea, "sea");
+	LayerAddObject(EXECUTE, &Sea, 4);
+	LayerAddObject(REALIZE, &Sea, 65530);
+	Sea.Sea2.WaterColor = argb(0, 30, 90, 115);
+	Sea.Sea2.SkyColor = argb(0, 205, 255, 255);
+	Sea.Sea2.Amp1 = 3.0;
+	Sea.Sea2.AnimSpeed1 = 1.5;
+	Sea.Sea2.Scale1 = 0.6;
+	Sea.Sea2.MoveSpeed1 = "2.0, 0.0, 0.0";
+	Sea.Sea2.Amp2 = 0.8;
+	Sea.Sea2.AnimSpeed2 = 15.0;
+	Sea.Sea2.Scale2 = 3.8;
+	Sea.Sea2.MoveSpeed2 = "1.0, 0.0, 1.0";
+	Sea.Sea2.PosShift = 1.0;
+	Sea.Sea2.BumpScale = 0.05;
+	Sea.Sea2.Reflection = 0.6;
+	Sea.Sea2.Transparency = 0.45;
+	Sea.Sea2.Frenel = 0.45;
+	Sea.Sea2.Attenuation = 0.3;
+	Sea.Sea2.LodScale = 0.5;
+	Sea.Sea2.GridStep = 0.1;
+	Sea.Sea2.FoamEnable = 1;
+	Sea.Sea2.FoamK = 0.2;
+	Sea.Sea2.FoamV = 2.0;
+	Sea.Sea2.FoamUV = 0.5;
+	Sea.Sea2.FoamTexDisturb = 0.7;
+	Sea.Sea2.SimpleSea = 0;
+	Sea.Fog.Enable = 1;
+	Sea.Fog.Start = 0.0;
+	Sea.Fog.Color = argb(0, 150, 185, 215);
+	Sea.Fog.SeaDensity = 0.001;
+	Sea.MaxSeaHeight = 50.0;
+	Sea.isDone = "";
+}
+
+// The ship: rigging entities first (the ship sends them its model when it is created), then the
+// type, the character and the ship entity on it.
+void CreateShip()
+{
+	// sail reads resource\ini\rigging.ini; it is drawn and traced right after the ship
+	CreateEntity(&Sail, "sail");
+	LayerAddObject(EXECUTE, &Sail, iShipPriorityExecute + 1);
+	LayerAddObject(REALIZE, &Sail, iShipPriorityRealize + 1);
+	LayerAddObject(SAILS_TRACE, &Sail, 10);
+	LayerAddObject(SEA_REFLECTION2, &Sail, 3);
+	SailTextures.normalTex = "ships\brig\sail.tga";
+
+
+	BaseShip.Name = "ABrig";
+	BaseShip.Class = 4;
+	BaseShip.SpeedRate = 12.0;
+	BaseShip.TurnRate = 40.0;
+	BaseShip.MinCrew = 20;
+	BaseShip.MaxCrew = 120;
+	BaseShip.Capacity = 1500;
+	BaseShip.Weight = 300.0;
+	BaseShip.SpeedDependWeight = 0.2;
+	BaseShip.SubSeaDependWeight = 0.6;
+	BaseShip.TurnDependWeight = 0.2;
+	BaseShip.TurnDependSpeed = 0.3;
+	BaseShip.WaterLine = 0.0;
+	// how fast the ship follows its target speed (x sideways, y turning, z ahead) and stops
+	BaseShip.InertiaAccelerationX = 0.2;
+	BaseShip.InertiaBrakingX = 2.0;
+	BaseShip.InertiaAccelerationY = 6.0;
+	BaseShip.InertiaBrakingY = 3.0;
+	BaseShip.InertiaAccelerationZ = 4.0;
+	BaseShip.InertiaBrakingZ = 3.0;
+
+	Player.id = "Player";
+	Player.index = 0;
+	Player.nation = 0;
+	// the ship of the main character reads the Ship_* controls itself
+	Player.MainCharacter = 1;
+	Player.ship.pos.x = 0.0;
+	Player.ship.pos.z = 0.0;
+	Player.ship.ang.y = 0.0;
+	// a positive speed starts with the sails set
+	Player.Ship.Speed.z = 1.0;
+
+	// the ship asks for its layers, polls Shp_UpdParams for its top speeds and the sails ask
+	// for their textures; all of them are raised while the ship is being created
+	SetEventHandler("SeaGetLayers", "Demo_ShipLayers", 0);
+	SetEventHandler("Shp_UpdParams", "Demo_ShipParameters", 0);
+	SetEventHandler("GetSailTextureData", "Demo_SailTextures", 0);
+	CreateEntity(&Player, "ship");
+	SendMessage(&Player, "laa", MSG_SHIP_CREATE, &Player, &BaseShip);
+	// lit by the sun of the weather; without a technique the vertex colours are drawn as is
+	SendMessage(&Player, "ls", 20510, "DLightModel");
+	Demo_UpdateSpeeds(1.0);
+}
+
+void CreateCamera()
+{
+	CreateEntity(&SeaCameras, "SEA_CAMERAS");
+	CreateEntity(&ShipCamera, "SHIP_CAMERA");
+	ShipCamera.Perspective = 1.285;
+	ShipCamera.SensivityDistance = 30.0;
+	ShipCamera.SensivityHeightAngle = 0.02;
+	ShipCamera.SensivityHeightAngleOnShip = 0.005;
+	ShipCamera.SensivityAzimuthAngle = 0.04;
+	ShipCamera.MaxAngleX = 0.07;
+	ShipCamera.MinAngleX = -1.4;
+	// 0..1 between close to the hull and far out
+	ShipCamera.Distance = 0.0;
+	ShipCamera.MinDistance = 25.0;
+	ShipCamera.MaxDistance = 1500.0;
+	ShipCamera.MinHeightOnSea = 1.0;
+	ShipCamera.MaxHeightOnShip = 5.0;
+	ShipCamera.InvertMouseX = 1.0;
+	ShipCamera.InvertMouseY = -1.0;
+	// SEA_CAMERAS switches between the sea cameras and gives the active one its character;
+	// the scene executes the active camera every frame
+	SendMessage(&SeaCameras, "lia", AI_CAMERAS_SET_CAMERA, &ShipCamera, &Player);
+	SendMessage(&Scene, "si", "SetActiveCamera", &ShipCamera);
+}
+
+// SHIP_CAMERA.AngleY: the camera angle around the ship, 0 behind the stern
+void Demo_Tick()
+{
+	cameraAngle = cameraAngle + 0.006;
+	ShipCamera.AngleY = cameraAngle;
+	PostEvent("Demo_Tick", TICK_MS);
+}
+
+void Demo_ShipLayers()
+{
+	aref ship = GetEventData();
+	SendMessage(ship, "lll", AI_MESSAGE_SET_LAYERS, EXECUTE, REALIZE);
+}
+
+// Top speeds of the ship: the sails give a share of the wind from 0 to 1, the ship multiplies it
+// by MaxSpeedZ (knots); the turn controls give -1..1 and the ship multiplies that by MaxSpeedY.
+void Demo_ShipParameters()
+{
+	int index = GetEventData();
+	float sailState = GetEventData();
+	Demo_UpdateSpeeds(sailState);
+}
+
+void Demo_UpdateSpeeds(float sailState)
+{
+	Player.Ship.MaxSpeedZ = stf(BaseShip.SpeedRate);
+	// a ship under sail turns faster than one drifting
+	Player.Ship.MaxSpeedY = stf(BaseShip.TurnRate) / 160.0 * (0.4 + 0.6 * sailState);
+}
+
+ref Demo_SailTextures()
+{
+	int index = GetEventData();
+	return &SailTextures;
+}
+
+int Demo_FogColor()
+{
+	float x = GetEventData();
+	float y = GetEventData();
+	float z = GetEventData();
+	float k = y / fogHeight;
+	if (k < 0.0) { k = 0.0; }
+	if (k > 1.0) { k = 1.0; }
+	int alpha = 255 - makeint(255.0 * k);
+	return or(shl(alpha, 24), sti(Weather.Fog.Color));
+}
+
+void Demo_Control()
+{
+	string control = GetEventData();
+	if (control == "Demo_WindLeft") { Demo_TurnWind(-0.5); }
+	if (control == "Demo_WindRight") { Demo_TurnWind(0.5); }
+	if (control == "Demo_Quit")
+	{
+		Trace("PDM_SEA: quit");
+		ExitProgram();
+	}
+}
+
+void Demo_TurnWind(float delta)
+{
+	Weather.Wind.Angle = stf(Weather.Wind.Angle) + delta;
+	Trace("PDM_SEA: wind " + Weather.Wind.Angle);
+}
