@@ -1,0 +1,319 @@
+#!/usr/bin/env python3
+"""Converts a character of the original Sea Dogs (PDM 1.061) into a Storm 2 location character:
+a skinned .gm, its skeleton animation .an and the actions .ani.
+
+A PDM character (MODELS/CHARACTERS/*.cff) is a set of rigid parts, each with a key per frame:
+translation and rotation (Ry*Rx*Rz) of the part, frames 0..N. There is no skeleton in the file,
+but the parts move as one: a forearm's pivot stays at the same point of the upper arm in every
+frame. So the skeleton is found from the keys: the parent of a part is the part in whose frame
+its pivot does not move (the error is zero for 2/3 of the characters; some have loose parts, such
+as a bottle thrown about in a hand, kept at their mean place). The root is the part that gives the
+tree of the least error, the pelvis.
+
+Storm moves only the root bone, the others turn around their joints, which is exactly such a
+hierarchy: joint = the pivot in the parent's frame, rotation = R_parent^T * R_part per frame.
+
+The actions are WORLDS/CHARACTERS/<anim>.idf (the file anim_types.idf gives the model): name, first
+and last frame (reversed when first > last), speed; the seated ones (drink, salor, hubernator) have
+only do_some1..8 and talk_1..12, with a weight instead of the speed. The speed is the walk
+speed in hundredths of a unit per second: a foot on the ground moves 0.031 units a frame in the
+hero's walk (speed 30) and 0.06 in his run (60), so the original plays 10 frames a second.
+
+usage: pdm_character.py <PDM_dir> <resource_out> <model.cff> <anim.idf> [--name N] [--scale K]
+"""
+import argparse
+import math
+import struct
+import sys
+from pathlib import Path
+
+TOOLS = Path(__file__).resolve().parent
+sys.path.insert(0, str(TOOLS))
+import cff2gm  # noqa: E402
+from cff2gm import write_gm  # noqa: E402
+from pdm2storm import convert_texture, parse_idf  # noqa: E402
+from pdm_ship import index_files  # noqa: E402
+from storm_formats import write_an  # noqa: E402
+
+# the hero is 0.78 units tall: a unit is 2.3 m. The towns are in the same units
+DEFAULT_SCALE = 2.3
+FPS = 10.0
+
+# Storm action <- the PDM actions to take it from, the first one the character has
+ACTIONS = {
+    "idle_1": ["stand_calm", "do_some1", "simple_stand"],
+    "idle_2": ["do_some1"],
+    "idle_3": ["do_some2"],
+    "idle_4": ["do_some3"],
+    "walk": ["cyrcle_walk"],
+    "run": ["circle_run", "cyrcle_walk"],
+    "turn left": ["left_rot", "turn_left_calm", "stand_calm"],
+    "turn right": ["right_rot", "turn_right_calm", "stand_calm"],
+    "dead": ["death_1"],
+    "talk": ["talk_1", "stand_calm"],
+}
+
+
+def read_keys(path: Path):
+    """The animation keys of every mesh of LOD 0: [(tx, ty, tz, rx, ry, rz)] per frame."""
+    data = path.read_bytes()
+    r = cff2gm.CFFReader(data)
+    r.skip(24)
+    textures, materials, lods = r.u32(), r.u32(), r.u32()
+    r.skip(8)
+    for _ in range(textures):
+        r.skip(r.u8())
+    for _ in range(materials):
+        r.skip(36)
+        r.skip(r.u32() * 20)
+    vert_size = 13 if cff2gm._parse_meshes_at(data, r.off, lods, 13)[1] else 12
+    count = r.u32()
+    r.skip(4)
+    parts = []
+    for _ in range(count):
+        r.skip(20)
+        r.u32()
+        vertices, faces = r.u32(), r.u32()
+        r.u32()
+        keys = r.u32()
+        r.skip(4)
+        r.skip(vertices * vert_size + faces * (6 if vertices > 256 else 3))
+        parts.append([struct.unpack_from("<6f", data, r.off + 28 * i) for i in range(keys)])
+        r.skip(keys * 28)
+    return parts
+
+
+def mat_t(m):
+    return [[m[j][i] for j in range(3)] for i in range(3)]
+
+
+def mat_mul(a, b):
+    return [[sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+
+
+def mat_vec(m, v):
+    return [sum(m[i][k] * v[k] for k in range(3)) for i in range(3)]
+
+
+def quaternion(m):
+    """(x, y, z, w) of a rotation matrix acting on column vectors."""
+    trace = m[0][0] + m[1][1] + m[2][2]
+    if trace > 0:
+        s = math.sqrt(trace + 1.0) * 2
+        q = ((m[2][1] - m[1][2]) / s, (m[0][2] - m[2][0]) / s, (m[1][0] - m[0][1]) / s, 0.25 * s)
+    elif m[0][0] > m[1][1] and m[0][0] > m[2][2]:
+        s = math.sqrt(1.0 + m[0][0] - m[1][1] - m[2][2]) * 2
+        q = (0.25 * s, (m[0][1] + m[1][0]) / s, (m[0][2] + m[2][0]) / s, (m[2][1] - m[1][2]) / s)
+    elif m[1][1] > m[2][2]:
+        s = math.sqrt(1.0 + m[1][1] - m[0][0] - m[2][2]) * 2
+        q = ((m[0][1] + m[1][0]) / s, 0.25 * s, (m[1][2] + m[2][1]) / s, (m[0][2] - m[2][0]) / s)
+    else:
+        s = math.sqrt(1.0 + m[2][2] - m[0][0] - m[1][1]) * 2
+        q = ((m[0][2] + m[2][0]) / s, (m[1][2] + m[2][1]) / s, 0.25 * s, (m[1][0] - m[0][1]) / s)
+    n = math.sqrt(sum(c * c for c in q))
+    return tuple(c / n for c in q)
+
+
+def skeleton(keys):
+    """Parents, joints and the fit error of the parts from their keys.
+
+    Returns (order, parents, pivots, error): order lists the parts root first, every parent before
+    its children; parents[i] is the parent part of part i (-1 for the root); pivots[i] the pivot
+    of part i in its parent's frame (mean over the frames); error the worst mean distance of a
+    pivot from its place, in units.
+    """
+    frames = min(len(k) for k in keys)
+    rot = [[cff2gm.frame_matrix(*k[f][3:6]) for f in range(frames)] for k in keys]
+    pos = [[k[f][0:3] for f in range(frames)] for k in keys]
+    n = len(keys)
+    # sample the frames for speed: a hierarchy is a hierarchy in every frame
+    sample = range(0, frames, max(1, frames // 120))
+
+    def fit(i, p):
+        local = [mat_vec(mat_t(rot[p][f]), [pos[i][f][c] - pos[p][f][c] for c in range(3)]) for f in sample]
+        mean = [sum(v[c] for v in local) / len(local) for c in range(3)]
+        error = math.sqrt(sum(sum((v[c] - mean[c]) ** 2 for c in range(3)) for v in local) / len(local))
+        return error, mean
+
+    cost = {(i, p): fit(i, p) for i in range(n) for p in range(n) if i != p}
+
+    def grow(root):
+        """The tree from the root by the best fitting links (Prim): order, parents, total error."""
+        parents, order, total = {root: -1}, [root], 0.0
+        while len(order) < n:
+            e, i, p = min((cost[i, p][0], i, p) for i in range(n) if i not in parents for p in order)
+            parents[i] = p
+            order.append(i)
+            total += e
+        return total, order, parents
+
+    # the root is the part that gives the tree of the least error: a bottle or a saber thrown about
+    # in a hand moves on its own and is no root, though it fits under no other part
+    _, order, parents = min(grow(r) for r in range(n))
+    pivots = {i: cost[i, p][1] if p >= 0 else None for i, p in parents.items()}
+    error = max([cost[i, p][0] for i, p in parents.items() if p >= 0] or [0.0])
+    return order, parents, pivots, error, rot, pos, frames
+
+
+def quat_matrix(q):
+    x, y, z, w = q
+    return [[1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+            [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+            [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)]]
+
+
+def check_pose(parents_b, joints, root_positions, rotations, rot, pos, order, k):
+    """Replays the bones the way the engine builds them (Bone::BuildMatrix: local * parent, the
+    joint in the parent's frame, start^-1 * bone for the skin) and returns the worst distance of a
+    part's pivot and axis tips from where the keys of the original put them, in metres."""
+    def world(f):
+        mats = []
+        for b, p in enumerate(parents_b):
+            m = quat_matrix(rotations[b][f])
+            t = root_positions[f] if p < 0 else joints[b]
+            if p < 0:
+                mats.append((m, list(t)))
+            else:
+                pm, pt = mats[p]
+                mats.append((mat_mul(pm, m), [a + c for a, c in zip(mat_vec(pm, t), pt)]))
+        return mats
+    start = world(0)
+    worst = 0.0
+    frames = len(root_positions)
+    for f in range(0, frames, max(1, frames // 40)):
+        now = world(f)
+        for b, part in enumerate(order):
+            for tip in ((0, 0, 0), (0.1, 0, 0), (0, 0.1, 0), (0, 0, 0.1)):
+                # a point of the part in the bind pose (frame 0) ...
+                bind = [k * c for c in pos[part][0]]
+                v = [a + c for a, c in zip(mat_vec(rot[part][0], tip), bind)]
+                # ... skinned by the engine
+                sm, st = start[b]
+                local = mat_vec(mat_t(sm), [v[c] - st[c] for c in range(3)])
+                nm, nt = now[b]
+                engine = [a + c for a, c in zip(mat_vec(nm, local), nt)]
+                # ... and where the original puts it
+                want = [a + k * c for a, c in zip(mat_vec(rot[part][f], tip), pos[part][f])]
+                worst = max(worst, math.dist(engine, want))
+    return worst
+
+
+def read_actions(idf: Path):
+    actions = {}
+    for obj in parse_idf(idf)["objects"]:
+        fields = dict(obj)
+        if fields.get("name", "0") == "0":
+            continue
+        actions[fields["name"]] = (int(fields["start_action"]), int(fields["end_action"]),
+                                   float(fields.get("speed", "0") or 0))
+    return actions
+
+
+def write_ani(path: Path, an_name: str, actions, k: float, frames: int):
+    """The Storm actions the Character entity looks for, from the PDM ones (ACTIONS)."""
+    text = f"; converted by tools/pdm_character.py, {FPS:g} frames a second as in the original\n"
+    text += f"animation = {an_name}.an\n"
+    found = []
+
+    def section(name, start, end, speed, loop=True):
+        nonlocal text
+        reverse = start > end
+        start, end = min(start, end, frames - 1), min(max(start, end), frames - 1)
+        text += f"\n[{name}]\nstart_time = {start}\nend_time = {end}\nloop = {'true' if loop else 'false'}\n"
+        if reverse:
+            text += "type = reverse\n"
+        if speed:
+            text += f'data = "Walk speed", "{speed:.3f}"\n'
+
+    for name, sources in ACTIONS.items():
+        src = next((s for s in sources if s in actions), None)
+        if src is None:
+            continue
+        start, end, speed = actions[src]
+        found.append(name)
+        if name in ("walk", "run"):
+            # the speed of a cycle is the speed of the walk it is made of (a run made of the walk walks)
+            speed = actions[src][2] / 100.0 * k
+            section(name, start, end, speed)
+            # walking back plays the cycle the other way
+            section("back " + name, end, start, -speed)
+        else:
+            section(name, start, end, 0, loop=name != "dead")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="ascii")
+    return found
+
+
+def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: float = DEFAULT_SCALE,
+            textures: dict = None):
+    """Writes models/characters/<name>.gm, animation/<name>.{an,ani} and the textures to
+    textures/characters/; returns a summary line."""
+    models = index_files(res / "MODELS" / "CHARACTERS")
+    textures = textures or index_files(res / "TEXTURES")
+    cff = models[Path(model).name.lower()]
+    name = (name or Path(model).stem).lower()
+    keys = read_keys(cff)
+    if not keys or not all(keys):
+        return f"{name}: static, skipped"
+    order, parents, pivots, error, rot, pos, frames = skeleton(keys)
+    bone = {part: b for b, part in enumerate(order)}
+
+    used = set()
+
+    def texture(stem):
+        used.add(stem.lower())
+        return f"{stem.lower()}.tga"
+
+    meshes = cff2gm.cff_to_meshes(cff, place=lambda p: tuple(c * k for c in p), texture=texture)
+    assert len(meshes) == len(keys), "a key list per mesh"
+    for part, mesh in enumerate(meshes):
+        mesh.vertices = [(p, n, uv, bone[part]) for p, n, uv, _ in mesh.vertices]
+
+    bone_parents = [-1] + [bone[parents[part]] for part in order[1:]]
+    joints = [tuple(c * k for c in pos[order[0]][0])] + [tuple(c * k for c in pivots[part]) for part in order[1:]]
+    root_positions = [tuple(c * k for c in pos[order[0]][f]) for f in range(frames)]
+    rotations = []
+    for part in order:
+        p = parents[part]
+        if p < 0:
+            rotations.append([quaternion(rot[part][f]) for f in range(frames)])
+        else:
+            rotations.append([quaternion(mat_mul(mat_t(rot[p][f]), rot[part][f])) for f in range(frames)])
+
+    drift = check_pose(bone_parents, joints, root_positions, rotations, rot, pos, order, k)
+    write_gm(meshes, out / "models" / "characters" / f"{name}.gm", skinned=True)
+    write_an(out / "animation" / f"{name}.an", FPS, bone_parents, joints, root_positions, rotations)
+    # anim_types.idf names the files in either case (traktir_man.idf for Traktir_Man.idf)
+    anims = index_files(res / "WORLDS" / "CHARACTERS")
+    found = write_ani(out / "animation" / f"{name}.ani", name, read_actions(anims[anim.lower()]), k, frames)
+    missing = []
+    for stem in sorted(used):
+        src = textures.get(stem)
+        dst = out / "textures" / "characters" / f"{stem}.tga.tx"
+        if src is None:
+            missing.append(stem)
+            continue
+        if not dst.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            convert_texture(src, dst)
+    note = f", missing textures {' '.join(missing)}" if missing else ""
+    return (f"{name}: {len(order)} bones, {frames} frames, pose error {drift:.3f} m, "
+            f"actions {' '.join(a.replace(' ', '_') for a in found)}{note}")
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("pdm")
+    ap.add_argument("out")
+    ap.add_argument("model")
+    ap.add_argument("anim")
+    ap.add_argument("--name")
+    ap.add_argument("--scale", type=float, default=DEFAULT_SCALE)
+    a = ap.parse_args()
+    res = Path(a.pdm)
+    res = res / "RESOURCE" if (res / "RESOURCE").is_dir() else res
+    print(convert(res, Path(a.out), a.model, a.anim, a.name, a.scale))
+
+
+if __name__ == "__main__":
+    main()

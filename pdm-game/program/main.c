@@ -19,8 +19,10 @@ aref PlayerShipType;
 #include "data\pdm_data.c"
 #include "data\start.c"
 #include "data\pdm_logic.c"
+#include "data\pdm_world.c"
 #include "story.c"
 #include "sea.c"
+#include "town.c"
 #include "review.c"
 #include "menu.c"
 
@@ -34,6 +36,7 @@ void Main()
 {
 	PdmData_Init();
 	PdmLogic_Init();
+	PdmWorld_Init();
 	makearef(PlayerCard, PdmCharacters.Nicolas_Sharp);
 	// an attribute name in .(...) has to be a variable
 	string shipKey = PlayerCard.ship_key;
@@ -64,6 +67,7 @@ void Main()
 	}
 	Pdm_NewGame();
 	if (StartScene == "review") { Review_Start(); }
+	else if (StartScene == "town") { Town_Start(StartTown, "sea"); }
 	else { Sea_Start(); }
 }
 

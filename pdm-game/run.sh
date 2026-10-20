@@ -5,6 +5,7 @@
 # PDM=<Sea Dogs install dir with RESOURCE> (default: ../../Корсары next to the repository)
 # RECONVERT=1 converts everything again. The game starts with the main menu (SCENE=menu);
 # SCENE=sea starts at sea at once, SCENE=menu-newgame presses "Новая Игра" by itself, SCENE=review starts with the fleet review,
+# SCENE=town starts in the town TOWN (default City_GrandaAvilia), TOWN_AUTO=1 walks into its tavern and out,
 # SCENE=story runs the self-test of the story machine (every action of the original) and quits.
 set -euo pipefail
 ENGINE="$(realpath "$1")"
@@ -32,10 +33,14 @@ if [ ! -f "$DIR/resource/.converted" ]; then
 fi
 # the screens of the interface (INI/menu.ini ...), their pictures, texts and fonts
 [ -f "$DIR/resource/ini/interfaces/mainmenu.ini" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR" MainMenu
+# the towns and interiors (WORLDS/locations/*.loc), their patches and the characters with animation
+[ -f "$DIR/program/data/pdm_world.c" ] || python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"
 python3 -I "$TOOLS/pdm_data2c.py" "$DIR/data" "$DIR/program"
 python3 -I "$TOOLS/pdm_logic2c.py" "$DIR/data" "$DIR/program"
 # the scene to start with: menu, sea (the hero on his ship), review (all ship types side by side) or story
 echo "string StartScene = \"${SCENE:-menu}\";" > "$DIR/program/data/start.c"
+echo "string StartTown = \"${TOWN:-City_GrandaAvilia}\";" >> "$DIR/program/data/start.c"
+echo "int TownAuto = ${TOWN_AUTO:-0};" >> "$DIR/program/data/start.c"
 ln -sfn "$(dirname "$ENGINE")/resource/techniques" "$DIR/resource/techniques"
 
 cd "$DIR"
