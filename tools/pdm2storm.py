@@ -13,9 +13,10 @@ Stages (all by default):
   desc      .def -> ship part locators                           (out/data/desc/*.json)
   characters .mtx -> character cards                             (out/data/characters/*.json)
   ships     .shp -> ship profiles: class, crew, HP, skills, cargo  (out/data/ships/*.json)
+  quests    .ql -> story line: quests with condition and action  (out/data/quests/*.json)
 
 The engine reads out/resource; out/data is UTF-8 JSON for the game scripts and for people.
-.ql, .ani, .sls, .dlm, .dlt are copied raw until their layouts are known (see docs/pdm-formats.md).
+.ani, .sls, .dlm, .dlt are copied raw until their layouts are known (see docs/pdm-formats.md).
 A summary goes to stdout and out/convert-report.json.
 """
 import argparse
@@ -38,7 +39,7 @@ TEXTURE_EXT = {".tf", ".tga"}
 MODEL_EXT = {".cff"}
 # converted files do not go to out/resource; everything else is copied for the engine and the scripts
 CONVERTED_EXT = TEXTURE_EXT | MODEL_EXT | {".a"}
-STAGES = ["textures", "models", "copy", "actions", "dialogs", "tables", "desc", "characters", "ships"]
+STAGES = ["textures", "models", "copy", "actions", "dialogs", "tables", "desc", "characters", "ships", "quests"]
 
 
 # ---------- textures ----------
@@ -247,9 +248,57 @@ def parse_shp(src: Path):
             "unknown": _unknown(d, known)}
 
 
+# pointer tables of QUEST_EDITOR.dll .data (0x1000b5a0, 0x1000b068)
+QL_CONDITIONS = ["NO CONDITION", "OBTAIN", "KILL", "ESCORT", "MATCH"]
+QL_TYPES = ["Person", "Game", "Ship", "Item", "Goods", "Record", "Quest", "Location", "Expirience", "Module",
+            "Characteristics", "File", "Rank", "Dialog", "DLink", "Story line", "String", "Interface", "Playside",
+            "Model", "Reputation", "DNode", "State", "Officer", "Officer Rank", "Engine movie"]
+
+
+def _ql_condition(b: bytes):
+    """u8 condition, u8 object type, then u32 len + string and/or i32 value; ESCORT adds a Location target."""
+    if len(b) < 2 or b[0] == 0:
+        return None
+    name = lambda i: QL_TYPES[i] if i < len(QL_TYPES) else i  # noqa: E731
+    cond = {"type": QL_CONDITIONS[b[0]] if b[0] < len(QL_CONDITIONS) else b[0], "object": name(b[1])}
+    p = 2
+    if len(b) - p == 4:
+        cond["value"] = struct.unpack_from("<i", b, p)[0]
+        return cond
+    (n,) = struct.unpack_from("<I", b, p)
+    cond["name"] = cstr(b[p + 4:p + 4 + n])
+    p += 4 + n
+    if len(b) - p == 4:
+        cond["value"] = struct.unpack_from("<i", b, p)[0]
+    elif len(b) - p > 4:  # ESCORT: u8 type (Location), u32 72, name[64], i32, i32
+        (n,) = struct.unpack_from("<I", b, p + 1)
+        cond["to"] = {"object": name(b[p]), "name": cstr(b[p + 5:p + 69]),
+                      "params": list(struct.unpack_from("<2i", b, p + 69)) if n == 72 else b[p + 69:p + 5 + n].hex()}
+    return cond
+
+
+def parse_ql(src: Path):
+    """.ql story line: u32, u32 count, u32; per quest a 0x10c header (u32 0, u32 data len, u32 heap pointer,
+    name[64], action[64], action[64], [64]) + data len bytes of condition (QUEST_EDITOR FUN_10004570 appends one quest).
+    The third string is the ACTIONS/*.a run when the condition is met (106 of 106 exist), "void" is the idle quest."""
+    d = src.read_bytes()
+    _, count, _ = struct.unpack_from("<3I", d, 0)
+    off, quests = 12, []
+    for _ in range(count):
+        (n,) = struct.unpack_from("<I", d, off + 4)
+        names = [cstr(d[off + 12 + 64 * k:off + 76 + 64 * k]) for k in range(4)]
+        quests.append({"name": names[0], "action_alt": names[1] or None, "action": names[2] or None,
+                       "extra": names[3] or None, "condition": _ql_condition(d[off + 0x10c:off + 0x10c + n])})
+        off += 0x10c + n
+    if off != len(d):
+        raise ValueError(f"{len(d) - off} bytes left after {count} quests")
+    return {"source": src.name, "story_line": src.stem, "quests": quests}
+
+
 DATA_STAGES = {"actions": (".a", parse_actions), "dialogs": (".d", parse_dialog),
                "tables": (".idf", parse_idf), "desc": (".def", parse_def),
-               "characters": (".mtx", parse_mtx), "ships": (".shp", parse_shp)}
+               "characters": (".mtx", parse_mtx), "ships": (".shp", parse_shp),
+               "quests": (".ql", parse_ql)}
 
 
 # ---------- driver ----------
@@ -270,7 +319,10 @@ def main():
         sys.exit(f"unknown stages: {', '.join(sorted(bad))}")
     out_res, out_data = a.out / "resource", a.out / "data"
     files = sorted(p for p in res.rglob("*") if p.is_file())
+    report_path = a.out / "convert-report.json"
     report = {"source": str(res), "stages": {}}
+    if report_path.exists():  # --only reruns update their stages and keep the others
+        report["stages"] = json.loads(report_path.read_text(encoding="utf-8")).get("stages", {})
     t0 = time.time()
 
     def stage(name, ok, failed, extra=None):
@@ -341,9 +393,9 @@ def main():
         stage(name, ok, failed)
 
     a.out.mkdir(parents=True, exist_ok=True)
-    (a.out / "convert-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     total_fail = sum(s["failed"] for s in report["stages"].values())
-    print(f"done in {time.time() - t0:.0f}s, {total_fail} failed, report: {a.out / 'convert-report.json'}")
+    print(f"done in {time.time() - t0:.0f}s, {total_fail} failed, report: {report_path}")
 
 
 if __name__ == "__main__":

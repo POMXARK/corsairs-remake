@@ -16,13 +16,14 @@ tools\convert.bat <папка_игры> <out>     # Windows (вызывает co
 |---|---|---|---|
 | textures | `.tf` → `.tx`, `.tga` без `.tf`-двойника → `.tx` | `out/resource` | 3167, 0 ошибок |
 | models | `.cff` → `.gm` | `out/resource` | 677, 3 битых в оригинале |
-| copy | остальное как есть (звук, ini, тексты, `.ql`, `.ani`…) | `out/resource` | 3232 |
+| copy | остальное как есть (звук, ini, тексты, `.ani`…) | `out/resource` | 3232 |
 | actions | `.a` → команды | `out/data/actions` | 715 |
 | dialogs | `.d` → узлы, ссылки, действия | `out/data/dialogs` | 1108 |
 | tables | `.idf` → объекты name/value | `out/data/tables` | 96 |
 | desc | `.def` → локаторы частей корабля | `out/data/desc` | 97 |
 | characters | `.mtx` → карточки персонажей | `out/data/characters` | 297 |
 | ships | `.shp` → профили кораблей | `out/data/ships` | 94 (+1 шаблон старой версии) |
+| quests | `.ql` → сюжетные линии: квест, условие, действие | `out/data/quests` | 76 |
 
 `out/resource` читает движок, `out/data` — JSON в UTF-8 для игровых скриптов. Итог с ошибками — в `out/convert-report.json`. Папку для запуска движка собирает `tools/make_korsari_run.sh <PDM> <sd-teho-public> <out> [engine/build/Debug]` (тот же конвертер + ini и скрипты TEHO + шейдеры).
 
@@ -125,20 +126,39 @@ LAUNCH Story_line "Spanish_line"
 
 `SHIPS/reserved/empty.shp` — 740 байт: шаблон более ранней версии редактора (апрель 2000).
 
-## QL — квесты (разобрано частично)
+## QL — сюжетные линии (этап quests)
 
-Двоичный граф. Заголовок: `u32 0, u32 node_count, 3×u32 0`. Узлы начинаются с `0x14`:
+Файл `.ql` — одна сюжетная линия (story line), записи в нём — её квесты. Пишет их `QUEST_EDITOR.dll` (`FUN_10004570` дописывает квест в конец и обновляет счётчик в заголовке). Разбираются все 76 файлов до байта.
 
-- 4 байта (похоже на указатель);
-- `name[64]`;
-- второе строковое поле 64 байта;
-- имя действия (например `Frederick_killed`);
-- условия переменной длины, например `02 00 13 00 00 00 "Frederick The Mole"` — убийство персонажа.
+```
+u32 0, u32 count, u32 0
+count × {
+  u32 0, u32 data_len, u32 указатель кучи (мусор)
+  char name[64]        имя квеста; "void" — пустое состояние линии
+  char action_alt[64]  действие (3 случая)
+  char action[64]      ACTIONS/<action>.a, выполняется, когда условие выполнено (106 из 106 есть в ACTIONS)
+  char extra[64]       всегда пусто
+  u8 data[data_len]    условие
+}
+```
 
-Семантику восстанавливаем декомпиляцией `QUEST_EDITOR.dll` (см. ниже).
+Условие: `u8 condition, u8 object`, дальше по типу — `u32 len + строка`, `i32` значение или и то и другое. Для ESCORT добавляется цель: `u8 object (7 = Location), u32 72, name[64], i32, i32`. Имена взяты из таблиц указателей в `.data` DLL, а не из выгрузки строк: короткое `KILL` в неё не попало.
+
+| condition | object | пример |
+|---|---|---|
+| 0 NO CONDITION | — | `void` |
+| 1 OBTAIN | 3 Item, 4 Goods + количество | `Item "money" 5000`, `Goods "Chocolate" 150` |
+| 1 OBTAIN | 12 Rank, 20 Reputation | `Reputation 5` |
+| 2 KILL | 0 Person | `Person "Frederick The Mole"` |
+| 3 ESCORT | 0 Person → 7 Location | `"Tedoro Alameda"` → `sinistra` |
+| 4 MATCH | | в PDM не встречается |
+
+Типы объектов (индекс): Person, Game, Ship, Item, Goods, Record, Quest, Location, Expirience, Module, Characteristics, File, Rank, Dialog, DLink, Story line, String, Interface, Playside, Model, Reputation, DNode, State, Officer, Officer Rank, Engine movie.
+
+Как это связано: действие `.a` запускает линию (`LAUNCH Story_line "X"`) или переключает её квест (`SET_FOR Story_line "Mullen_check_1000" Quest "void"`). Движок проверяет условие текущего квеста, а когда оно выполнено, запускает его `action`. Тот, в свою очередь, двигает линию дальше, выдаёт предметы, меняет диалоги персонажей (`SET_FOR Person "X" Dialog "Y"`).
 
 ## Логика игры — в DLL
 
-В `MODULES/` 104 модуля Storm 1 (PE32 i386). Каждый экспортирует только `?CreateEntity@@YAPAVEntity@@PAD@Z`. Скриптов на C, как в Storm 2, нет. Логика — это DLL плюс данные: ACTIONS, QUESTS, DIALOGS. Поэтому скрипты TEHO оригинал не запустят — нужен свой `program/*.c`, который читает данные PDM.
+В `MODULES/` 104 модуля Storm 1 (PE32 i386). Каждый экспортирует только `?CreateEntity@@YAPAVEntity@@PAD@Z`. Скриптов на C, как в Storm 2, нет. Логика — это DLL плюс данные: ACTIONS, QUESTS, DIALOGS (сюжетная машина описана выше в разделе QL). Поэтому скрипты TEHO оригинал не запустят — нужен свой `program/*.c`, который читает данные PDM.
 
 Декомпиляция: `GHIDRA=<ghidra> tools/ghidra/decompile.sh <out> MODULES/*.dll` (Ghidra 12.1.4 headless + `DumpDecomp.java`) выгружает C всех функций и строки в `<out>/<dll>.c` и `.strings.txt`. Результат декомпиляции в git не кладём: это код Akella.
