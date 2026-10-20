@@ -110,6 +110,76 @@ def text(data: bytes) -> str:
     return data.decode("cp1251").replace("\r\n", "\n")
 
 
+# CORE.dll tables: command names (strcmpi on the first whitespace-delimited word, unknown -> line ignored)
+# and object types; Item and Goods take a second quoted value (count).
+A_COMMANDS = ["CLOSE", "ADD", "DELETE", "SET_FOR", "COMPLETE", "DESTROY", "PLAY", "LAUNCH", "CHECK", "ADVANCE",
+              "OPEN", "MESSAGE BOX", "SET"]
+A_TYPES = ["Person", "Game", "Ship", "Item", "Goods", "Record", "Quest", "Location", "Expirience", "Module",
+           "Characteristics", "File", "Rank", "Dialog", "DLink", "Story_line", "String", "Interface", "Playside",
+           "Model", "Reputation", "DNode", "State", "Officer", "Officer_Rank", "Engine_movie", "Quantity",
+           "hull_hp", "team_hp"]
+A_EFFECTS = {  # (command, first type, second type) -> what the CORE branch does
+    ("CLOSE", "Game", None): "end the game (final movie/screen)",
+    ("ADD", "Person", None): "add character to the player's squadron",
+    ("ADD", "Item", None): "give item to player; 'money' changes gold",
+    ("ADD", "Goods", None): "load goods into the player's ship",
+    ("ADD", "Record", None): "add journal record RESOURCE/TEXTS/RECORDS/<name>.rcd",
+    ("ADD", "Expirience", None): "give experience points",
+    ("ADD", "Reputation", None): "raise reputation",
+    ("ADD", "Officer", None): "hire character as officer",
+    ("ADD", "hull_hp", None): "repair hull",
+    ("ADD", "team_hp", None): "add crew",
+    ("DELETE", "Person", None): "remove character from the squadron",
+    ("DELETE", "Item", None): "take item from player; 'money' changes gold",
+    ("DELETE", "Goods", None): "unload goods",
+    ("DELETE", "Expirience", None): "remove experience points",
+    ("DELETE", "Reputation", None): "lower reputation",
+    ("DELETE", "Officer", None): "dismiss officer",
+    ("SET_FOR", "Person", "Ship"): "give ship RESOURCE/SHIPS/<name>.shp",
+    ("SET_FOR", "Person", "Item"): "transfer item to character",
+    ("SET_FOR", "Person", "Location"): "teleport character to island.location ('void' hides it)",
+    ("SET_FOR", "Person", "Dialog"): "assign dialog RESOURCE/DIALOGS/<name>.d",
+    ("SET_FOR", "Person", "Playside"): "change character nation (nations.idf)",
+    ("SET_FOR", "Person", "Model"): "change model characters/<name>.cff",
+    ("SET_FOR", "Location", "Playside"): "change location owner nation",
+    ("SET_FOR", "Story_line", "Quest"): "switch story line to quest",
+    ("PLAY", "Engine_movie", None): "play cinema movie",
+    ("LAUNCH", "Story_line", None): "open story line",
+    ("LAUNCH", "Interface", None): "open interface screen",
+    ("ADVANCE", "Story_line", None): "advance story line",
+    ("OPEN", "Location", None): "move player to location",
+    ("SET", "State", "DLink"): "enable/disable dialog link dialog:node:link",
+}
+_A_CMD = {c.lower(): c for c in A_COMMANDS}
+_A_TYPE = {t.lower(): t for t in A_TYPES}
+
+
+def parse_action_line(line: str):
+    """One command as CORE.dll reads it: command word, then pairs <Type> "value" ["count"]."""
+    try:
+        words = shlex.split(line, posix=True)
+    except ValueError:
+        words = line.split()
+    cmd = _A_CMD.get(words[0].lower())
+    objects, rest = [], words[1:]
+    while rest:
+        t = _A_TYPE.get(rest[0].lower())
+        if t is None:
+            break
+        obj = {"type": t, "value": rest[1] if len(rest) > 1 else ""}
+        n = 2
+        if t in ("Item", "Goods") and len(rest) > 2:
+            obj["count"], n = rest[2], 3
+        objects.append(obj)
+        rest = rest[n:]
+    key = (cmd, *(o["type"] for o in objects[:2]), None, None)[:3]
+    effect = A_EFFECTS.get(key) or A_EFFECTS.get((key[0], key[1], None))
+    out = {"op": words[0].upper(), "args": words[1:], "line": line, "cmd": cmd, "objects": objects, "effect": effect}
+    if cmd is None:
+        out["note"] = "ignored by CORE.dll: unknown command"
+    return out
+
+
 def parse_actions(src: Path):
     """Decoded .a: one command per line, '/' starts a comment (CORE.dll skips such lines)."""
     body = text(a_decode(src.read_bytes()))
@@ -118,11 +188,7 @@ def parse_actions(src: Path):
         line = line.strip().rstrip("\x00")
         if not line or line.startswith("/"):
             continue
-        try:
-            words = shlex.split(line, posix=True)
-        except ValueError:
-            words = line.split()
-        commands.append({"op": words[0].upper(), "args": words[1:], "line": line})
+        commands.append(parse_action_line(line))
     return {"source": src.name, "commands": commands}
 
 

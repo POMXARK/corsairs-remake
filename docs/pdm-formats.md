@@ -75,7 +75,45 @@ ADD Item "..." "1"
 LAUNCH Story_line "Spanish_line"
 ```
 
-Частота команд в 715 файлах: SET_FOR 980, ADD 541, SET 507, DELETE 129, LAUNCH 73, OPEN 42, PLAY 15, MESSAGE 12, END 2. Декодированные файлы лежат в `korsari-run/ref/ACTIONS`.
+### Как CORE.dll читает команду
+
+Интерпретатор (`CORE.dll`, функция `0x100014a0`) берёт первое слово строки до пробела, табуляции или перевода строки и сравнивает его без учёта регистра с таблицей команд. Затем читает пары `<Тип> "значение"`; у `Item` и `Goods` есть второе значение в кавычках — количество.
+
+Команды (индекс = номер в таблице): `CLOSE, ADD, DELETE, SET_FOR, COMPLETE, DESTROY, PLAY, LAUNCH, CHECK, ADVANCE, OPEN, MESSAGE BOX, SET`.
+
+Типы объектов (у каждого в таблице есть сигнатура аргумента: `s` — строка, `l` — число, `sl` — строка и число):
+`Person, Game, Ship, Item, Goods, Record, Quest, Location, Expirience, Module, Characteristics, File, Rank, Dialog, DLink, Story_line, String, Interface, Playside, Model, Reputation, DNode, State, Officer, Officer_Rank, Engine_movie, Quantity, hull_hp, team_hp`.
+
+Что делают ветки, которые встречаются в данных:
+
+| Команда | Что делает | Строк |
+|---|---|---|
+| `SET State "0" DLink "диалог:узел:ссылка"` | включает или выключает ссылку диалога | 522 |
+| `SET_FOR Person "X" Dialog "Y"` | назначает персонажу диалог `DIALOGS/Y.d` | 398 |
+| `SET_FOR Person "X" Location "остров.локация"` | телепорт; `void` убирает персонажа | 320 |
+| `SET_FOR Story_line "L" Quest "Q"` | переключает линию на квест и запускает его действие | 224 |
+| `ADD Record "R"` | запись в журнал `TEXTS/RECORDS/R.rcd` | 204 |
+| `ADD`/`DELETE Item "money" "N"` | деньги; иначе — предмет | 214 |
+| `ADD Expirience "N"` | опыт | 110 |
+| `ADD`/`DELETE Reputation "N"` | репутация | 97 |
+| `LAUNCH Story_line "L"` | открывает сюжетную линию | 74 |
+| `OPEN Location "остров.локация"` | переносит игрока в локацию | 50 |
+| `ADD`/`DELETE Person "X"` | персонаж в эскадру игрока или из неё | 55 |
+| `SET_FOR Person/Location … Playside "нация"` | меняет нацию по `nations.idf` | 46 |
+| `PLAY Engine_movie "M"` | ролик | 28 |
+| `SET_FOR Person "X" Model "M"` | модель `characters/M.cff` | 24 |
+| `ADD`/`DELETE Officer`, `Goods`, `SET_FOR Person … Ship/Item` | офицеры, груз, корабль `SHIPS/*.shp`, передача предмета | ≤ 20 каждая |
+| `CLOSE Game "X"` | конец игры | 5 |
+
+Сюжетную линию двигают сообщения в `CORE`: 9001 переводит линию на следующий квест и выполняет его действие, 9002 ставит квест по имени. После этого `CORE` до 5000 раз повторяет проверку, пока переходы идут каскадом.
+
+**Мёртвый код в данных.** Таблицу команд ищут по одному слову, поэтому `MESSAGE BOX …` (16 строк, всплывающие подсказки) не совпадает ни с чем. `message_box` и `END` (2 строки) в таблице тоже нет. Все они игнорируются: эти подсказки в оригинале никогда не показывались. `test_dima.a` не расшифровывается ни одним сдвигом — тестовый мусор.
+
+Конвертер раскладывает каждую строку по этим таблицам. В JSON у команды есть поля:
+
+- `cmd` — каноническое имя команды; `null`, если `CORE` её проигнорирует, тогда рядом стоит `note`;
+- `objects` — список `type` / `value` / `count`;
+- `effect` — что делает команда.
 
 ## D — диалоги
 
