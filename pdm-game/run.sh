@@ -3,7 +3,8 @@
 # of the game and are converted on the first run; the game logic is the scripts in program/.
 # Usage: run.sh <path to built engine executable> [engine options]
 # PDM=<Sea Dogs install dir with RESOURCE> (default: ../../Корсары next to the repository)
-# RECONVERT=1 converts everything again. SCENE=review starts with the fleet review,
+# RECONVERT=1 converts everything again. The game starts with the main menu (SCENE=menu);
+# SCENE=sea starts at sea at once, SCENE=menu-newgame presses "Новая Игра" by itself, SCENE=review starts with the fleet review,
 # SCENE=story runs the self-test of the story machine (every action of the original) and quits.
 set -euo pipefail
 ENGINE="$(realpath "$1")"
@@ -29,10 +30,12 @@ if [ ! -f "$DIR/resource/.converted" ]; then
     mkdir -p "$DIR/resource/sounds" "$DIR/resource/ini/aliases"
     touch "$DIR/resource/.converted"
 fi
+# the screens of the interface (INI/menu.ini ...), their pictures, texts and fonts
+[ -f "$DIR/resource/ini/interfaces/mainmenu.ini" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR" MainMenu
 python3 -I "$TOOLS/pdm_data2c.py" "$DIR/data" "$DIR/program"
 python3 -I "$TOOLS/pdm_logic2c.py" "$DIR/data" "$DIR/program"
-# the scene to start with: sea (the hero on his ship), review (all ship types side by side) or story
-echo "string StartScene = \"${SCENE:-sea}\";" > "$DIR/program/data/start.c"
+# the scene to start with: menu, sea (the hero on his ship), review (all ship types side by side) or story
+echo "string StartScene = \"${SCENE:-menu}\";" > "$DIR/program/data/start.c"
 ln -sfn "$(dirname "$ENGINE")/resource/techniques" "$DIR/resource/techniques"
 
 cd "$DIR"

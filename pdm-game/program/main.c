@@ -22,6 +22,7 @@ aref PlayerShipType;
 #include "story.c"
 #include "sea.c"
 #include "review.c"
+#include "menu.c"
 
 void MapKey(string controlName, int keyCode)
 {
@@ -54,6 +55,11 @@ void Main()
 	{
 		Story_SelfTest();
 		ExitProgram();
+		return;
+	}
+	if (StartScene == "menu" || StartScene == "menu-newgame")
+	{
+		Menu_Start();
 		return;
 	}
 	Pdm_NewGame();
