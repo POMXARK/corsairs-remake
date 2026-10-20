@@ -25,20 +25,43 @@ object Sail;
 object Rope;
 object Vant;
 object VantL;
+object Flag;
+// the flag of a ship: the column and the row in the flag atlas of pdm_ship.py (a column per nation)
+int SeaFlagTexture[2];
 object SeaCameras;
 object ShipCamera;
-// the ship type: the engine reads its parameters and the model name, ships\<Name>\<Name>.gm
-object BaseShip;
-// the character the ship entity lives on
-object Player;
+#define SEA_MAX_SHIPS 48
+// the most sails with the coat of arms on one ship
+#define SEA_MAX_EMBLEMS 6
+// the characters the ship entities live on; the index in the array is their .index, by which the
+// ship and sail entities ask the script about them. 0 is the hero
+object SeaShips[SEA_MAX_SHIPS];
+// their ship types: the engine reads the parameters and the model name, ships\<Name>\<Name>.gm
+object SeaShipTypes[SEA_MAX_SHIPS];
 // textures of the sails, returned to the sail entity by GetSailTextureData
-object SailTextures;
+object SeaSailTextures[SEA_MAX_SHIPS];
+int seaShipCount = 0;
+// 0 holds every ship where it is (the fleet review)
+float seaSpeedScale = 1.0;
 
 float fogHeight = 150.0;
 #define SEA_TICK_MS 40
 float cameraAngle = 1.6;
 
+// The hero on his ship; the camera flies round it until the player takes the mouse, the run needs no input.
 void Sea_Start()
+{
+	Sea_MapShipKeys();
+	Sea_CreateWorld();
+	int hero = Sea_AddShip(PlayerCard, PlayerShipCard.type_key, 0.0, 0.0, 0.0);
+	SeaShips[hero].MainCharacter = 1;
+	Sea_CreateCamera(hero);
+	SetEventHandler("Sea_Tick", "Sea_Tick", 0);
+	PostEvent("Sea_Tick", SEA_TICK_MS);
+	Trace("PDM: sea loaded");
+}
+
+void Sea_MapShipKeys()
 {
 	// read by the ship entity itself for the main character
 	MapKey("Ship_TurnLeft", 65);
@@ -50,18 +73,10 @@ void Sea_Start()
 	MapKey("ShipCamera_Turn_V", 257);
 	MapKey("ShipCamera_Forward", 81);
 	MapKey("ShipCamera_Backward", 69);
-
-	CreateWorld();
-	CreateShip();
-	CreateCamera();
-	// the camera flies round the ship until the player takes the mouse; the run needs no input
-	SetEventHandler("Sea_Tick", "Sea_Tick", 0);
-	PostEvent("Sea_Tick", SEA_TICK_MS);
-	Trace("PDM: sea loaded");
 }
 
 // Sea, sky and weather as in the sea demo, with the day preset; the wind blows the sails.
-void CreateWorld()
+void Sea_CreateWorld()
 {
 	CreateEntity(&Weather, "weather");
 	Weather.Fog.Enable = 1;
@@ -130,18 +145,16 @@ void CreateWorld()
 	Sea.isDone = "";
 }
 
-// The ship: rigging entities first (the ship sends them its model when it is created), then the
-// type, the character and the ship entity on it.
-void CreateShip()
+// The rigging entities: one of each draws the sails, stays and shrouds of all ships; the ship sends
+// them its model when it is created, so they come first.
+void Sea_CreateRigging()
 {
-	// sail reads resource\ini\rigging.ini; it is drawn and traced right after the ship
+	// sail reads resource\ini\rigging.ini; it is drawn and traced right after the ships
 	CreateEntity(&Sail, "sail");
 	LayerAddObject(EXECUTE, &Sail, iShipPriorityExecute + 1);
 	LayerAddObject(REALIZE, &Sail, iShipPriorityRealize + 1);
 	LayerAddObject(SAILS_TRACE, &Sail, 10);
 	LayerAddObject(SEA_REFLECTION2, &Sail, 3);
-	// the sail texture of each hull is written by pdm_ship.py next to its other textures
-	SailTextures.normalTex = "ships\" + PlayerShipType.id + "\parus_all.tga";
 	// rope draws the stays of the original as round ropes between the labels of the model
 	CreateEntity(&Rope, "rope");
 	LayerAddObject(EXECUTE, &Rope, iShipPriorityExecute + 2);
@@ -153,55 +166,98 @@ void CreateShip()
 	CreateEntity(&VantL, "vantl");
 	LayerAddObject(EXECUTE, &VantL, iShipPriorityExecute + 3);
 	LayerAddObject(REALIZE, &VantL, iShipPriorityRealize + 3);
-
-
-	// the type of the hero's ship from WORLDS\Ships.idf: speed in knots, turn rate, crew, hold
-	BaseShip.Name = PlayerShipType.id;
-	BaseShip.Class = sti(PlayerShipType.class);
-	BaseShip.SpeedRate = stf(PlayerShipType.speedrate);
-	BaseShip.TurnRate = stf(PlayerShipType.turnrate);
-	BaseShip.MinCrew = sti(PlayerShipType.mincrew);
-	BaseShip.MaxCrew = sti(PlayerShipType.maxcrew);
-	BaseShip.Capacity = sti(PlayerShipType.capacity);
-	BaseShip.HP = sti(PlayerShipType.hitpoint);
-	BaseShip.Weight = 300.0;
-	BaseShip.SpeedDependWeight = 0.2;
-	BaseShip.SubSeaDependWeight = 0.6;
-	BaseShip.TurnDependWeight = 0.2;
-	BaseShip.TurnDependSpeed = 0.3;
-	BaseShip.WaterLine = 0.0;
-	// how fast the ship follows its target speed (x sideways, y turning, z ahead) and stops
-	BaseShip.InertiaAccelerationX = 0.2;
-	BaseShip.InertiaBrakingX = 2.0;
-	BaseShip.InertiaAccelerationY = 6.0;
-	BaseShip.InertiaBrakingY = 3.0;
-	BaseShip.InertiaAccelerationZ = 4.0;
-	BaseShip.InertiaBrakingZ = 3.0;
-
-	Player.id = PlayerCard.id;
-	Player.index = 0;
-	Player.nation = sti(PlayerCard.nation);
-	// the ship of the main character reads the Ship_* controls itself
-	Player.MainCharacter = 1;
-	Player.ship.pos.x = 0.0;
-	Player.ship.pos.z = 0.0;
-	Player.ship.ang.y = 0.0;
-	// a positive speed starts with the sails set
-	Player.Ship.Speed.z = 1.0;
-
+	// flag draws the flags (labels flag<N>) in the wind; a ship finds it by the entity name
+	CreateEntity(&Flag, "flag");
+	LayerAddObject(EXECUTE, &Flag, iShipPriorityExecute + 4);
+	LayerAddObject(REALIZE, &Flag, iShipPriorityRealize + 4);
+	LayerAddObject(SEA_REFLECTION2, &Flag, 3);
 	// the ship asks for its layers, polls Shp_UpdParams for its top speeds and the sails ask
 	// for their textures; all of them are raised while the ship is being created
 	SetEventHandler("SeaGetLayers", "Sea_ShipLayers", 0);
 	SetEventHandler("Shp_UpdParams", "Sea_ShipParameters", 0);
 	SetEventHandler("GetSailTextureData", "Sea_SailTextures", 0);
-	CreateEntity(&Player, "ship");
-	SendMessage(&Player, "laa", MSG_SHIP_CREATE, &Player, &BaseShip);
-	// lit by the sun of the weather; without a technique the vertex colours are drawn as is
-	SendMessage(&Player, "ls", 20510, "DLightModel");
-	Sea_UpdateSpeeds(1.0);
+	SetEventHandler("GetRiggingData", "Sea_RiggingData", 0);
 }
 
-void CreateCamera()
+// The flag asks for its picture: GetShipFlagTexNum, pennant or not, the nation (the index in
+// WORLDS\nations.idf, which is the column of the atlas), special or not, the character.
+ref Sea_RiggingData()
+{
+	string request = GetEventData();
+	int pennant = GetEventData();
+	int nation = GetEventData();
+	SeaFlagTexture[0] = nation;
+	SeaFlagTexture[1] = 0;
+	return &SeaFlagTexture;
+}
+
+// A ship of the type typeKey (a key of PdmShipTypes, a record of WORLDS\Ships.idf) under the character
+// card (a record of PdmCharacters, or any object with .id and .nation) at x, z heading ay.
+// Returns its index in SeaShips.
+int Sea_AddShip(aref card, string typeKey, float x, float z, float ay)
+{
+	if (seaShipCount == 0) { Sea_CreateRigging(); }
+	int i = seaShipCount;
+	seaShipCount = seaShipCount + 1;
+	aref type;
+	makearef(type, PdmShipTypes.(typeKey));
+
+	// the sails of the nation (nations.idf): the cloth, and the coat of arms on the yards rey_emblem<n>
+	// (the sails of sub 6 in the DEF); pdm_ship.py cut the arms out of emb_sail into ships\gerald
+	aref nation = GetAttributeN(&PdmNations, sti(card.nation));
+	SeaSailTextures[i].normalTex = "ships\sails\" + nation.sail + ".tga";
+	if (nation.emb_sail != nation.sail)
+	{
+		for (int j = 1; j <= SEA_MAX_EMBLEMS; j++)
+		{
+			string yard = "rey_emblem" + j;
+			SeaSailTextures[i].(yard).Gerald = "ships\gerald\" + nation.name + ".tga";
+			// the arms cover the whole sail, as emb_sail did
+			SeaSailTextures[i].(yard).hscale = 1.0;
+		}
+	}
+
+	// the type from WORLDS\Ships.idf: speed in knots, turn rate, crew, hold
+	SeaShipTypes[i].Name = type.id;
+	SeaShipTypes[i].Class = sti(type.class);
+	SeaShipTypes[i].SpeedRate = stf(type.speedrate);
+	SeaShipTypes[i].TurnRate = stf(type.turnrate);
+	SeaShipTypes[i].MinCrew = sti(type.mincrew);
+	SeaShipTypes[i].MaxCrew = sti(type.maxcrew);
+	SeaShipTypes[i].Capacity = sti(type.capacity);
+	SeaShipTypes[i].HP = sti(type.hitpoint);
+	SeaShipTypes[i].Weight = 300.0;
+	SeaShipTypes[i].SpeedDependWeight = 0.2;
+	SeaShipTypes[i].SubSeaDependWeight = 0.6;
+	SeaShipTypes[i].TurnDependWeight = 0.2;
+	SeaShipTypes[i].TurnDependSpeed = 0.3;
+	SeaShipTypes[i].WaterLine = 0.0;
+	// how fast the ship follows its target speed (x sideways, y turning, z ahead) and stops
+	SeaShipTypes[i].InertiaAccelerationX = 0.2;
+	SeaShipTypes[i].InertiaBrakingX = 2.0;
+	SeaShipTypes[i].InertiaAccelerationY = 6.0;
+	SeaShipTypes[i].InertiaBrakingY = 3.0;
+	SeaShipTypes[i].InertiaAccelerationZ = 4.0;
+	SeaShipTypes[i].InertiaBrakingZ = 3.0;
+
+	SeaShips[i].id = card.id;
+	SeaShips[i].index = i;
+	SeaShips[i].nation = sti(card.nation);
+	SeaShips[i].ship.pos.x = x;
+	SeaShips[i].ship.pos.z = z;
+	SeaShips[i].ship.ang.y = ay;
+	// a positive speed starts with the sails set
+	SeaShips[i].Ship.Speed.z = 1.0;
+
+	CreateEntity(&SeaShips[i], "ship");
+	SendMessage(&SeaShips[i], "laa", MSG_SHIP_CREATE, &SeaShips[i], &SeaShipTypes[i]);
+	// lit by the sun of the weather; without a technique the vertex colours are drawn as is
+	SendMessage(&SeaShips[i], "ls", 20510, "DLightModel");
+	Sea_UpdateSpeeds(i, 1.0);
+	return i;
+}
+
+void Sea_CreateCamera(int i)
 {
 	CreateEntity(&SeaCameras, "SEA_CAMERAS");
 	CreateEntity(&ShipCamera, "SHIP_CAMERA");
@@ -222,7 +278,7 @@ void CreateCamera()
 	ShipCamera.InvertMouseY = -1.0;
 	// SEA_CAMERAS switches between the sea cameras and gives the active one its character;
 	// the scene executes the active camera every frame
-	SendMessage(&SeaCameras, "lia", AI_CAMERAS_SET_CAMERA, &ShipCamera, &Player);
+	SendMessage(&SeaCameras, "lia", AI_CAMERAS_SET_CAMERA, &ShipCamera, &SeaShips[i]);
 	SendMessage(&Scene, "si", "SetActiveCamera", &ShipCamera);
 }
 
@@ -240,26 +296,26 @@ void Sea_ShipLayers()
 	SendMessage(ship, "lll", AI_MESSAGE_SET_LAYERS, EXECUTE, REALIZE);
 }
 
-// Top speeds of the ship: the sails give a share of the wind from 0 to 1, the ship multiplies it
+// Top speeds of a ship: the sails give a share of the wind from 0 to 1, the ship multiplies it
 // by MaxSpeedZ (knots); the turn controls give -1..1 and the ship multiplies that by MaxSpeedY.
 void Sea_ShipParameters()
 {
 	int index = GetEventData();
 	float sailState = GetEventData();
-	Sea_UpdateSpeeds(sailState);
+	Sea_UpdateSpeeds(index, sailState);
 }
 
-void Sea_UpdateSpeeds(float sailState)
+void Sea_UpdateSpeeds(int i, float sailState)
 {
-	Player.Ship.MaxSpeedZ = stf(BaseShip.SpeedRate);
+	SeaShips[i].Ship.MaxSpeedZ = stf(SeaShipTypes[i].SpeedRate) * seaSpeedScale;
 	// a ship under sail turns faster than one drifting
-	Player.Ship.MaxSpeedY = stf(BaseShip.TurnRate) / 160.0 * (0.4 + 0.6 * sailState);
+	SeaShips[i].Ship.MaxSpeedY = stf(SeaShipTypes[i].TurnRate) / 160.0 * (0.4 + 0.6 * sailState);
 }
 
 ref Sea_SailTextures()
 {
 	int index = GetEventData();
-	return &SailTextures;
+	return &SeaSailTextures[index];
 }
 
 int Sea_FogColor()

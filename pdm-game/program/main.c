@@ -16,7 +16,9 @@ aref PlayerShipCard;
 aref PlayerShipType;
 
 #include "data\pdm_data.c"
+#include "data\start.c"
 #include "sea.c"
+#include "review.c"
 
 void MapKey(string controlName, int keyCode)
 {
@@ -43,7 +45,9 @@ void Main()
 	Render.BackColor = argb(255, 0, 0, 0);
 	CreateEntity(&Scene, "Scene");
 	LayerAddObject(EXECUTE, &Scene, 0);
-	Sea_Start();
+	// run.sh writes the scene to start with (SCENE=…) into data\start.c
+	if (StartScene == "review") { Review_Start(); }
+	else { Sea_Start(); }
 }
 
 void Pdm_Control()

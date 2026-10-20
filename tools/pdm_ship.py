@@ -9,15 +9,18 @@ their textures converted to textures/ships/<name>/*.tga.tx.
 usage: pdm_ship.py <PDM_dir> <resource_out> <Ship> [--name Name] [--scale K]
 """
 import argparse
+import math
+import re
 import struct
 import sys
+import tempfile
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS))
 import cff2gm  # noqa: E402
 from cff2gm import Mesh, write_gm  # noqa: E402
-from pdm2storm import convert_texture, parse_def  # noqa: E402
+from pdm2storm import convert_texture, parse_def, parse_idf  # noqa: E402
 
 # DEF units: the brig ABrig is 1.17 long; a real brig of the time is about 30 m
 DEFAULT_SCALE = 26.0
@@ -32,8 +35,22 @@ def index_files(folder: Path):
     return files
 
 
+# the masts are the parts *_MS_<n> / *_ms<n> standing on the hull (0 is the bowsprit)
+MAST_FILE = re.compile(r"_?ms_?(\d)")
+
+
+# the DEF sub of the sails with the coat of arms
+EMBLEM_SAIL = 6
+
+
+class Node:
+    """A node of the Storm model: its meshes and labels, relative to its origin (metres, from the hull)."""
+    def __init__(self, origin=(0.0, 0.0, 0.0), parent=None):
+        self.origin, self.parent, self.meshes, self.labels = origin, parent, [], []
+
+
 def placed(items, kind="Model"):
-    """Items of a class with their offset summed along the link chain (the models are not rotated).
+    """Items of a class (or of several, "Model,Rey") with their offset summed along the link chain (the models are not rotated).
 
     The Patch item is skipped: a black lid over the hull facing down (ABrig_Patch.cff, texture "black"),
     a mask of the original against its sea inside the hull. Storm 2 does not need it and, with the faces
@@ -43,7 +60,8 @@ def placed(items, kind="Model"):
         by_index.setdefault(it["index"], it)
     out = []
     for it in items:
-        if it["class"] != kind or not it["file"]:
+        # a Flag is a point (the masthead, the ensign staff): it has no model
+        if it["class"] not in kind.split(",") or not (it["file"] or kind == "Flag"):
             continue
         pos, link, seen = list(it["pos"]), it["link"], set()
         while link >= 0 and link in by_index and link not in seen:
@@ -135,8 +153,10 @@ def write_tx(dst: Path, size, pixel):
 
 
 ROPE = (42, 32, 22, 255)  # tarred hemp
+# the shrouds of the original are light hemp ladders, the stays dark lines
+HEMP = (150, 128, 96, 255)
 WOOD = (92, 64, 38, 255)
-CLEAR = (42, 32, 22, 0)
+CLEAR = (150, 128, 96, 0)
 
 
 def write_rope_texture(dst: Path):
@@ -150,7 +170,7 @@ def write_rope_texture(dst: Path):
 
 
 # Where write_vant_texture puts the parts of a shroud; the vant entity reads them from rigging.ini
-VANT_INI = """fWidth = 0.08
+VANT_INI = """fWidth = 0.03
 fVRopeXbeg = 0.0
 fVRopeXend = 0.1
 fTreangXbeg = 0.125
@@ -161,7 +181,7 @@ fBalkYbeg = 0.6
 fBalkYend = 1.0
 fHRopeXbeg = 0.5
 fHRopeXend = 1.0
-fHRopeHeight = 0.45
+fHRopeHeight = 0.9
 fVRopeHeight = 1.0
 fTreangWidth = 0.6
 fTreangHeight = 0.9
@@ -176,20 +196,100 @@ def write_vant_texture(dst: Path, size=128):
     def pixel(x, y):
         u, v = (x + 0.5) / size, (y + 0.5) / size
         if u < 0.1:
-            return ROPE
+            return HEMP
         if u < 0.5:
             if v >= 0.6:
-                return WOOD
+                return WOOD if v < 0.75 else CLEAR
             # five ropes from the top middle to the beam
             if 0.125 <= u and v > 0.02:
                 for k in range(5):
                     end = 0.14 + 0.345 * k / 4
                     at = 0.3125 + (end - 0.3125) * v / 0.6
-                    if abs(u - at) < 1.5 / size:
-                        return ROPE
+                    if abs(u - at) < 1 / size:
+                        return HEMP
             return CLEAR
-        return ROPE if abs(v - 0.5) < 3 / size else CLEAR
+        return HEMP if abs(v - 0.5) < 1.5 / size else CLEAR
     write_tx(dst, size, pixel)
+
+
+# The flags: the flag entity draws them as cloth in the wind from four labels of a group flag<N>: f1 and
+# f4 the edge at the mast (top, bottom), f2 and f3 the free edge (top, bottom). A DEF Flag item is only
+# the point the flag hangs from; sub 2 is the pennant of the foremast. Length aft and height, metres:
+# the ensign on the stern staff (a flag of the hull) is big, the flags at the mastheads small and long.
+FLAG_SIZE = {0: (2.0, 0.8), 2: (4.0, 0.35), "stern": (4.2, 2.6)}
+# the atlas of the flags: a column per nation of WORLDS/nations.idf, in its order (the .nation of a
+# character is that index); the script returns the column in GetRiggingData/GetShipFlagTexNum
+FLAG_COLUMNS = 8
+
+
+def flag_labels(n, sub, at, stern=False):
+    """The labels of flag n hanging from the point at (in its node)."""
+    length, height = FLAG_SIZE["stern" if stern else sub if sub in FLAG_SIZE else 0]
+    x, y, z = at
+    return [(f"flag{n}", "f1", (x, y, z)), (f"flag{n}", "f4", (x, y - height, z)),
+            (f"flag{n}", "f2", (x, y, z - length)), (f"flag{n}", "f3", (x, y - height, z - length))]
+
+
+def write_flag_texture(res: Path, textures: dict, dst: Path):
+    """The flags of the nations (the flag field of nations.idf, 128 x 64 .tf) side by side."""
+    nations = [dict(o) for o in parse_idf(res / "WORLDS" / "nations.idf")["objects"]]
+    w, h = 128, 64
+    rows = [bytearray(w * FLAG_COLUMNS * 4) for _ in range(h)]
+    with tempfile.TemporaryDirectory() as tmp:
+        for col, nation in enumerate(nations[:FLAG_COLUMNS]):
+            src = textures.get(nation.get("flag", "").lower())
+            if src is None:
+                continue
+            tx = Path(tmp) / "flag.tx"
+            convert_texture(src, tx)
+            data = tx.read_bytes()
+            fw, fh = struct.unpack_from("<6i", data)[1:3]
+            for y in range(h):
+                sy = y * fh // h
+                for x in range(w):
+                    o = 24 + (sy * fw + x * fw // w) * 4
+                    rows[y][(col * w + x) * 4:(col * w + x) * 4 + 4] = data[o:o + 4]
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    width = w * FLAG_COLUMNS
+    dst.write_bytes(struct.pack("<6i", 0, width, h, 1, 21, width * h * 4) + b"".join(rows))
+
+
+def read_tx(src: Path, tmp: Path):
+    """A .tf/.tga of the original as (width, height, BGRA bytes of the first mip)."""
+    convert_texture(src, tmp)
+    data = tmp.read_bytes()
+    w, h = struct.unpack_from("<6i", data)[1:3]
+    return w, h, data[24:24 + w * h * 4]
+
+
+def write_nation_sails(res: Path, textures: dict, out: Path):
+    """The sails of the nations (nations.idf): the cloth (sail, textures/ships/sails/<sail>.tga) and the
+    coat of arms (emb_sail, the same cloth with the arms painted on). Storm draws the arms over the sail
+    as a texture of their own (Gerald of the sail entity), so the arms are cut out: where emb_sail
+    differs from the cloth they are opaque, elsewhere clear (textures/ships/gerald/<nation>.tga)."""
+    nations = [dict(o) for o in parse_idf(res / "WORLDS" / "nations.idf")["objects"]]
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp) / "t.tx"
+        for nation in nations:
+            sail, emb = (textures.get(nation.get(f, "").lower()) for f in ("sail", "emb_sail"))
+            if sail is None:
+                continue
+            dst = out / "textures" / "ships" / "sails" / f"{nation['sail'].lower()}.tga.tx"
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            convert_texture(sail, dst)
+            if emb is None or emb == sail:
+                continue
+            w, h, cloth = read_tx(sail, tmp)
+            ew, eh, arms = read_tx(emb, tmp)
+            if (w, h) != (ew, eh):
+                continue
+            px = bytearray(arms)
+            for i in range(0, len(px), 4):
+                diff = sum(abs(arms[i + c] - cloth[i + c]) for c in range(3))
+                px[i + 3] = 255 if diff > 40 else 0
+            dst = out / "textures" / "ships" / "gerald" / f"{nation['name'].lower()}.tga.tx"
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(struct.pack("<6i", 0, w, h, 1, 21, w * h * 4) + bytes(px))
 
 
 def main():
@@ -215,43 +315,77 @@ def main():
         return f"{tex_dir}\\{stem.lower()}.tga"
 
     k = a.scale
-    meshes, labels, vants = [], [], []
     items = parse_def(desc[a.ship.lower() + ".def"])["items"]
+    by_index = {}
+    for it in items:
+        by_index.setdefault(it["index"], it)
+    # the nodes of the Storm model: the hull, a node per mast (the engine breaks and drops a node named
+    # mast<N>) and in it a node per yard with its sail (rey...: they fall with the mast). A node is
+    # loaded from <name>_<node>.gm where its parent has a "geometry" label; its parts are relative to it
+    nodes = {"": Node()}
+    masts = {}
     for it, pos in placed(items):
-        cff = models.get(it["file"].lower())
+        m = MAST_FILE.search(Path(it["file"]).stem.lower())
+        if m and by_index.get(it["link"], {}).get("class") == "Model" and by_index[it["link"]]["link"] < 1:
+            masts[it["index"]] = f"mast{int(m.group(1)) + 1}"
+            nodes[masts[it["index"]]] = Node(tuple(v * k for v in pos), "")
+
+    def node_of(it):
+        """The mast an item stands on (the one nearest the hull along its links), or the hull."""
+        found, link, seen = "", it["index"], set()
+        while link in by_index and link not in seen:
+            seen.add(link)
+            found = masts.get(link, found)
+            link = by_index[link]["link"]
+        return found
+
+    vants, ropes = 0, 0
+    # the parts: hull, masts, the yards of the ships without .sls (Rey: Shnyava) and the deck guns (a
+    # Cannon with a model; the ones without are the ports of the lower decks, the points they fire from)
+    for it, pos in placed(items, "Model,Rey,Cannon"):
+        # Tartana.def names Tartana.clf, which is not in the release: the .cff of the same name is
+        cff = models.get(it["file"].lower()) or models.get(Path(it["file"]).stem.lower())
         if cff is None:
             print(f"  missing model {it['file']}")
             continue
+        node = nodes[node_of(it)]
+        # a gun is turned to its side about the vertical (rot y: -pi/2 left, pi/2 right, pi aft)
+        cos, sin = math.cos(it["rot"][1]), math.sin(it["rot"][1])
 
-        def place(p, pos=pos):
-            # summed DEF offset, then metres
-            return tuple((v + o) * k for v, o in zip(p, pos))
+        def place(p, pos=pos, cos=cos, sin=sin, origin=node.origin):
+            # turned, summed DEF offset, metres, then from the node
+            p = (p[0] * cos + p[2] * sin, p[1], -p[0] * sin + p[2] * cos)
+            return tuple((v + o) * k - c for v, o, c in zip(p, pos, origin))
         parts = cff2gm.cff_to_meshes(cff, place=place, texture=texture)
+        hull = nodes[""]
         for part in parts:
-            if part.texture.endswith("\\takelag_new.tga"):
+            # the shrouds and stays are drawn by the vant and rope entities from labels of the hull node
+            to_hull = lambda q, origin=node.origin: tuple(a + b for a, b in zip(q, origin))
+            if part.texture.endswith(("\\takelag_new.tga", "\\mf_takelag.tga")):
                 # the shrouds: a triangle each, the masthead and two points at the side; the vant entity
                 # draws them as ropes with ratlines. Its labels carry one digit: vant1..9, then vanx1..9
                 # for the vantl entity (half the triangles are the back side)
                 for a, b, c in part.triangles[:len(part.triangles) // 2]:
-                    up, left, right = sorted((part.vertices[i][0] for i in (a, b, c)), key=lambda p: -p[1])
-                    n = len(vants) + 1
-                    vant = f"vant{n}" if n <= 9 else f"vanx{n - 9}"
-                    vants.append(n)
-                    labels += [("vant", vant + "u", up), ("vant", vant + "l", left), ("vant", vant + "r", right)]
+                    up, left, right = sorted((to_hull(part.vertices[i][0]) for i in (a, b, c)), key=lambda p: -p[1])
+                    vants += 1
+                    vant = f"vant{vants}" if vants <= 9 else f"vanx{vants - 9}"
+                    hull.labels += [("vant", vant + "u", up), ("vant", vant + "l", left), ("vant", vant + "r", right)]
             elif part.texture.endswith("\\black.tga"):
                 # the stays: ropes of the rope entity instead of flat strips (half the vertices are the back side)
                 front = len(part.vertices) // 2
-                positions = [v[0] for v in part.vertices[:front]]
+                positions = [to_hull(v[0]) for v in part.vertices[:front]]
                 for b, e in rope_ends(positions, part.triangles[:len(part.triangles) // 2]):
-                    n = sum(1 for g, *_ in labels if g == "rope") // 2 + 1
-                    labels += [("rope", f"ropeb{n}", b), ("rope", f"ropee{n}", e)]
+                    ropes += 1
+                    hull.labels += [("rope", f"ropeb{ropes}", b), ("rope", f"ropee{ropes}", e)]
             else:
-                meshes.append(part)
-        print(f"  {it['file']:<20} {len(parts):3d} meshes at {[round(v, 3) for v in pos]}")
-    ropes = sum(1 for g, *_ in labels if g == "rope") // 2
+                node.meshes.append(part)
+        print(f"  {it['file']:<20} {len(parts):3d} meshes at {[round(v, 3) for v in pos]} {node_of(it)}")
 
-    # the sails: their yards go into the model, the cloth is drawn by the sail entity from the corners
-    sls = {}
+    # the sails: their yards go into the model, the cloth is drawn by the sail entity from the corners.
+    # The yard of each sail on a mast is a node of its own. Sub 6 is the sail with the coat of arms of
+    # the nation (the topsails of the original): its yard is rey_emblem<n>, the script gives those
+    # nodes the arms (Gerald of the sail entity)
+    sls, yards = {}, []
     for it, pos in placed(items, "Sail"):
         if it["file"].lower() not in sls:
             sls[it["file"].lower()] = parse_sls(desc[it["file"].lower()])
@@ -259,23 +393,53 @@ def main():
         if sail is None:
             print(f"  no sail {it['index']} in {it['file']}")
             continue
+        yards.append((it, pos, sail))
+    emblems = 0
+    for it, pos, sail in yards:
+        mast = node_of(it)
+        origin = tuple(v * k for v in pos)
+        # a sail without a yard mesh stays in its mast node: a node has to have geometry
+        if mast and sail["meshes"]:
+            if it["sub"] == EMBLEM_SAIL:
+                emblems += 1
+                yard = f"rey_emblem{emblems}"
+            else:
+                yard = f"rey{it['index']}"
+            nodes[yard] = Node(origin, mast)
+        else:
+            yard = mast
+            origin = nodes[mast].origin
+        node = nodes[yard]
 
-        def place(p, pos=pos):
-            return tuple((v + o) * k for v, o in zip(p, pos))
+        def place(p, pos=pos, origin=origin):
+            return tuple((v + o) * k - c for v, o, c in zip(p, pos, origin))
         for tex, verts, tris in sail["meshes"]:
-            meshes.append(yard_mesh(f"yard{it['index']}", texture(tex.split(".")[0]), verts, tris, place))
+            node.meshes.append(yard_mesh(f"yard{it['index']}", texture(tex.split(".")[0]), verts, tris, place))
         # sub 4 is the gaff sail of the mizzen: a trapezium that does not roll up ("sailf"); the rest
         # are square sails ("sails"); the corners go in the order the sail entity expects
         group = f"sail{'f' if it['sub'] == 4 else 's'}{it['index']}"
-        labels += [(group, f"sail{n + 1}", place(c)) for n, c in enumerate(sail["corners"])]
-    sails = sum(1 for g, *_ in labels if g.startswith("sail")) // 4
-    print(f"  {ropes} ropes, {len(vants)} shrouds, {sails} sails")
-    # the cloth of the sails (parus1..3 are the same cloth torn); the script gives it to the sail entity
-    texture("parus_all")
+        node.labels += [(group, f"sail{n + 1}", place(c)) for n, c in enumerate(sail["corners"])]
+    for it, pos in placed(items, "Flag"):
+        mast = node_of(it)
+        node = nodes[mast]
+        n = sum(1 for nd in nodes.values() for g, *_ in nd.labels if g.startswith("flag")) // 4 + 1
+        at = tuple(v * k - c for v, c in zip(pos, node.origin))
+        node.labels += flag_labels(n, it["sub"], at, stern=not mast and it["sub"] == 0)
+    flags = sum(1 for nd in nodes.values() for g, *_ in nd.labels if g.startswith("flag")) // 4
+    print(f"  {ropes} ropes, {vants} shrouds, {len(yards)} sails, {flags} flags, {len(masts)} masts, {emblems} arms")
 
+    # a node is placed by a label of its parent
+    for nm, nd in nodes.items():
+        if nm:
+            parent = nodes[nd.parent]
+            parent.labels.append(("geometry", nm, tuple(a - b for a, b in zip(nd.origin, parent.origin))))
     gm = out / "models" / "ships" / name / f"{name}.gm"
     gm.parent.mkdir(parents=True, exist_ok=True)
-    write_gm(meshes, gm, bsp=True, labels=labels)
+    for old in gm.parent.glob(f"{name}_*.gm"):
+        old.unlink()
+    for nm, nd in nodes.items():
+        write_gm(nd.meshes, gm.with_name(f"{name}_{nm}.gm" if nm else f"{name}.gm"), bsp=True, labels=nd.labels)
+    meshes = [m for nd in nodes.values() for m in nd.meshes]
     for stem in sorted(used):
         src = textures.get(stem)
         if src is None:
@@ -287,10 +451,13 @@ def main():
     # the rope entity takes its texture by the name in rigging.ini, sail_rope.tga by default
     write_rope_texture(out / "textures" / "sail_rope.tga.tx")
     write_vant_texture(out / "textures" / "vant.tga.tx")
+    write_flag_texture(res, textures, out / "textures" / "flags_pdm.tga.tx")
+    write_nation_sails(res, textures, out)
     # the rope and vant settings for rigging.ini, appended by run.sh
     (out / "ini").mkdir(parents=True, exist_ok=True)
     (out / "ini" / "rigging_pdm.ini").write_text(
-        "[ROPES]\nfWIDTH = 0.12\nfMaxDist = 200000\n\n[VANTS]\n" + VANT_INI + "\n[VANTS_L]\n" + VANT_INI)
+        "[ROPES]\nfWIDTH = 0.04\nfMaxDist = 200000\n\n[VANTS]\n" + VANT_INI + "\n[VANTS_L]\n" + VANT_INI +
+        f"\n[FLAGS]\nTextureName = flags_pdm.tga\nTextureCountColumn = {FLAG_COLUMNS}\nTextureCountRow = 1\n")
     print(f"{gm}: {len(meshes)} meshes, {len(used)} textures")
 
 
