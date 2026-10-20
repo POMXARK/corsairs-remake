@@ -13,6 +13,8 @@ python3 -I "$DEMOS/sea/make_sea.py" "$DIR/resource"
 # rigging.ini, mast.ini and the sail textures the sail entity loads by fixed names
 python3 -I "$DEMOS/ship/make_ship.py" "$DIR/resource"
 python3 -I "$DIR/../tools/pdm_ship.py" "$PDM" "$DIR/resource" ABrig
+# the settings of the rope and vant entities written by pdm_ship.py (rope width, shroud texture layout)
+cat "$DIR/resource/ini/rigging_pdm.ini" >> "$DIR/resource/ini/rigging.ini"
 ln -sfn "$(dirname "$ENGINE")/resource/techniques" "$DIR/resource/techniques"
 mkdir -p "$DIR/resource/sounds" "$DIR/resource/ini/aliases"
 

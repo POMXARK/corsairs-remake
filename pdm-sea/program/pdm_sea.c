@@ -1,8 +1,9 @@
 // A ship of the original Sea Dogs (PDM 1.061) on the Storm 2 sea: the brig ABrig assembled by
-// tools/pdm_ship.py from its DESC/ABrig.def and MODELS/*.cff (hull, masts, rigging, cannons).
+// tools/pdm_ship.py from its DESC/ABrig.def, DESC/ABrig.sls and MODELS/*.cff (hull, masts, yards,
+// cannons; the sails, the stays and the shrouds are labels for the sail, rope and vant entities).
 // Built on the ship demo of the engine (engine/demos/ship): the "ship" entity rocks it on the waves
-// and moves it, SHIP_CAMERA follows it. The sails of PDM (.sls) are not converted yet, so the ship
-// sails without them; the camera flies round it. A/D turn, W/S sails, the mouse turns the camera, Escape quits.
+// and moves it, SHIP_CAMERA follows it; the camera flies round it. A/D turn, W/S sails, the mouse
+// turns the camera, Escape quits.
 
 #define EXECUTE 0
 #define REALIZE 1
@@ -28,6 +29,9 @@ object Weather;
 object Sky;
 object Sea;
 object Sail;
+object Rope;
+object Vant;
+object VantL;
 object SeaCameras;
 object ShipCamera;
 // the ship type: the engine reads its parameters and the model name, ships\<Name>\<Name>.gm
@@ -158,7 +162,18 @@ void CreateShip()
 	LayerAddObject(REALIZE, &Sail, iShipPriorityRealize + 1);
 	LayerAddObject(SAILS_TRACE, &Sail, 10);
 	LayerAddObject(SEA_REFLECTION2, &Sail, 3);
-	SailTextures.normalTex = "ships\brig\sail.tga";
+	SailTextures.normalTex = "ships\abrig\parus_all.tga";
+	// rope draws the stays of the original as round ropes between the labels of the model
+	CreateEntity(&Rope, "rope");
+	LayerAddObject(EXECUTE, &Rope, iShipPriorityExecute + 2);
+	LayerAddObject(REALIZE, &Rope, iShipPriorityRealize + 2);
+	// vant and vantl draw the shrouds (labels vant1..9 and vanx1..9) as ropes with ratlines
+	CreateEntity(&Vant, "vant");
+	LayerAddObject(EXECUTE, &Vant, iShipPriorityExecute + 3);
+	LayerAddObject(REALIZE, &Vant, iShipPriorityRealize + 3);
+	CreateEntity(&VantL, "vantl");
+	LayerAddObject(EXECUTE, &VantL, iShipPriorityExecute + 3);
+	LayerAddObject(REALIZE, &VantL, iShipPriorityRealize + 3);
 
 
 	BaseShip.Name = "ABrig";
