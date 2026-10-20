@@ -2,7 +2,29 @@
 
 Что проверено на файлах игры и чем конвертируется в форматы Storm 2. Справка по форматам — [AlexKimov/seadogs-file-formats](https://github.com/AlexKimov/seadogs-file-formats) (шаблоны 010 Editor, плагины Noesis, wiki); ниже то, где она неполна или ошибается.
 
-Папку для запуска собирает `tools/make_korsari_run.sh <PDM> <sd-teho-public> <out> [engine/build/Debug]`.
+## Конвертер всего RESOURCE
+
+```
+tools/convert.sh  <папка_игры> <out>     # Linux / macOS
+tools\convert.bat <папка_игры> <out>     # Windows (вызывает convert.ps1)
+.\tools\convert.ps1 <папка_игры> <out>   # PowerShell
+```
+
+Все три — обёртки над `tools/pdm2storm.py` (нужен только Python 3.8+, для моделей — submodule `engine`). Ключи: `--only textures,models,...` — выбрать этапы, `-j N` — число процессов. На 16 ядрах весь PDM конвертируется за ~40 секунд:
+
+| этап | что | куда | PDM 1.061 |
+|---|---|---|---|
+| textures | `.tf` → `.tx`, `.tga` без `.tf`-двойника → `.tx` | `out/resource` | 3167, 0 ошибок |
+| models | `.cff` → `.gm` | `out/resource` | 677, 3 битых в оригинале |
+| copy | остальное как есть (звук, ini, тексты, `.ql`, `.ani`…) | `out/resource` | 3232 |
+| actions | `.a` → команды | `out/data/actions` | 715 |
+| dialogs | `.d` → узлы, ссылки, действия | `out/data/dialogs` | 1108 |
+| tables | `.idf` → объекты name/value | `out/data/tables` | 96 |
+| desc | `.def` → локаторы частей корабля | `out/data/desc` | 97 |
+| characters | `.mtx` → карточки персонажей | `out/data/characters` | 297 |
+| ships | `.shp` → профили кораблей | `out/data/ships` | 94 (+1 шаблон старой версии) |
+
+`out/resource` читает движок, `out/data` — JSON в UTF-8 для игровых скриптов. Итог с ошибками — в `out/convert-report.json`. Папку для запуска движка собирает `tools/make_korsari_run.sh <PDM> <sd-teho-public> <out> [engine/build/Debug]` (тот же конвертер + ini и скрипты TEHO + шейдеры).
 
 ## TF — текстуры → `.tx` (`tools/tf2tx.py`)
 
@@ -23,6 +45,15 @@
 - `TF.bt` путает типы 0 и 1. Проверка: у type 1 в раскладке A1R5G5B5 соседние пиксели отличаются в среднем на 3.4 на канал, в R5G5B5A1 — на 12.3, то есть получается шум.
 - **Альфа инвертирована**: установленный бит (у type 2 — 15) означает прозрачность. Проверено на `Dama_Body` (прозрачен только зигзаг сверху) и `mf_takelag` (прозрачны промежутки между верёвками).
 - Палитровые картинки — запасной вариант, если 16-битных мипов нет.
+
+## TGA — картинки интерфейса → `.tx` (`pdm2storm.py`)
+
+425 из 450 TGA не имеют `.tf`-пары: иконки товаров, кнопки, фоны, карта. Все несжатые (image type 2):
+
+- 305 файлов — 16 бит A1R5G5B5. Альфа-бит, как и в `.tf`, означает прозрачность: он не стоит ни в одном файле, и всё это непрозрачные картинки интерфейса. По стандарту TGA они вышли бы полностью прозрачными.
+- 105 — 32 бит без альфы, 40 — 32 бит с обычной 8-битной альфой (гербы, свиток, такелаж, шрифты).
+- Строки снизу вверх, если не стоит бит 0x20 дескриптора; `.tx` хранит сверху вниз.
+- Надписи на карте (`MermaidReefs`, `goldway`…) имеют альфу 0 во всех пикселях: видимо, игра рисовала их аддитивно. Конвертер переносит альфу как есть.
 
 ## CFF — модели → `.gm` (`tools/cff2gm.py`)
 
@@ -48,6 +79,51 @@ LAUNCH Story_line "Spanish_line"
 ## D — диалоги
 
 Обычный текст cp1251: `<N узел>`, `<T реплика>`, `<L ссылка,...,узел>`.
+
+## IDF — таблицы (`pdm2storm.py`, этап tables)
+
+`u32, u32 count, u32`, затем `count` объектов: `u32 n` + `n × 132` байт (`u32` мусор/указатель, `name[64]`, `value[64]`, cp1251). Разбираются все 96 файлов до последнего байта. Порядок объектов важен: другие файлы ссылаются на них по индексу (`nation` в `.mtx` — номер в `nations.idf`: 0 england, 1 pirate, 2 france, 3 spain; груз `.shp` — номера в `Goods.idf`).
+
+## DEF — устройство корабля (этап desc)
+
+`u32 count` + `count × 296`: `u32 index, u32 class, u32 sub, char file[256], float pos[3], float rot[3], i32 link` ([DEF.bt](https://github.com/AlexKimov/seadogs-file-formats)). Классы 200–209: Model, Rey, Sail, Cannon, Flag, Waterline, Patch, CannonSet, AllCannons, ShipTrace; 210–212 встречаются, смысл не известен.
+
+## MTX — персонажи (этап characters)
+
+2384 байта (`0x950`). `CHARACTER_EDITOR.dll` (`FUN_10003dc0`) собирает их поле за полем из объекта редактора, обратная функция — `FUN_10003ef0`. Первый `u32` — размер, по нему файл и проверяется.
+
+| смещение | поле | подпись в редакторе |
+|---|---|---|
+| 0x058 | `char[32]` имя (рус.) | name |
+| 0x078 | `char[32]` id, он же имя файла | file name |
+| 0x0a8 | `i32` нация, индекс в `nations.idf` | nation |
+| 0x0ac | `i32` отношение, индекс в `relations.idf` | relation |
+| 0x2b4 | `i32` тип: 0 — обычный NPC, 2 — капитан с кораблём, 1 — три квестовых NPC | character is |
+| 0x2c8 | `char[32]` модель `CHARACTERS\*.cff` | 3D model |
+| 0x2e8 | `char[32]` корабль `*.shp` | ship |
+| 0x308 | `char[64]` текущий диалог | current dialog |
+| 0x348 | `char[64]` остров, 0x388 `i32` — номер локации | address («A:%d on island: %s») |
+| 0x734 | `i32[9]` навыки: Sailing, Repair, Commerce, Accuracy, Reload, Coordination, Combat, Defence, Board Range | |
+| 0x934 | `i32` ранг офицера: −1 нет, 0 FIRST_MATE … 5 CARPENTER | officer rank |
+
+Порядок навыков подтверждается данными: у казначея Адама Муллена (ранг 2, MASTER_PURSER) ненулевой только третий навык — Commerce. Остальные непустые слова конвертер кладёт в `unknown`. У 96 персонажей в 0x0b0 лежит `0xCCCCCCCC` — неинициализированное поле.
+
+## SHP — профили кораблей (этап ships)
+
+792 байта: `u32` + структура `0x2f0` + блок `0x24`. Их пишет `TOOLS_SHIPEDITOR.dll` (`FUN_10004ad0`, три `fwrite`), а читает `FUN_10004c40`. Поля сопоставлены с формой редактора:
+
+| смещение | поле |
+|---|---|
+| 0x000 | Player skill (1–12) |
+| 0x008 | `char[32]` имя профиля |
+| 0x028 | `char[32]` класс корабля из `Ships.idf` (Ship type) |
+| 0x04c | Hull HP (0x048 обычно то же число — вероятно, Rig HP) |
+| 0x05c | Crew number |
+| 0x084 | Weapon type: 0 Demi-culverins, 1 Culverins, 2 Demi-cannons |
+| 0x090 | `i32[128]` груз: количество по индексам `Goods.idf` (пушки, ядра, книппели, картечь, бомбы, товары) |
+| 0x300 / 0x304 / 0x308 | Soldier / Cannoneer / Sailor Skill |
+
+`SHIPS/reserved/empty.shp` — 740 байт: шаблон более ранней версии редактора (апрель 2000).
 
 ## QL — квесты (разобрано частично)
 
