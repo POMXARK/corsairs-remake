@@ -1,0 +1,154 @@
+"""Converts the sea toolbar of the original Sea Dogs (SQUAD_CONTROL.dll on TEXTURES/toolbar) and the action icon of
+the land for BATTLE_INTERFACE and ILogAndActions of Storm Engine.
+
+Usage: pdm_hud.py <Sea Dogs install dir with RESOURCE> <game dir>
+Writes into <game dir>/resource/textures/battle_interface/pdm:
+  commands.tga.tx  the icons of the commands, <cmd>_n.tga and <cmd>_a.tga (64x64) side by side in a grid of
+                   8x4: the normal one of the command i in the cell 2i, the active one in 2i+1
+  ships.tga.tx     the pictures of the ships, <icon>1.tga (a dark plate in the corner) and <icon>2.tga (the
+                   plate lit, the ship chosen), with the flag of the nation (tflag0..3.tga, its blue keyed out)
+                   on the plate, in a grid of 16x16: the cell ((icon * 4 + flag) * 2 + lit)
+  status.tga.tx    ship_status.tga: the bars of the sails, the crew and the hull, empty on the top, full below
+  back.tga.tx      the empty bars with the crew full (ours: the engine draws two gauges, the crew stays full)
+and <game dir>/program/data/pdm_hud.c: the cells of the commands, the icons and the flags, the notes of the
+commands and the names of the exits ([main] of TEXTS/RUSSIAN/INI/interface.ini).
+The engine reads a picture grid with as many rows as columns (BIShipIcon::GetShipUVFromPictureIndex
+takes the rows for the columns), so the grids of the ships are square.
+"""
+import sys
+from pathlib import Path
+
+from PIL import Image
+
+TOOLS = Path(__file__).resolve().parent
+sys.path.insert(0, str(TOOLS.parent / "engine/demos/common"))
+from storm_formats import write_tx  # noqa: E402
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(TOOLS))
+from pdm_ui import LANGUAGE, Original  # noqa: E402
+
+# the icons of the toolbar; SQUAD_CONTROL.dll gives follow_me followme, capture and boarding board,
+# sail_to chase, sea_map map2, land town, skip_time time
+COMMANDS = ["assault", "board", "cancel", "chase", "destroy", "followme", "map", "map2", "ocean", "runaway", "time",
+            "town"]
+COMMAND_COLS = 8
+SHIP_COLS = 16
+CELL = 64
+# the nations of WORLDS/nations.idf -> tflag<n>.tga; the Americans sail under the pirate flag (their flag of
+# nations.idf is flag-pirat.tf)
+FLAGS = {"england": 0, "pirate": 1, "france": 2, "spain": 3, "America": 1}
+FLAG_COUNT = 4
+FLAG_KEY = (104, 176, 216)
+# the toolbar draws pure black as transparent (a colour key): the pictures take the top 50 rows of their 64,
+# the rest is black, so is the gap between the empty and the full bars of ship_status
+BLACK_KEY = (0, 0, 0)
+# the flag (its 20x18 at the top left of tflag) on the plate of the picture
+FLAG_BOX = (0, 0, 20, 18)
+FLAG_AT = (1, 28)
+# ship_status.tga: the empty bars at the top, the full ones below; the stripes of the full ones
+STATUS_EMPTY = (0, 0, 64, 20)
+STATUS_FULL = (0, 20, 64, 40)
+CREW_ROWS = (27, 33)
+# the notes of the commands and the names of the exits of the land, keys of [main]
+NOTES = ["follow_me", "destroy", "capture", "run_away", "sea_map", "land", "boarding", "sail_to", "assault",
+         "info_bar", "open_sea", "street", "tavern", "store", "shipyard", "townhall", "fort", "sea",
+         "ControlTurboMode", "ControlExecuteFastAction"]
+
+
+def picture(pdm, name, key=BLACK_KEY):
+    path = pdm.find("TEXTURES/toolbar/" + name)
+    if path is None:
+        raise SystemExit(f"pdm_hud: no TEXTURES/toolbar/{name}")
+    return keyed(Image.open(path).convert("RGBA"), key)
+
+
+def keyed(image, key):
+    image = image.copy()
+    image.putdata([(r, g, b, 0) if (r, g, b) == key else (r, g, b, a) for r, g, b, a in image.getdata()])
+    return image
+
+
+def commands(pdm):
+    rows = -(-len(COMMANDS) * 2 // COMMAND_COLS)
+    atlas = Image.new("RGBA", (COMMAND_COLS * CELL, rows * CELL))
+    for i, name in enumerate(COMMANDS):
+        for lit, suffix in enumerate(("n", "a")):
+            cell = 2 * i + lit
+            atlas.paste(picture(pdm, f"{name}_{suffix}.tga"), (cell % COMMAND_COLS * CELL, cell // COMMAND_COLS * CELL))
+    return atlas
+
+
+def ship_icons(pdm):
+    """The stems with both pictures, in the order of their names."""
+    folder = pdm.find("TEXTURES/toolbar")
+    stems = {p.name[:-5].lower() for p in folder.iterdir() if p.name.lower().endswith("1.tga")}
+    return sorted(s for s in stems if pdm.find(f"TEXTURES/toolbar/{s}2.tga") and not s.startswith(("it_", "tflag")))
+
+
+def ships(pdm, icons):
+    cells = len(icons) * FLAG_COUNT * 2
+    if cells > SHIP_COLS * SHIP_COLS:
+        raise SystemExit(f"pdm_hud: {cells} ship pictures do not fit the grid of {SHIP_COLS}")
+    atlas = Image.new("RGBA", (SHIP_COLS * CELL, SHIP_COLS * CELL))
+    flags = [picture(pdm, f"tflag{f}.tga", FLAG_KEY).crop(FLAG_BOX) for f in range(FLAG_COUNT)]
+    for i, icon in enumerate(icons):
+        for f, flag in enumerate(flags):
+            for lit in range(2):
+                image = picture(pdm, f"{icon}{lit + 1}.tga")
+                image.alpha_composite(flag, FLAG_AT)
+                cell = (i * FLAG_COUNT + f) * 2 + lit
+                atlas.paste(image, (cell % SHIP_COLS * CELL, cell // SHIP_COLS * CELL))
+    return atlas
+
+
+def back(status):
+    empty = status.crop(STATUS_EMPTY)
+    full = status.crop(STATUS_FULL)
+    y0, y1 = CREW_ROWS
+    top = STATUS_FULL[1]
+    empty.paste(full.crop((0, y0 - top, 64, y1 - top)), (0, y0 - top))
+    return empty
+
+
+def strings(pdm):
+    path = pdm.find(f"TEXTS/{LANGUAGE}/INI/interface.ini")
+    found = {}
+    for line in path.read_bytes().decode("cp1251").splitlines():
+        if "=" in line and not line.lstrip().startswith(("//", "[")):
+            k, v = line.split("=", 1)
+            found.setdefault(k.strip(), v.strip().replace('"', "'"))
+    return found
+
+
+def main():
+    pdm, game = Original(sys.argv[1]), Path(sys.argv[2])
+    out = game / "resource/textures/battle_interface/pdm"
+    write_tx(commands(pdm), out / "commands.tga.tx", mip_chain=False)
+    icons = ship_icons(pdm)
+    write_tx(ships(pdm, icons), out / "ships.tga.tx", mip_chain=False)
+    status = picture(pdm, "ship_status.tga")
+    write_tx(status, out / "status.tga.tx", mip_chain=False)
+    write_tx(back(status), out / "back.tga.tx", mip_chain=False)
+
+    texts = strings(pdm)
+    lines = [f"\tPdmHud.command_cols = {COMMAND_COLS};",
+             f"\tPdmHud.command_rows = {-(-len(COMMANDS) * 2 // COMMAND_COLS)};",
+             f"\tPdmHud.ship_cols = {SHIP_COLS};",
+             f"\tPdmHud.flag_count = {FLAG_COUNT};"]
+    lines += [f"\tPdmHud.command.{name} = {i * 2};" for i, name in enumerate(COMMANDS)]
+    lines += [f"\tPdmHud.icon.{icon} = {i};" for i, icon in enumerate(icons)]
+    lines += [f"\tPdmHud.flag.{nation} = {f};" for nation, f in FLAGS.items()]
+    missing = [k for k in NOTES if k not in texts]
+    if missing:
+        raise SystemExit("pdm_hud: no " + ", ".join(missing) + " in interface.ini")
+    lines += [f'\tPdmHud.note.{k} = "{texts[k]}";' for k in NOTES]
+    (game / "program/data").mkdir(parents=True, exist_ok=True)
+    (game / "program/data/pdm_hud.c").write_text(
+        "// Generated by tools/pdm_hud.py: the cells of the pictures of the toolbar (resource/textures/battle_interface/pdm)\n"
+        "// and the notes of its commands\nobject PdmHud;\n\nvoid PdmHud_Init()\n{\n" + "\n".join(lines) + "\n}\n",
+        encoding="utf-8")
+    print(f"pdm_hud: {len(COMMANDS)} commands, {len(icons)} ship pictures x {FLAG_COUNT} flags, {len(NOTES)} notes")
+
+
+if __name__ == "__main__":
+    main()

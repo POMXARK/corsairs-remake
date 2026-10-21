@@ -44,6 +44,8 @@ grep -A4 '^\[MAP\]' "$DIR/resource/ini/interfaces/mainmap.ini" 2>/dev/null | gre
 [ -f "$DIR/program/data/pdm_world.c" ] || python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"
 # the islands (DESC/<Island>.def, WORLDS/islands_x.idf), where the ship appears at each and their names
 grep -qs '"label"' "$DIR/data/islands/Highrock.json" || python3 -I "$TOOLS/pdm_island.py" "$PDM" "$DIR/resource" all --data "$DIR/data"
+# the toolbar of the sea (the commands, the pictures of the ships with flags, the bars) and its notes
+[ -f "$DIR/program/data/pdm_hud.c" ] || python3 -I "$TOOLS/pdm_hud.py" "$PDM" "$DIR"
 # the music, the sounds and their aliases, the sounds of the kinds of location
 [ -f "$DIR/program/data/pdm_sound.c" ] || python3 -I "$TOOLS/pdm_sound.py" "$PDM" "$DIR"
 python3 -I "$TOOLS/pdm_data2c.py" "$DIR/data" "$DIR/program"

@@ -24,8 +24,11 @@ aref PlayerShipType;
 #include "data\pdm_voices.c"
 #include "data\pdm_screens.c"
 #include "data\pdm_sound.c"
+#include "data\pdm_hud.c"
 #include "sound.c"
 #include "story.c"
+// before sea.c and town.c: they use its defines
+#include "hud.c"
 #include "sea.c"
 #include "town.c"
 #include "review.c"
@@ -47,6 +50,7 @@ void Main()
 	PdmVoices_Init();
 	PdmScreens_Init();
 	PdmSound_Init();
+	PdmHud_Init();
 	makearef(PlayerCard, PdmCharacters.Nicolas_Sharp);
 	// an attribute name in .(...) has to be a variable
 	string shipKey = PlayerCard.ship_key;
@@ -91,8 +95,9 @@ void Pdm_Control()
 	if (screenOverGame) { return; }
 	if (control == "Screen_Status") { Screen_Status(); return; }
 	Sea_Control(control);
-	// Escape in a dialog only leaves it
-	if (control == "Pdm_Quit" && townTalkNpc < 0)
+	// Escape in a dialog only leaves it, in the commands of the toolbar only closes them (the script hears the
+	// key before the battle interface does, the menu is still open)
+	if (control == "Pdm_Quit" && townTalkNpc < 0 && !Hud_MenuOpen())
 	{
 		Trace("PDM: quit");
 		ExitProgram();

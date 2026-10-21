@@ -35,7 +35,7 @@ RECONVERT=1 corsairs-remake/pdm-game/run.sh build/Debug/engine   # всё ско
 | `SCENE=town` | город `TOWN` (по умолчанию `City_GrandaAvilia`) |
 | `TOWN_AUTO=1` | герой сам идёт от причала в таверну и обратно |
 | `TOWN_AUTO=2` | то же и разговор с первым NPC таверны, у которого есть диалог |
-| `TOWN_AUTO=4` | герой выходит в море, через 5 с возвращается к причалу (`Sea_ToPort`) и идёт в таверну |
+| `TOWN_AUTO=4` | герой выходит в море, через 5 с возвращается к причалу (`Sea_ToPort`) и идёт в таверну; в каждом выходе стоит 1,5 с под значком действия (справа сверху), на море видна картинка корабля с полосами |
 | `TOWN_AUTO=5` | герой выходит в море, корабль ставится на 250 м дальше от гавани и плывёт к ней сам (время ×6); у гавани — заход в порт (`Sea_AtHarbour`), затем таверна |
 | `TOWN_AUTO=6` | герой выходит в море, оттуда на карту мира, автотест кликает по Хайроку на карте (так же, как мышь: `mousepos` → `Map_Click`), корабль плывёт к нему (из Хайрока — к Granda Avilia), выходит в море в 400 м от гавани, заходит в порт и идёт в таверну; в море время ×6 (так же в `TOWN_AUTO=5`) |
 | `TOWN_AUTO=3` | с `TOWN=City_HighRock`: первое поручение города — вино для стражника Билли (квест от начала до конца) |
@@ -53,6 +53,7 @@ python3 -I corsairs-remake/tools/pdm_world.py $PDM corsairs-remake/pdm-game     
 python3 -I corsairs-remake/tools/pdm_world.py $PDM corsairs-remake/pdm-game tavern_spa   # одна локация
 python3 -I corsairs-remake/tools/pdm_sound.py $PDM corsairs-remake/pdm-game          # звук и музыка
 python3 -I corsairs-remake/tools/pdm_ui.py $PDM corsairs-remake/pdm-game             # экраны, диалог, голоса
+python3 -I corsairs-remake/tools/pdm_hud.py $PDM corsairs-remake/pdm-game            # тулбар моря: команды, картинки кораблей с флагами, полосы
 python3 -I corsairs-remake/tools/pdm_character.py $PDM <out> <model.cff> <anim.idf>  # один персонаж
 python3 -I corsairs-remake/tools/pdm_island.py $PDM corsairs-remake/pdm-game/resource all --data corsairs-remake/pdm-game/data  # острова, карты глубин, места корабля (~2 мин)
 python3 -I corsairs-remake/engine/demos/sea/make_sea.py corsairs-remake/pdm-game/resource --waves fft   # волны FFT (без --waves — синусоиды демо)

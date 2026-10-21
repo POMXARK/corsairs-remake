@@ -10,7 +10,8 @@
 // of the town and the kind of the location (2 street, 3 tavern, 4 store, 5 shipyard, 6 townhall,
 // 8 the town guard), or whom the story put there (Pdm_SetLocation, "<island>.<kind>").
 //
-// E talks to the nearest character who has a dialog (card.dialog_key, see Town_Talk below).
+// E talks to the nearest character who has a dialog (card.dialog_key, see Town_Talk below). In an exit box
+// the icon of the exit shows top right (hud.c), Space goes through it.
 
 #define MSG_LOCATION_ADD_MODEL 30100
 #define MSG_LOCATION_SET_CHRS_PATCH 30120
@@ -60,6 +61,8 @@ string townStreet = "";
 string townHere = "";
 // the exit box the hero stands in: he leaves through an exit only after stepping into it
 int townInExit = -1;
+// the exit box the hero appears in, until he steps out of it: its icon shows, the autotest does not go back
+int townArriveExit = -1;
 int townShadow[2];
 // TOWN_AUTO (run.sh): the hero follows a plan by himself, for the tests (Town_AutoPlan): 1 walks into
 // the tavern and out again, 2 also talks to the first character of the tavern who has a dialog,
@@ -158,6 +161,7 @@ void Town_Start(string loc, string from)
 	SetEventHandler("DialogCancel", "Town_DialogLeave", 0);
 	SetEventHandler("EmergencyDialogExit", "Town_DialogLeave", 0);
 	SetEventHandler("Town_DialogClose", "Town_DialogClose", 0);
+	SetEventHandler("Town_ExitGo", "Town_ExitGo", 0);
 	if (TownAuto) { Town_AutoPlan(); }
 	Town_Load(loc, from);
 	PostEvent("Town_Tick", TOWN_TICK_MS);
@@ -232,7 +236,8 @@ void Town_Load(string loc, string from)
 	else { CreateEntity(&TownHero, "player"); }
 	Town_SetModel(&TownHero, "hero");
 	Town_Teleport(&TownHero, data, arrive);
-	townInExit = Town_ExitAt(data, &TownHero);
+	townInExit = -1;
+	townArriveExit = Town_ExitAt(data, &TownHero);
 
 	CreateEntity(&TownCamera, "locationcamera");
 	SendMessage(&TownCamera, "li", MSG_CAMERA_SETTARGET, &TownHero);
@@ -240,6 +245,9 @@ void Town_Load(string loc, string from)
 	SendMessage(&Scene, "si", "SetActiveCamera", &TownCamera);
 
 	Town_PlaceCharacters(data);
+	// the action of the original on the land is Space (a control has one key: F2 of the sea is taken off)
+	Hud_CreateLog();
+	MapKey("BIFastCommand", HUD_KEY_ACTION);
 	// the voices of many when the location is full of people
 	Sound_Location(data.sound, townNpcCount > 2);
 	townLoaded = true;
@@ -252,6 +260,7 @@ void Town_Load(string loc, string from)
 void Town_Release()
 {
 	Town_DialogClose();
+	Hud_ReleaseLog();
 	for (int i = 0; i < townNpcCount; i++) { DeleteClass(&TownNpc[i]); }
 	townNpcCount = 0;
 	DeleteClass(&TownCamera);
@@ -510,10 +519,35 @@ void Town_Tick()
 	aref data;
 	makearef(data, PdmLocations.(townHere));
 	int exit = Town_ExitAt(data, &TownHero);
+	if (exit != townArriveExit) { townArriveExit = -2; }
 	if (exit == townInExit) { return; }
 	townInExit = exit;
-	if (exit < 0) { return; }
+	if (exit < 0) { Hud_SetAction("Nothing", ""); return; }
 	string at = "p" + exit;
+	string link = data.(at).link;
+	string note = link;
+	if (CheckAttribute(&PdmHud, "note." + link)) { note = PdmHud.note.(link); }
+	if (link == "sea") { Hud_SetAction("ToSea", note); }
+	else { Hud_SetAction("ToDoor", note); }
+	// the autotest walks in and stands a moment under the icon
+	if (TownAuto && exit != townArriveExit) { PostEvent("Town_ExitGo", HUD_AUTO_EXIT_MS, "l", townGen); }
+}
+
+// Space (BI_FastCommand of hud.c): through the exit the hero stands in. Called in the frame of the log
+// entity, which the location deletes: the location changes in the next event
+void Town_Action()
+{
+	if (!townLoaded || townInExit < 0 || townTalkNpc >= 0 || screenName != "") { return; }
+	PostEvent("Town_ExitGo", 0, "l", townGen);
+}
+
+void Town_ExitGo()
+{
+	int gen = GetEventData();
+	if (!townLoaded || gen != townGen || townInExit < 0) { return; }
+	aref data;
+	makearef(data, PdmLocations.(townHere));
+	string at = "p" + townInExit;
 	Town_Go(data.(at).link);
 }
 

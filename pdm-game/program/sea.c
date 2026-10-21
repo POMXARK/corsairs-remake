@@ -1,7 +1,7 @@
 // The sea of the original world: the weather and the sea of the engine demos, the ship of the hero
 // built from its type in WORLDS\Ships.idf (the hull is models\ships\<filename>, assembled by
 // tools/pdm_ship.py from DESC\<filename>.def). A/D turn, W/S sails, the mouse turns the camera,
-// Enter goes back to the port.
+// Tab opens the commands of the toolbar (hud.c): to the land at the harbour, the map, the time.
 
 // shared/layers.h: mirrored into the sea reflection (sky in the first, ships in the second)
 #define SEA_REFLECTION 15
@@ -78,8 +78,7 @@ float seaPortDistance = 0.0;
 bool seaPortArmed = false;
 float cameraAngle = 1.6;
 bool seaActive = false;
-// ours until the islands (P5): Enter at sea brings the ship back to the port it left
-#define SEA_PORT_KEY 13
+// TOWN_AUTO=4: the autotest lands this long after it has sailed out
 #define SEA_AUTO_PORT_MS 5000
 // M opens the world map (ours: the original opens it by sailing off the island)
 #define SEA_MAP_KEY 77
@@ -100,7 +99,6 @@ bool seaAutoMapDone = false;
 void Sea_Start(string islandKey)
 {
 	Sea_MapShipKeys();
-	MapKey("Sea_ToPort", SEA_PORT_KEY);
 	MapKey("Sea_ToMap", SEA_MAP_KEY);
 	MapKey("Sea_Time", SEA_TIME_KEY);
 	Sound_StopLocation();
@@ -135,6 +133,7 @@ void Sea_Start(string islandKey)
 	SeaShips[hero].MainCharacter = 1;
 	seaHero = hero;
 	Sea_CreateCamera(hero);
+	Hud_Start();
 	SetEventHandler("Sea_Tick", "Sea_Tick", 0);
 	SetEventHandler("Sea_ToPort", "Sea_ToPort", 0);
 	SetEventHandler("Sea_ToMap", "Sea_ToMap", 0);
@@ -152,7 +151,6 @@ void Sea_Start(string islandKey)
 void Sea_Control(string control)
 {
 	// the scene is changed outside the input handler
-	if (control == "Sea_ToPort" && seaActive && Sea_PortTown() != "") { PostEvent("Sea_ToPort", 0); }
 	if (control == "Sea_Time" && seaActive) { Sea_NextTimeScale(); }
 	if (control == "Sea_ToMap" && seaActive) { PostEvent("Sea_ToMap", 0); }
 }
@@ -199,6 +197,7 @@ void Sea_ToMap()
 void Sea_Release()
 {
 	seaActive = false;
+	Hud_Release();
 	SetTimeScale(1.0);
 	DelEventHandler("Sea_Tick", "Sea_Tick");
 	DelEventHandler("Sea_ToPort", "Sea_ToPort");
@@ -494,6 +493,12 @@ float Sea_HeroHarbourDistance()
 	return Sea_HarbourDistance(stf(SeaShips[seaHero].ship.pos.x), stf(SeaShips[seaHero].ship.pos.z));
 }
 
+// the ship is no farther off the harbour than where it appears leaving the town (and SEA_PORT_REACH m)
+bool Sea_NearHarbour(float d)
+{
+	return d >= 0.0 && d <= seaPortDistance + SEA_PORT_REACH;
+}
+
 // the port is the town of the island, as Town_Load knows it (Telltak's Grot is not a town yet)
 bool Sea_AtHarbour(float d)
 {
@@ -519,7 +524,9 @@ void Sea_Tick()
 	Weather.Wind.Speed = SEA_WIND_SPEED * (1.0 + gust);
 	Weather.Wind.Angle = SEA_WIND_VEER * sin(SEA_PI2 * seaTime / SEA_WIND_VEER_PERIOD);
 	float d = Sea_HeroHarbourDistance();
-	if (Sea_AtHarbour(d)) { PostEvent("Sea_ToPort", 0); return; }
+	// the player lands by the command of the toolbar; the autotest sailing in lands by itself
+	if (TownAuto != 0 && Sea_AtHarbour(d)) { PostEvent("Sea_ToPort", 0); return; }
+	Hud_SeaTick();
 	if (d > 0.0 && CheckAttribute(&PdmIslands, seaIsland + ".exit_r") && d > stf(PdmIslands.(seaIsland).exit_r))
 	{
 		PostEvent("Sea_ToMap", 0);
