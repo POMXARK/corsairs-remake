@@ -1,4 +1,4 @@
-# The original Sea Dogs (PDM 1.061) on Storm Engine, Windows: the menu of game.sh. Builds the engine
+﻿# The original Sea Dogs (PDM 1.061) on Storm Engine, Windows: the menu of game.sh. Builds the engine
 # (build.ps1 of the game root), converts the installed original and starts the game (run.ps1).
 # Usage: game.ps1                       the menu
 #        game.ps1 build Debug|Release

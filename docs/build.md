@@ -86,6 +86,8 @@ DIST=/games/corsairs-pdm-linux    # куда класть пакет, по ум�
 $env:PDM = 'D:\Games\Корсары'
 ```
 
+`local.ps1` с кириллицей в пути сохраняйте в **UTF-8 с BOM**: Windows PowerShell 5.1 читает файл без BOM как ANSI и портит путь. Скрипты в git уже с BOM.
+
 ## Linux
 
 ### Подготовка
@@ -153,7 +155,7 @@ pdm-game\game.bat package           :: dist\corsairs-pdm-windows\play.bat
 - **Логи** — `Документы\My Games\Sea Dogs\Logs`.
 - **Отладка** — Visual Studio: «Открыть папку» `engine\`, пресет `default`, конфигурация Debug, рабочая папка `pdm-game\`.
 
-> Windows-скрипты (`game.ps1`, `run.ps1`) проверены разбором и командами `keys`/`check` в PowerShell 7 на Linux. На самой Windows сборка и конвертация не запускались: если что-то упадёт, пришлите вывод окна и `system.log`.
+> Windows-скрипты (`game.ps1`, `run.ps1`) работают в Windows PowerShell 5.1 (PowerShell 7 не нужен). Сборка Debug и конвертация на Windows доходили до локаций; если что-то упадёт, пришлите вывод окна и `system.log`.
 
 ## Анимации персонажей
 

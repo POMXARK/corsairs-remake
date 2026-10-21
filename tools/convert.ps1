@@ -1,4 +1,4 @@
-# Конвертирует RESOURCE оригинальных «Корсаров» (PDM 1.061) для Storm Engine.
+﻿# Конвертирует RESOURCE оригинальных «Корсаров» (PDM 1.061) для Storm Engine.
 # usage: .\convert.ps1 <папка_игры> <out> [--only stage,...] [-j N]
 $ErrorActionPreference = 'Stop'
 $py = Get-Command py, python3, python -ErrorAction SilentlyContinue | Select-Object -First 1

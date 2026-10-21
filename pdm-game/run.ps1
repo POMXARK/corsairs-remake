@@ -22,7 +22,7 @@ if ((Get-Env 'RECONVERT' '0') -eq '1')
 if (-not (Test-Path "$Demo/resource/.converted"))
 {
     # the tables, characters, ships and the story data as JSON in data/
-    Invoke-Python "$Tools/pdm2storm.py" $Pdm $Demo --only actions,dialogs,tables,desc,characters,ships,quests
+    Invoke-Python "$Tools/pdm2storm.py" $Pdm $Demo --only 'actions,dialogs,tables,desc,characters,ships,quests'
     # the sea, the sky and the sail settings of the engine demos
     Invoke-Python "$Demos/sea/make_sea.py" "$Demo/resource" --waves $(if ($env:SEA_WAVES) { $env:SEA_WAVES } else { "fft" })
     Invoke-Python "$Demos/ship/make_ship.py" "$Demo/resource"
