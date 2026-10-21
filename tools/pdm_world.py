@@ -23,6 +23,7 @@ Writes, in the units of the engine (metres, pdm_character.DEFAULT_SCALE):
 usage: pdm_world.py <PDM_dir> <game_dir> [loc ...]   (default: every .loc)
 """
 import math
+import struct
 import sys
 from pathlib import Path
 
@@ -63,6 +64,118 @@ def parse_loc(path: Path):
             # the box is axis aligned: its least corner and its size
             "box": (x0, z0, x0 + sx, z0 + sz), "link": f[11]})
     return loc
+
+
+SEAM = 0.003  # metres: a vertex this close to the inside of an edge splits it
+
+
+def close_seams(meshes):
+    """Splits the triangles that have a vertex of the model inside an edge (T-junctions): the original
+    lays the cobbles of a street along longer edges of the grass, and the rasteriser leaves a crack of
+    single pixels along such an edge, white lines on the floor. A split triangle becomes a fan around
+    its centre over its corners and the vertices on its edges."""
+    grid = {}
+    for m in meshes:
+        for v in m.vertices:
+            grid.setdefault(tuple(math.floor(c) for c in v[0]), set()).add(v[0])
+
+    def on_edge(a, b):
+        """The vertices inside the edge a-b as (t, position), along it."""
+        d = [b[k] - a[k] for k in range(3)]
+        length = math.sqrt(sum(c * c for c in d))
+        if length < 2 * SEAM:
+            return []
+        lo = [math.floor(min(a[k], b[k]) - SEAM) for k in range(3)]
+        hi = [math.floor(max(a[k], b[k]) + SEAM) for k in range(3)]
+        found = {}
+        for i in range(lo[0], hi[0] + 1):
+            for j in range(lo[1], hi[1] + 1):
+                for n in range(lo[2], hi[2] + 1):
+                    for p in grid.get((i, j, n), ()):
+                        t = sum((p[k] - a[k]) * d[k] for k in range(3)) / (length * length)
+                        if SEAM < t * length < length - SEAM \
+                                and math.dist(p, [a[k] + t * d[k] for k in range(3)]) < SEAM:
+                            found[p] = t
+        return sorted((t, p) for p, t in found.items())
+
+    def mix(a, b, t):
+        return [a[k] + t * (b[k] - a[k]) for k in range(len(a))]
+
+    split = 0
+    for m in meshes:
+        triangles = []
+        for tri in m.triangles:
+            ring = []
+            for e in range(3):
+                a, b = m.vertices[tri[e]], m.vertices[tri[(e + 1) % 3]]
+                ring.append(tri[e])
+                ring += [m.vertex(p, mix(a[1], b[1], t), mix(a[2], b[2], t), a[3]) for t, p in on_edge(a[0], b[0])]
+            if len(ring) == 3:
+                triangles.append(tri)
+                continue
+            split += 1
+            corners = [m.vertices[k] for k in tri]
+            pos, normal, uv = ([sum(c[n][k] for c in corners) / 3 for k in range(len(corners[0][n]))] for n in range(3))
+            centre = m.vertex(pos, normal, uv, corners[0][3])
+            triangles += [(centre, ring[k], ring[(k + 1) % len(ring)]) for k in range(len(ring))]
+        m.triangles = triangles
+    return split
+
+
+INSET = 1 / 256  # of a texture: how far the UV of a single tile stay off its edges
+
+
+def inset_tiles(meshes):
+    """The floors of the towns are tiles, each a texture of its own laid once (UV from 0 to 1). The
+    engine wraps textures, so the filter blends the far edge of a tile into the near one: light lines
+    along the tiles. The UV of a texture that stays in one square in the whole model are pulled off its
+    edges. Returns the textures pulled."""
+    span = {}
+    for m in meshes:
+        for v in m.vertices:
+            for k in range(2):
+                lo, hi = span.get((m.texture, k), (math.inf, -math.inf))
+                span[(m.texture, k)] = (min(lo, v[2][k]), max(hi, v[2][k]))
+    tiles = {t for (t, k), (lo, hi) in span.items()
+             if all(math.floor(span[(t, n)][0] + EPS) == math.floor(span[(t, n)][1] - EPS) for n in range(2))}
+    for m in meshes:
+        if m.texture not in tiles:
+            continue
+        base = [math.floor(span[(m.texture, k)][0] + EPS) for k in range(2)]
+        m.vertices = [(v[0], v[1], tuple(base[k] + 0.5 + (v[2][k] - base[k] - 0.5) * (1 - 2 * INSET)
+                                         for k in range(2)), v[3]) for v in m.vertices]
+    return tiles
+
+
+def unframe(tx: Path):
+    """The tiles of the floors are drawn with a light frame a pixel wide: laid side by side, they
+    show light lines along the joints. The frame is replaced by the row next to it and the mips are
+    made again from the cleaned picture (the mips of the original keep the frame)."""
+    data = tx.read_bytes()
+    flags, w, h, mips, fmt, _ = struct.unpack_from("<6i", data)
+    if fmt != 21 or w < 4 or h < 4:  # A8R8G8B8 only, as tf2tx writes them
+        return
+    px = [bytearray(data[24 + (y * w) * 4:24 + (y * w + w) * 4]) for y in range(h)]
+    px[0][:], px[h - 1][:] = px[1], px[h - 2]
+    for row in px:
+        row[0:4], row[(w - 1) * 4:w * 4] = row[4:8], row[(w - 2) * 4:(w - 1) * 4]
+    out = [b"".join(px)]
+    for _ in range(mips - 1):
+        if w == 1 and h == 1:
+            break
+        nw, nh = max(w // 2, 1), max(h // 2, 1)
+        small = bytearray(nw * nh * 4)
+        for y in range(nh):
+            for x in range(nw):
+                for c in range(4):
+                    s = (px[min(2 * y, h - 1)][min(2 * x, w - 1) * 4 + c] + px[min(2 * y, h - 1)][min(2 * x + 1, w - 1) * 4 + c]
+                         + px[min(2 * y + 1, h - 1)][min(2 * x, w - 1) * 4 + c] + px[min(2 * y + 1, h - 1)][min(2 * x + 1, w - 1) * 4 + c])
+                    small[(y * nw + x) * 4 + c] = (s + 2) // 4
+        w, h = nw, nh
+        px = [small[y * w * 4:(y + 1) * w * 4] for y in range(h)]
+        out.append(bytes(small))
+    tx.write_bytes(struct.pack("<6i", flags, *struct.unpack_from("<2i", data, 4), len(out), fmt,
+                               len(out[0])) + b"".join(out))
 
 
 def merge_by_texture(meshes, name):
@@ -413,14 +526,17 @@ def clean_patch(triangles):
 
 
 # ---------- what stands on the floor ----------
-# The original stops the hero at the geometry of the location; the engine only walks the patch, and
-# the patches run under tables, barrels, carts and the corners of houses. The floor is cut into
-# CELL squares; a square where the location model crosses the height of a body over that floor is
-# cut out of the patch.
+# The original stops the hero at the geometry of the location: MAN.dll traces five feelers at 0.3 m
+# over the floor, 0.285 m ahead, 0.275 m back, 0.395 m at 45 degrees and 0.375 m to the sides, and
+# slides the hero along what they touch. The engine only walks the patch, and the patches run under
+# tables, barrels, carts and along the walls of houses. The floor is cut into CELL squares; a square
+# where the location model crosses the height of a body over that floor is cut out of the patch,
+# grown by the reach of the feelers. The squares just outside the patch take the height of the floor
+# next to them: the edge of a patch often runs right along a wall.
 
 CELL = 0.15  # metres
-BODY = (0.35, 1.6)  # metres above the floor: what a walking body bumps into
-REACH = 1  # cells: a blocked square grows by this, the body is not a point
+BODY = (0.3, 1.6)  # metres above the floor: what a walking body bumps into, from the height of the feelers
+REACH = 2  # cells: a blocked square grows by this, 0.3-0.375 m, the reach of the feelers
 FREE = 0.45  # metres around a point of the location (a character, an exit) stay walkable
 
 
@@ -440,6 +556,12 @@ def blocked_cells(model: Path, triangles, points, boxes):
                 if all(area2([poly[k - 1], poly[k], (x, z)]) >= -EPS for k in range(3)):
                     floors.setdefault((i, j), []).append(height(x, z))
 
+    near = {}  # the floor heights of a square and of the squares within REACH of it
+    for (i, j), hs in floors.items():
+        for di in range(-REACH, REACH + 1):
+            for dj in range(-REACH, REACH + 1):
+                near.setdefault((i + di, j + dj), set()).update(hs)
+
     hit = {}
     lo, hi = BODY
     for m in cff2gm.cff_to_meshes(model, place=lambda p: tuple(c * K for c in p)):
@@ -449,7 +571,7 @@ def blocked_cells(model: Path, triangles, points, boxes):
             x0, z0, x1, z1 = bounds([(p[0], p[2]) for p in pts])
             for i in cell_range(x0, x1):
                 for j in cell_range(z0, z1):
-                    hs = [h for h in floors.get((i, j), ()) if max(ys) > h + lo and min(ys) < h + hi]
+                    hs = [h for h in near.get((i, j), ()) if max(ys) > h + lo and min(ys) < h + hi]
                     if not hs:
                         continue
                     # the part of the triangle over the square: (x, z, y) clipped in x/z
@@ -540,6 +662,7 @@ class World:
         self.models = index_files(res / "MODELS")
         self.textures = index_files(res / "TEXTURES")
         self.used_textures = set()
+        self.tile_textures = set()
         self.done_models = {}
         self.lines = []
 
@@ -557,11 +680,19 @@ class World:
             print(f"  missing model {name}")
             self.done_models[stem] = None
             return None
+        meshes = cff2gm.cff_to_meshes(cff, place=lambda p: tuple(c * K for c in p), texture=self.texture)
+        seams = close_seams(meshes)
+        tiles = inset_tiles(meshes)
+        # the textures need the tiles of every model, the cached ones too
+        self.tile_textures |= {Path(t).stem.lower() for t in tiles}
         if (self.out / "models" / "locations" / f"{stem}.gm").exists():
             # the BSP of a town takes a minute: models written before are kept (RECONVERT=1 redoes them)
             self.done_models[stem] = 0
             return stem
-        meshes = cff2gm.cff_to_meshes(cff, place=lambda p: tuple(c * K for c in p), texture=self.texture)
+        if seams:
+            print(f"  {stem}: {seams} triangles split at T-junctions")
+        if tiles:
+            print(f"  {stem}: {len(tiles)} textures laid once, kept off their edges")
         meshes = merge_by_texture(meshes, stem)
         write_gm(meshes, self.out / "models" / "locations" / f"{stem}.gm", bsp=True)
         self.done_models[stem] = len(meshes)
@@ -643,6 +774,8 @@ class World:
             dst = self.out / "textures" / "locations" / f"{stem}.tga.tx"
             dst.parent.mkdir(parents=True, exist_ok=True)
             convert_texture(src, dst)
+            if stem in self.tile_textures:
+                unframe(dst)
         return missing
 
     def write_script(self):
@@ -670,7 +803,9 @@ def main():
     for line in world.characters():
         print(line)
     missing = world.write_textures()
-    world.write_script()
+    # the table of all the locations is written only from all of them: a few would drop the rest
+    if not sys.argv[3:]:
+        world.write_script()
     print(f"{len(locs)} locations, {len(world.done_models)} models, {len(world.used_textures)} textures"
           + (f", missing {' '.join(missing)}" if missing else ""))
 

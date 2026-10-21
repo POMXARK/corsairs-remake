@@ -19,12 +19,17 @@
 #define MSG_CHARACTER_SETMODEL 30200
 #define MSG_CHARACTER_GETPOS 30202
 #define MSG_CHARACTER_TELEPORT_AY 30211
+#define MSG_CHARACTER_TURNBYCHR 30341
 #define MSG_NPCHARACTER_SETTASK 30400
 #define MSG_CAMERA_SETTARGET 30500
 #define MSG_CAMERA_FOLLOW 30510
+#define MSG_CAMERA_TOPOS 30512
 
 #define TOWN_MAX_NPC 32
 #define TOWN_TICK_MS 200
+#define TOWN_TALK_BACK 1.0
+#define TOWN_TALK_SIDE 0.5
+#define TOWN_TALK_HEIGHT 1.8
 
 object TownLocation;
 object TownWeather;
@@ -42,12 +47,20 @@ string townHere = "";
 // the exit box the hero stands in: he leaves through an exit only after stepping into it
 int townInExit = -1;
 int townShadow[2];
-// TOWN_AUTO=1 (run.sh): the hero walks by himself into the tavern and out again, for the tests;
-// TOWN_AUTO=2 also talks to the first character of the tavern who has a dialog, always taking the
-// first answer that is on
-int townAutoStep = 0;
-bool townAutoTalked = false;
+// TOWN_AUTO (run.sh): the hero follows a plan by himself, for the tests (Town_AutoPlan): 1 walks into
+// the tavern and out again, 2 also talks to the first character of the tavern who has a dialog,
+// 3 does the errand of the guard Billy in Highrock
+object TownPlan;
+int townPlanCount = 0;
+int townPlanStep = 0;
 int townAutoNpc = -1;
+// the action of the answer the autotest talks for, whether it is said, the nodes seen
+string townAutoWant = "";
+bool townAutoDone = false;
+bool townAutoTalking = false;
+int townAutoWait = 0;
+int townAutoPicks = 0;
+object TownVisited;
 
 #define TOWN_TALK_DIST 3.0
 object TownDialog;
@@ -130,6 +143,7 @@ void Town_Start(string loc, string from)
 	SetEventHandler("DialogCancel", "Town_DialogLeave", 0);
 	SetEventHandler("EmergencyDialogExit", "Town_DialogLeave", 0);
 	SetEventHandler("Town_DialogClose", "Town_DialogClose", 0);
+	if (TownAuto) { Town_AutoPlan(); }
 	Town_Load(loc, from);
 	PostEvent("Town_Tick", TOWN_TICK_MS);
 }
@@ -438,7 +452,7 @@ void Town_Control()
 string Town_DialogOf(int i)
 {
 	string id = TownNpc[i].id;
-	if (!CheckAttribute(&PdmCharacters, id + ".dialog_key")) { return ""; }
+	if (id == "" || !CheckAttribute(&PdmCharacters, id + ".dialog_key")) { return ""; }
 	string dialog = PdmCharacters.(id).dialog_key;
 	if (dialog == "" || !CheckAttribute(&PdmDialogs, dialog + ".start")) { return ""; }
 	return dialog;
@@ -478,6 +492,11 @@ void Town_TalkTo(int i)
 	// the window shows "name lastname" of the speaker
 	TownNpc[i].name = PdmCharacters.(id).name;
 	TownNpc[i].lastname = "";
+	// the hero stops, the speaker and the hero face each other
+	if (TownAuto) { SendMessage(&TownHero, "ls", MSG_NPCHARACTER_SETTASK, "Stay"); }
+	SendMessage(&TownNpc[i], "li", MSG_CHARACTER_TURNBYCHR, &TownHero);
+	SendMessage(&TownHero, "li", MSG_CHARACTER_TURNBYCHR, &TownNpc[i]);
+	Town_TalkCamera(i);
 	CreateEntity(&TownDialog, "dialog");
 	SendMessage(&TownDialog, "lii", 1, &TownNpc[i], &TownNpc[i]);
 	LayerAddObject(REALIZE, &TownDialog, -256);
@@ -485,6 +504,25 @@ void Town_TalkTo(int i)
 	if (CheckAttribute(&PdmCharacters, id + ".greeting")) { TownDialog.greeting = PdmCharacters.(id).greeting; }
 	Trace("PDM dialog: " + id + " talks " + townTalkKey);
 	Town_DialogNode(PdmDialogs.(townTalkKey).start);
+}
+
+// the camera looks at the speaker over the shoulder of the hero, close to him: nothing stands between
+void Town_TalkCamera(int i)
+{
+	float hx, hy, hz, x, y, z;
+	SendMessage(&TownHero, "leee", MSG_CHARACTER_GETPOS, &hx, &hy, &hz);
+	SendMessage(&TownNpc[i], "leee", MSG_CHARACTER_GETPOS, &x, &y, &z);
+	float dx = hx - x;
+	float dz = hz - z;
+	float d = sqrt(dx * dx + dz * dz);
+	if (d < 0.01) { return; }
+	dx = dx / d;
+	dz = dz / d;
+	// a metre behind the hero, half a metre to his right, a bit over his head
+	float cx = hx + dx * TOWN_TALK_BACK + dz * TOWN_TALK_SIDE;
+	float cz = hz + dz * TOWN_TALK_BACK - dx * TOWN_TALK_SIDE;
+	SendMessage(&TownCamera, "li", MSG_CAMERA_SETTARGET, &TownNpc[i]);
+	SendMessage(&TownCamera, "lfffl", MSG_CAMERA_TOPOS, cx, hy + TOWN_TALK_HEIGHT, cz, 0);
 }
 
 // the speech of a node of the dialog and its links that are on
@@ -545,36 +583,94 @@ void Town_DialogClose()
 {
 	if (townTalkNpc < 0) { return; }
 	DeleteClass(&TownDialog);
+	SendMessage(&TownCamera, "li", MSG_CAMERA_SETTARGET, &TownHero);
+	SendMessage(&TownCamera, "l", MSG_CAMERA_FOLLOW);
 	string id = TownNpc[townTalkNpc].id;
 	Trace("PDM dialog: closed, " + id + " has the dialog " + PdmCharacters.(id).dialog_key);
 	townTalkNpc = -1;
-	if (TownAuto == 2 && !townAutoTalked)
+	Town_Refresh();
+	if (townAutoTalking)
 	{
-		townAutoTalked = true;
+		townAutoTalking = false;
+		if (townAutoWant != "" && !townAutoDone) { Trace("PDM dialog: autotest FAILED, no answer " + townAutoWant); }
 		PostEvent("Town_AutoGo", 2000);
 	}
 }
 
-// ---------- the autotest, TOWN_AUTO=1/2 run.sh ----------
-
-// the hero of TOWN_AUTO goes to the door of the tavern, then back to the street, then the game quits;
-// with TOWN_AUTO=2 he talks to the tavern first
-void Town_AutoGo()
+// the story may take a character out of the location (Pdm_SetLocation): he leaves at once
+void Town_Refresh()
 {
-	if (TownAuto == 2 && townHere != townStreet && !townAutoTalked)
+	string kind = Town_Kind(townHere);
+	string id, place;
+	for (int i = 0; i < townNpcCount; i++)
 	{
-		Town_AutoTalkGo();
+		id = TownNpc[i].id;
+		if (id == "" || !CheckAttribute(&PdmCharacters, id + ".location")) { continue; }
+		place = PdmCharacters.(id).location;
+		if (Town_StoryPlaceIs(place, kind)) { continue; }
+		Trace("PDM town: " + id + " leaves for " + place);
+		DeleteClass(&TownNpc[i]);
+		TownNpc[i].id = "";
+	}
+}
+
+// ---------- the autotest, TOWN_AUTO=1/2/3 run.sh ----------
+
+// the plan of the autotest: its steps "go" (through the exit with the link arg), "talk" (to the
+// character arg, "" for the first one with a dialog, up to the answer whose action is want)
+void Town_PlanAdd(string kind, string arg, string want)
+{
+	string at = "s" + townPlanCount;
+	TownPlan.(at) = kind;
+	TownPlan.(at).arg = arg;
+	TownPlan.(at).want = want;
+	townPlanCount++;
+}
+
+void Town_AutoPlan()
+{
+	townPlanCount = 0;
+	townPlanStep = 0;
+	if (TownAuto == 3)
+	{
+		// the first errand of Highrock: the guard Billy asks for wine, the tavern keeper sells
+		// a bottle, Billy gets it; the story turns the link of the tavern keeper on and changes
+		// Billy's dialog twice
+		Town_PlanAdd("talk", "Billy___Town_Guard", "PdmA_Wine_agreed");
+		Town_PlanAdd("go", "tavern", "");
+		Town_PlanAdd("talk", "Jeremy_Windem", "PdmA_Wine_bought");
+		Town_PlanAdd("go", "street", "");
+		Town_PlanAdd("talk", "Billy___Town_Guard", "PdmA_Wine_good_end");
 		return;
 	}
-	townAutoStep++;
-	string link = "tavern";
-	if (townHere != townStreet) { link = "street"; }
-	if (townAutoStep > 2)
+	Town_PlanAdd("go", "tavern", "");
+	if (TownAuto == 2) { Town_PlanAdd("talk", "", ""); }
+	Town_PlanAdd("go", "street", "");
+}
+
+// the next step of the plan; after the last one the game quits
+void Town_AutoGo()
+{
+	if (townPlanStep >= townPlanCount)
 	{
-		Trace("PDM town: autotest done in " + townHere);
+		Trace("PDM town: autotest done in " + townHere + ", money " + Pdm_Count(PlayerCard, "money") + ", reputation "
+			+ Pdm_Count(PlayerCard, "reputation") + ", experience " + Pdm_Count(PlayerCard, "experience"));
 		PostEvent("Town_AutoQuit", 3000);
 		return;
 	}
+	string at = "s" + townPlanStep;
+	townPlanStep++;
+	if (TownPlan.(at) == "talk")
+	{
+		Town_AutoTalkGo(TownPlan.(at).arg, TownPlan.(at).want);
+		return;
+	}
+	Town_AutoDoor(TownPlan.(at).arg);
+}
+
+// walks into the exit box with the link
+void Town_AutoDoor(string link)
+{
 	aref data;
 	makearef(data, PdmLocations.(townHere));
 	int door = Town_FindPoint(data, 1, link);
@@ -627,50 +723,105 @@ void Town_AutoWhere()
 	Trace("PDM town: autotest hero at " + x + ", " + y + ", " + z + " in " + townHere);
 }
 
-// walks up to the first NPC with a dialog and talks to him
-void Town_AutoTalkGo()
+// walks up to the character (the first one with a dialog for "") and talks to him
+void Town_AutoTalkGo(string who, string want)
 {
 	townAutoNpc = -1;
 	for (int i = 0; i < townNpcCount && townAutoNpc < 0; i++)
 	{
-		if (Town_DialogOf(i) != "") { townAutoNpc = i; }
+		if (Town_DialogOf(i) == "") { continue; }
+		if (who == "" || TownNpc[i].id == who) { townAutoNpc = i; }
 	}
 	if (townAutoNpc < 0)
 	{
-		Trace("PDM dialog: autotest finds nobody to talk to in " + townHere);
-		townAutoTalked = true;
+		Trace("PDM dialog: autotest FAILED, nobody to talk to (" + who + ") in " + townHere);
 		PostEvent("Town_AutoGo", 0);
 		return;
 	}
+	townAutoWant = want;
+	townAutoDone = false;
+	townAutoWait = 0;
 	float x, y, z;
 	SendMessage(&TownNpc[townAutoNpc], "leee", MSG_CHARACTER_GETPOS, &x, &y, &z);
 	Trace("PDM dialog: autotest goes to " + TownNpc[townAutoNpc].id);
 	SendMessage(&TownHero, "lsfff", MSG_NPCHARACTER_SETTASK, "Goto point", x, y, z);
-	PostEvent("Town_AutoTalk", 6000);
+	PostEvent("Town_AutoTalk", 1000);
 }
 
+// talks as soon as the hero is near enough, at most 90 s later: an NPC walks a town slowly
 void Town_AutoTalk()
 {
+	float hx, hy, hz, x, y, z;
+	SendMessage(&TownHero, "leee", MSG_CHARACTER_GETPOS, &hx, &hy, &hz);
+	SendMessage(&TownNpc[townAutoNpc], "leee", MSG_CHARACTER_GETPOS, &x, &y, &z);
+	float d = (x - hx) * (x - hx) + (z - hz) * (z - hz);
+	if (d > TOWN_TALK_DIST * TOWN_TALK_DIST && townAutoWait < 180)
+	{
+		townAutoWait++;
+		// every 10 s where the hero is: a stop on the way shows in the log
+		if (townAutoWait % 20 == 0) { Town_AutoWhere(); }
+		PostEvent("Town_AutoTalk", 500);
+		return;
+	}
 	Town_AutoWhere();
+	// a test that goes on would talk to the empty air: it stops here, the log shows where
+	if (d > TOWN_TALK_DIST * TOWN_TALK_DIST)
+	{
+		Trace("PDM dialog: autotest FAILED, the hero does not reach " + TownNpc[townAutoNpc].id);
+		// who stands in the way
+		for (int i = 0; i < townNpcCount; i++)
+		{
+			SendMessage(&TownNpc[i], "leee", MSG_CHARACTER_GETPOS, &x, &y, &z);
+			Trace("PDM dialog: " + TownNpc[i].id + " at " + x + ", " + z);
+		}
+		SendMessage(&TownHero, "ls", MSG_NPCHARACTER_SETTASK, "Stay");
+		return;
+	}
+	DeleteAttribute(&TownVisited, "");
+	townAutoPicks = 0;
+	townAutoTalking = true;
 	Town_TalkTo(townAutoNpc);
 	PostEvent("Town_AutoPick", 4000);
 }
 
-// the first answer of the node that is on, as if the player pressed Enter on it
+// the answer the player would choose, as if he pressed Enter on it: the one whose action is wanted;
+// on the way to it the first answer to a node not seen yet; once it is said, the way out; without
+// a want, the first answer that is on
 void Town_AutoPick()
 {
 	if (townTalkNpc < 0) { return; }
+	TownVisited.(townTalkNode) = 1;
 	aref nd;
 	makearef(nd, PdmDialogs.(townTalkKey).(townTalkNode));
 	int n = GetAttributesNum(nd);
 	aref link;
+	string first = "";
+	string fresh = "";
+	string out = "";
+	string pick = "";
+	string name, to;
 	for (int i = 0; i < n; i++)
 	{
 		link = GetAttributeN(nd, i);
-		if (CheckAttribute(link, "to") && sti(link.on) != 0) { break; }
+		if (!CheckAttribute(link, "to") || sti(link.on) == 0) { continue; }
+		name = GetAttributeName(link);
+		to = link.to;
+		if (first == "") { first = name; }
+		if (!townAutoDone && townAutoWant != "" && link.action == townAutoWant) { pick = name; }
+		if (to == "exit") { if (out == "") { out = name; } }
+		else { if (fresh == "" && !CheckAttribute(&TownVisited, to)) { fresh = name; } }
 	}
-	if (i >= n) { return; }
-	Town_DialogPick(GetAttributeName(link));
+	if (first == "") { return; }
+	if (pick != "") { townAutoDone = true; }
+	else
+	{
+		pick = first;
+		if (townAutoDone && out != "") { pick = out; }
+		if (!townAutoDone && townAutoWant != "" && fresh != "") { pick = fresh; }
+	}
+	townAutoPicks++;
+	if (townAutoPicks > 30) { Town_DialogLeave(); return; }
+	Town_DialogPick(pick);
 	PostEvent("Town_AutoPick", 3500);
 }
 

@@ -374,9 +374,14 @@ class Converter:
                     "drawn with Old Standard Bold (SIL Open Font License)")
 
 
+# the screens of the game; the common files (interfaces.ini, pictures, strings) list what is converted,
+# so every run converts all of them and the screens of the command line come on top
+SCREENS = ["MainMenu"]
+
+
 def main():
     pdm, game = sys.argv[1], sys.argv[2]
-    sections = sys.argv[3:] or ["MainMenu"]
+    sections = SCREENS + [s for s in sys.argv[3:] if s not in SCREENS]
     c = Converter(pdm, game)
     for section in sections:
         c.screen(section)

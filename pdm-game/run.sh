@@ -6,7 +6,8 @@
 # RECONVERT=1 converts everything again. The game starts with the main menu (SCENE=menu);
 # SCENE=sea starts at sea at once, SCENE=menu-newgame presses "Новая Игра" by itself, SCENE=review starts with the fleet review,
 # SCENE=town starts in the town TOWN (default City_GrandaAvilia), TOWN_AUTO=1 walks into its tavern and out,
-# TOWN_AUTO=2 also talks to the first character of the tavern with a dialog,
+# TOWN_AUTO=2 also talks to the first character of the tavern with a dialog, TOWN_AUTO=3 (TOWN=City_HighRock)
+# does the errand of the guard Billy (the first quest of the town),
 # SCENE=story runs the self-test of the story machine (every action of the original) and quits.
 # SOUND_FX_ONLY=1 mutes the music and the ambience of the locations, to hear the steps and the effects.
 set -euo pipefail
