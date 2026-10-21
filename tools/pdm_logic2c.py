@@ -56,8 +56,8 @@ class Names:
 class Logic:
     def __init__(self, data: Path):
         self.data = data
-        chars = [load(f) for f in sorted((data / "characters" / "CHARACTERS").glob("*.json"))]
-        self.chars = Names(c["id"] for c in chars)
+        self.char_cards = [load(f) for f in sorted((data / "characters" / "CHARACTERS").glob("*.json"))]
+        self.chars = Names(c["id"] for c in self.char_cards)
         self.items = Names(dict(t)["name"] for t in table(data, "Items"))
         self.goods = Names(dict(t)["name"] for t in table(data, "Goods"))
         # a nation is its index in nations.idf, as the .nation of a character card
@@ -231,6 +231,9 @@ class Logic:
         dk = self.dialog_keys.get(Path(d["source"]).stem)
         base = f"PdmDialogs.{dk}"
         body = [f"\t{base}.id = {value(Path(d['source']).stem)};"]
+        # CORE.dll starts a dialog at its first node
+        if d["nodes"]:
+            body.append(f"\t{base}.start = {value(field(d['nodes'][0]['id']))};")
         for node in d["nodes"]:
             nb = f"{base}.{field(node['id'])}"
             body.append(f"\t{nb}.text = {value(node['text'] or '')};")
@@ -242,6 +245,18 @@ class Logic:
                 body += [f"\t{lb}.text = {value(link['text'] or '')};", f"\t{lb}.to = {value(field(link['to']))};",
                          f"\t{lb}.on = {link['flags'][0] if link['flags'] else 1};", f"\t{lb}.action = {value(fn or '')};"]
         return [f"// DIALOGS/{d['source']}", f"void PdmD_{dk}()", "{"] + body + ["}", ""]
+
+    def first_dialogs(self):
+        """The dialog of a .mtx card (common.dlg) is DIALOGS/<id>_common.d, as SET_FOR Person Dialog names it."""
+        out = []
+        for c in self.char_cards:
+            if not c.get("dialog"):
+                continue
+            name = f"{c['id']}_{Path(c['dialog']).stem}"
+            d = self.dialog_keys.get(name)
+            out.append(f"\tPdm_SetDialog({value(self.chars.get(c['id']))}, {value(d)});" if d
+                       else "\t" + self.miss("dialog", name))
+        return out
 
 
 def main():
@@ -272,7 +287,8 @@ def main():
             "void PdmLogic_Init()", "{"] + lines + [
         f"\tPdmActions.{lg.action_keys.get(Path(a['source']).stem)} = {value(lg.action_fn(Path(a['source']).stem))};"
         for a in lg.actions.values()] + [f"\tPdmD_{lg.dialog_keys.get(Path(d['source']).stem)}();"
-                                                     for d in lg.dialogs.values()]
+                                                     for d in lg.dialogs.values()] + [
+        "\t// the dialogs of the .mtx cards; SET_FOR Person Dialog changes them"] + lg.first_dialogs()
     head += [f'\tTrace("PDM logic: {summary}");', "}", "",
              "// WORLDS/story_lines.idf: the story lines open at a new game and their first quests",
              "void PdmLogic_NewGame()", "{"] + new_game + ["}", ""]

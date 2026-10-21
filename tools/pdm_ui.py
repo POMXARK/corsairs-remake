@@ -6,7 +6,10 @@ The sections default to MainMenu. Writes into <game dir>/resource:
   ini/interfaces/{interfaces,defaultnode,pictures}.ini and <section>.ini per screen,
   ini/texts/language.ini and texts/russian/common.ini (the strings of TEXTS/RUSSIAN/INI/interface.ini),
   ini/fonts.ini and textures/fonts/*.tx (the fonts of INI/fonts.ini rendered from a free font),
-  textures/interfaces/pdm/*.tx (the pictures of IMAGES).
+  textures/interfaces/pdm/*.tx (the pictures of IMAGES),
+  ini/dialog.ini and textures/dialog/dialog.tga.tx (the dialog window: [DialogTerminal] of INI/fonts.ini),
+  sounds/voices/<character>.wav (SOUNDS/<id>.wav, the greeting of a character when a dialog opens) and
+  <game dir>/program/data/pdm_voices.c, which gives them to the characters.
 
 The pattern: every screen of the original is one ini section of one grammar, read by MENU.dll,
 TOWN.dll, STATUS.dll ... on an 800x600 virtual screen:
@@ -21,6 +24,7 @@ instead of ',' (xr:585:yo:175 in [Options]). The paths are relative to [Common] 
 not care about the case of letters.
 """
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -29,6 +33,12 @@ from PIL import Image, ImageFont
 TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS.parent / "engine/demos/common"))
 from storm_formats import write_fonts, write_tx  # noqa: E402
+# the window of the dialog demo; no __pycache__ in the engine submodule
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(TOOLS.parent / "engine/demos/dialog"))
+import make_dialog  # noqa: E402
+sys.path.insert(0, str(TOOLS))
+from pdm_data2c import key, load  # noqa: E402
 
 LANGUAGE = "russian"
 # the fonts of the original (INI/fonts.ini: log-russ, seawolf) are not free; Old Standard (OFL) stands in
@@ -94,7 +104,8 @@ def rgb(value, default):
 class Converter:
     def __init__(self, pdm, game):
         self.pdm = Original(pdm)
-        self.resource = Path(game) / "resource"
+        self.game = Path(game)
+        self.resource = self.game / "resource"
         menu_ini = self.pdm.find("INI/menu.ini")
         self.ini = read_ini(menu_ini)
         self.base = "IMAGES/" + dict(self.ini["Common"])["path"]
@@ -270,6 +281,56 @@ class Converter:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text("\n".join(head + [""] + lines), encoding="utf-8")
 
+    # ---------- the dialog ----------
+
+    def dialog(self):
+        """DIALOG_TERMINAL.dll prints the speech in rgb_npc_speech and the answers in rgb_our_speech with
+        the font of [DialogTerminal]; its window has no picture (TEXTURES/dialog is empty), so the window
+        of the dialog demo stands in, and the dialog entity takes the colours and the font."""
+        terminal = dict(read_ini(self.pdm.find("INI/fonts.ini"))["DialogTerminal"])
+        size, _, face = terminal["font"].split(",")
+        font = self.font(f"dialog,{size}")
+        npc = [int(c) for c in terminal["rgb_npc_speech"].split(",")]
+        our = [int(c) for c in terminal["rgb_our_speech"].split(",")]
+        scale = f"{1 / FONT_OVERSAMPLE:.3f}"
+        changes = {
+            "mainfont": font, "subfont": font, "charnamefont": font,
+            "mainFontScale": scale, "subFontScale": scale, "charnamescale": scale,
+            "mainFontColor": make_dialog.argb(255, *npc), "charnamecolor": make_dialog.argb(255, *npc),
+            # the answer under the cursor is rgb_our_speech, the others dimmer
+            "subFontColorSelect": make_dialog.argb(255, *our),
+            "subFontColor": make_dialog.argb(255, *(c * 2 // 3 for c in our)),
+        }
+        lines = [f"; converted by tools/pdm_ui.py from [DialogTerminal] of INI/fonts.ini ({face}, {size}); "
+                 "the window of engine/demos/dialog/make_dialog.py"]
+        for line in make_dialog.dialog_ini().splitlines():
+            name = line.split("=", 1)[0].strip()
+            lines.append(f"{name} = {changes[name]}" if "=" in line and name in changes else line)
+        (self.resource / "ini").mkdir(parents=True, exist_ok=True)
+        (self.resource / "ini" / "dialog.ini").write_text("\n".join(lines) + "\n", encoding="ascii")
+        write_tx(make_dialog.window_texture(), self.resource / "textures/dialog/dialog.tga.tx", mip_chain=False)
+        # the tick of the cursor: the original has none, the demo's click
+        make_dialog.click_wav(self.resource / "sounds/interface/ok.wav")
+
+        # the voices: SOUNDS/<id of the character>.wav, under the key of its card as pdm_data2c.py makes it
+        used, voices = set(), []
+        cards = sorted((self.game / "data/characters/CHARACTERS").glob("*.json"))
+        for card in (load(f) for f in cards):
+            k = key(card["id"], used)
+            wav = self.pdm.find(f"SOUNDS/{card['id']}.wav")
+            if wav is None:
+                continue
+            out = self.resource / "sounds/voices" / f"{k.lower()}.wav"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(wav, out)
+            voices.append(f'\tPdmCharacters.{k}.greeting = "voices\\{k.lower()}.wav";')
+        program = self.game / "program/data"
+        program.mkdir(parents=True, exist_ok=True)
+        (program / "pdm_voices.c").write_text(
+            "// Generated by tools/pdm_ui.py: the voice a character greets with (SOUNDS/<id>.wav)\n"
+            "void PdmVoices_Init()\n{\n" + "\n".join(voices) + "\n}\n", encoding="utf-8")
+        self.voices = len(voices)
+
     # ---------- the common files ----------
 
     def common(self):
@@ -319,8 +380,9 @@ def main():
     c = Converter(pdm, game)
     for section in sections:
         c.screen(section)
+    c.dialog()
     c.common()
-    print(f"pdm_ui: {len(sections)} screens, {len(c.strings)} strings, {len(c.fonts)} fonts, "
+    print(f"pdm_ui: {len(sections)} screens, the dialog, {c.voices} voices, {len(c.strings)} strings, {len(c.fonts)} fonts, "
           f"{len(c.pictures)} picture groups; skipped: " + "; ".join(c.skipped))
 
 

@@ -20,6 +20,7 @@ aref PlayerShipType;
 #include "data\start.c"
 #include "data\pdm_logic.c"
 #include "data\pdm_world.c"
+#include "data\pdm_voices.c"
 #include "story.c"
 #include "sea.c"
 #include "town.c"
@@ -37,6 +38,7 @@ void Main()
 	PdmData_Init();
 	PdmLogic_Init();
 	PdmWorld_Init();
+	PdmVoices_Init();
 	makearef(PlayerCard, PdmCharacters.Nicolas_Sharp);
 	// an attribute name in .(...) has to be a variable
 	string shipKey = PlayerCard.ship_key;
@@ -74,7 +76,8 @@ void Main()
 void Pdm_Control()
 {
 	string control = GetEventData();
-	if (control == "Pdm_Quit")
+	// Escape in a dialog only leaves it
+	if (control == "Pdm_Quit" && townTalkNpc < 0)
 	{
 		Trace("PDM: quit");
 		ExitProgram();
