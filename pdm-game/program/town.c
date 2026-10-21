@@ -30,6 +30,18 @@
 #define TOWN_TALK_BACK 1.0
 #define TOWN_TALK_SIDE 0.5
 #define TOWN_TALK_HEIGHT 1.8
+// townsfolk walk as zombi.dll of the original: models of class 3, 9, 10 (anim_types.idf) outside a
+// tavern and a residence go from point to point of type 3, never the one they stand at, come there
+// within 2 units (4.6 m) and stand 3 to 12 actions before they go on (rand % 10 + 3)
+#define TOWN_WANDER_MS 1000
+#define TOWN_WANDER_POINT 3
+#define TOWN_WANDER_NEAR 4.6
+#define TOWN_WANDER_ACTIONS 3
+#define TOWN_WANDER_MORE 9
+// ours: an action of a stand is taken as 2 s (stand_calm, 30-40 frames at 20 a second); the
+// original has sensors to walk round others, here a walk not done in a minute ends where it is
+#define TOWN_WANDER_ACTION_S 2
+#define TOWN_WANDER_WAIT 60
 
 object TownLocation;
 object TownWeather;
@@ -40,6 +52,8 @@ object TownTaken;
 object TownNpc[TOWN_MAX_NPC];
 int townNpcCount = 0;
 bool townLoaded = false;
+// a loaded location counts up: a wander event of the location before it is dropped
+int townGen = 0;
 // the town of the island and the location the hero is in
 string townIsland = "";
 string townStreet = "";
@@ -133,6 +147,7 @@ void Town_Start(string loc, string from)
 	SetEventHandler("EWhr_GetShadowDensity", "Town_ShadowDensity", 0);
 	SetEventHandler("EWhr_GetFogDensity", "Town_FogDensity", 0);
 	SetEventHandler("Town_Tick", "Town_Tick", 0);
+	SetEventHandler("Town_Wander", "Town_Wander", 0);
 	SetEventHandler("Town_AutoGo", "Town_AutoGo", 0);
 	SetEventHandler("Town_AutoWhere", "Town_AutoWhere", 0);
 	SetEventHandler("Town_AutoQuit", "Town_AutoQuit", 0);
@@ -228,6 +243,8 @@ void Town_Load(string loc, string from)
 	// the voices of many when the location is full of people
 	Sound_Location(data.sound, townNpcCount > 2);
 	townLoaded = true;
+	townGen++;
+	PostEvent("Town_Wander", TOWN_WANDER_MS, "l", townGen);
 	if (TownAuto) { PostEvent("Town_AutoGo", 3000); }
 	Trace("PDM town: in " + loc + " from " + from + ", " + townNpcCount + " characters");
 }
@@ -329,12 +346,109 @@ void Town_PlaceCharacters(aref data)
 		}
 		TownTaken.(at) = 1;
 		TownNpc[townNpcCount].id = GetAttributeName(card);
+		TownNpc[townNpcCount].wander.on = Town_Wanders(cls, kind);
+		TownNpc[townNpcCount].wander.point = p;
+		TownNpc[townNpcCount].wander.rest = Town_WanderRest();
+		TownNpc[townNpcCount].wander.walk = 0;
+		TownNpc[townNpcCount].wander.hold = 0;
 		CreateEntity(&TownNpc[townNpcCount], "NPCharacter");
 		Town_SetModel(&TownNpc[townNpcCount], model);
 		Town_Teleport(&TownNpc[townNpcCount], data, p);
 		Trace("PDM town: " + card.id + " (" + model + ") on point " + p + " of type " + cls);
 		townNpcCount++;
 	}
+}
+
+// land_sector.dll: a wandering zombi is made for a model of class 3, 9 or 10, not in a tavern or a
+// residence; the guards (class 2) and the drunkards stand
+bool Town_Wanders(int cls, string kind)
+{
+	if (kind == "tavern" || kind == "townhall") { return false; }
+	return cls == 3 || cls == 9 || cls == 10;
+}
+
+// seconds of a stand at a point: 3 to 12 actions (zombi.dll)
+int Town_WanderRest()
+{
+	return (TOWN_WANDER_ACTIONS + rand(TOWN_WANDER_MORE)) * TOWN_WANDER_ACTION_S;
+}
+
+// once a second: a townsman who has stood his actions walks to another point; one who came
+// within 2 units of it stands again. A speaker and the one the autotest goes to hold still
+// (Town_WanderHold)
+void Town_Wander()
+{
+	int gen = GetEventData();
+	if (!townLoaded || gen != townGen) { return; }
+	PostEvent("Town_Wander", TOWN_WANDER_MS, "l", townGen);
+	aref data;
+	makearef(data, PdmLocations.(townHere));
+	float x, y, z, d;
+	string at;
+	for (int i = 0; i < townNpcCount; i++)
+	{
+		if (!sti(TownNpc[i].wander.on) || sti(TownNpc[i].wander.hold)) { continue; }
+		if (sti(TownNpc[i].wander.walk) > 0)
+		{
+			at = "p" + TownNpc[i].wander.point;
+			SendMessage(&TownNpc[i], "leee", MSG_CHARACTER_GETPOS, &x, &y, &z);
+			d = (x - stf(data.(at).x)) * (x - stf(data.(at).x)) + (z - stf(data.(at).z)) * (z - stf(data.(at).z));
+			TownNpc[i].wander.walk = sti(TownNpc[i].wander.walk) + 1;
+			if (d > TOWN_WANDER_NEAR * TOWN_WANDER_NEAR && sti(TownNpc[i].wander.walk) < TOWN_WANDER_WAIT) { continue; }
+			SendMessage(&TownNpc[i], "ls", MSG_NPCHARACTER_SETTASK, "Stay");
+			TownNpc[i].wander.walk = 0;
+			TownNpc[i].wander.rest = Town_WanderRest();
+			continue;
+		}
+		TownNpc[i].wander.rest = sti(TownNpc[i].wander.rest) - 1;
+		if (sti(TownNpc[i].wander.rest) > 0) { continue; }
+		Town_WanderGo(i, data);
+	}
+}
+
+// to a point of type 3 picked at random, not his own (zombi.dll); ours: not one another stands at,
+// so two do not meet on one spot. His own point is set free
+void Town_WanderGo(int i, aref data)
+{
+	int points = sti(data.points);
+	int free = 0;
+	int p;
+	string at;
+	for (p = 0; p < points; p++)
+	{
+		at = "p" + p;
+		if (sti(data.(at).type) == TOWN_WANDER_POINT && !CheckAttribute(&TownTaken, at)) { free++; }
+	}
+	TownNpc[i].wander.rest = Town_WanderRest();
+	if (free == 0) { return; }
+	int pick = rand(free - 1);
+	for (p = 0; p < points; p++)
+	{
+		at = "p" + p;
+		if (sti(data.(at).type) != TOWN_WANDER_POINT || CheckAttribute(&TownTaken, at)) { continue; }
+		if (pick == 0) { break; }
+		pick--;
+	}
+	DeleteAttribute(&TownTaken, "p" + TownNpc[i].wander.point);
+	TownTaken.(at) = 1;
+	TownNpc[i].wander.point = p;
+	TownNpc[i].wander.walk = 1;
+	SendMessage(&TownNpc[i], "lsfff", MSG_NPCHARACTER_SETTASK, "Goto point", stf(data.(at).x), stf(data.(at).y), stf(data.(at).z));
+}
+
+// a walking townsman stops where he is (hold) or stands a while before he walks on (release)
+void Town_WanderHold(int i, bool hold)
+{
+	if (i < 0 || i >= townNpcCount) { return; }
+	if (hold)
+	{
+		if (sti(TownNpc[i].wander.walk) > 0) { SendMessage(&TownNpc[i], "ls", MSG_NPCHARACTER_SETTASK, "Stay"); }
+		TownNpc[i].wander.walk = 0;
+		TownNpc[i].wander.hold = 1;
+		return;
+	}
+	TownNpc[i].wander.hold = 0;
+	TownNpc[i].wander.rest = Town_WanderRest();
 }
 
 // the script has no tolower, and the models are named in either case
@@ -489,6 +603,7 @@ void Town_TalkTo(int i)
 	string id = TownNpc[i].id;
 	townTalkNpc = i;
 	townTalkKey = Town_DialogOf(i);
+	Town_WanderHold(i, true);
 	// the window shows "name lastname" of the speaker
 	TownNpc[i].name = PdmCharacters.(id).name;
 	TownNpc[i].lastname = "";
@@ -587,6 +702,7 @@ void Town_DialogClose()
 	SendMessage(&TownCamera, "l", MSG_CAMERA_FOLLOW);
 	string id = TownNpc[townTalkNpc].id;
 	Trace("PDM dialog: closed, " + id + " has the dialog " + PdmCharacters.(id).dialog_key);
+	Town_WanderHold(townTalkNpc, false);
 	townTalkNpc = -1;
 	Town_Refresh();
 	if (townAutoTalking)
@@ -741,6 +857,8 @@ void Town_AutoTalkGo(string who, string want)
 	townAutoWant = want;
 	townAutoDone = false;
 	townAutoWait = 0;
+	// the hero goes to where he stands: he does not walk away meanwhile
+	Town_WanderHold(townAutoNpc, true);
 	float x, y, z;
 	SendMessage(&TownNpc[townAutoNpc], "leee", MSG_CHARACTER_GETPOS, &x, &y, &z);
 	Trace("PDM dialog: autotest goes to " + TownNpc[townAutoNpc].id);

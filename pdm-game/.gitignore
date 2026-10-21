@@ -7,3 +7,6 @@ engine.out
 *.log
 *.dxvk-cache
 save
+# the paths of the machine for game.sh/game.ps1
+local.env
+local.ps1

@@ -13,3 +13,5 @@ __pycache__/
 # the engine logs the economy tests replay
 !economy/tests/fixtures/*.log
 game/imgui.ini
+# game.sh package / game.ps1 package: the engine with the converted original
+dist/

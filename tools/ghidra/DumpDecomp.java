@@ -1,4 +1,6 @@
 // Dumps decompiled C of every function and all defined strings to <outdir>/<program>.c / .strings.txt
+// Extra args are hex addresses of functions the analysis missed (reached only through a virtual
+// table): they are disassembled and made functions first.
 import ghidra.app.script.GhidraScript;
 import ghidra.app.decompiler.*;
 import ghidra.program.model.listing.*;
@@ -10,6 +12,12 @@ public class DumpDecomp extends GhidraScript {
     public void run() throws Exception {
         String outDir = getScriptArgs()[0];
         String name = currentProgram.getName();
+        String[] args = getScriptArgs();
+        for (int i = 1; i < args.length; i++) {
+            var at = toAddr(Long.parseLong(args[i], 16));
+            disassemble(at);
+            if (getFunctionAt(at) == null) createFunction(at, null);
+        }
         DecompInterface di = new DecompInterface();
         di.openProgram(currentProgram);
         try (PrintWriter w = new PrintWriter(new FileWriter(new File(outDir, name + ".c")))) {

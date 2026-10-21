@@ -16,6 +16,8 @@ cd $W && . ./env.sh
 
 ## Сборка и запуск
 
+Меню и команды для сборки, запуска и пакета — `pdm-game/game.sh` (описано в [build.md](build.md)). Ниже — то же вручную.
+
 ```bash
 cmake --build build --target engine -j16                  # движок
 corsairs-remake/pdm-game/run.sh build/Debug/engine        # игра, начиная с главного меню

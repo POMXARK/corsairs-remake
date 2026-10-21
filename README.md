@@ -31,6 +31,10 @@ converted data. The stages and their status: [docs/port-plan.md](docs/port-plan.
 PDM=<Sea Dogs install dir> pdm-game/run.sh <path to built engine executable>
 ```
 
+Building on Linux and Windows (Debug, Release, a package to play), the repositories and branches, how
+the game is made from the installed original, the controls: [docs/build.md](docs/build.md). One script
+does it all from a menu: `pdm-game/game.sh` (Linux), `pdm-game/game.bat` (Windows).
+
 [![P1: the hero of the original, Nicolas Sharp, on his pink Principio](pdm-game/media/pdm-game.jpg)](pdm-game/media/pdm-game.mp4)
 [![P2: the fleet review, all 43 hulls of Ships.idf with the flags and arms of their nations](pdm-game/media/pdm-review.jpg)](pdm-game/media/pdm-review.mp4)
 

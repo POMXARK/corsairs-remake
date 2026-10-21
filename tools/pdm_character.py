@@ -16,8 +16,13 @@ hierarchy: joint = the pivot in the parent's frame, rotation = R_parent^T * R_pa
 The actions are WORLDS/CHARACTERS/<anim>.idf (the file anim_types.idf gives the model): name, first
 and last frame (reversed when first > last), speed; the seated ones (drink, salor, hubernator) have
 only do_some1..8 and talk_1..12, with a weight instead of the speed. The speed is the walk
-speed in hundredths of a unit per second: a foot on the ground moves 0.031 units a frame in the
-hero's walk (speed 30) and 0.06 in his run (60), so the original plays 10 frames a second.
+speed in thousandths of a unit a frame: a foot on the ground moves 0.031 units a frame in the
+hero's walk (speed 30) and 0.06 in his run (60). The core (CORE.dll) steps the game at most every
+30 ms; at 20 frames a second the hero makes 120 steps a minute at 1.4 m/s, a walk of a man, so the
+actions are played at 20 frames a second and a walk goes speed / 1000 * FPS units a second.
+
+Standing, the Character entity picks one of the idle actions at random each time the last one ends
+(weighted by "Probability"), as zombi.dll does: stand_calm 4 times in 5, else one of do_some1..3.
 
 usage: pdm_character.py <PDM_dir> <resource_out> <model.cff> <anim.idf> [--name N] [--scale K]
 """
@@ -37,14 +42,14 @@ from storm_formats import write_an  # noqa: E402
 
 # the hero is 0.78 units tall: a unit is 2.3 m. The towns are in the same units
 DEFAULT_SCALE = 2.3
-FPS = 10.0
+FPS = 20.0
 
 # Storm action <- the PDM actions to take it from, the first one the character has
 ACTIONS = {
     "idle_1": ["stand_calm", "do_some1", "simple_stand"],
-    "idle_2": ["do_some1"],
-    "idle_3": ["do_some2"],
-    "idle_4": ["do_some3"],
+    "idle_2": ["do_some1", "stand_calm", "simple_stand"],
+    "idle_3": ["do_some2", "stand_calm", "simple_stand"],
+    "idle_4": ["do_some3", "stand_calm", "simple_stand"],
     "walk": ["cyrcle_walk"],
     "run": ["circle_run", "cyrcle_walk"],
     "turn left": ["left_rot", "turn_left_calm", "stand_calm"],
@@ -55,6 +60,10 @@ ACTIONS = {
 
 # the blades of the original: a fighter holds his twice, in the scabbard on the belt and drawn in the
 # hand, and the game shows one of them; out of a fight the drawn one is left out
+# zombi.dll, at the end of each action of a stand: rand % 5 == 0 -> do_some(rand % 3 + 1), else
+# stand_calm; so each gesture weighs 1/15 against 12/15 of the calm stand (idle_1, 1)
+IDLE_PROBABILITY = {"idle_2": 1 / 12, "idle_3": 1 / 12, "idle_4": 1 / 12}
+
 BLADES = ("soldier_spa_palash", "pirat_sabel")
 
 
@@ -249,13 +258,15 @@ def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights)
     text += f"animation = {an_name}.an\n"
     found = []
 
-    def section(name, start, end, speed, loop=True):
+    def section(name, start, end, speed, loop=True, data=()):
         nonlocal text
         reverse = start > end
         start, end = min(start, end, frames - 1), min(max(start, end), frames - 1)
         text += f"\n[{name}]\nstart_time = {start}\nend_time = {end}\nloop = {'true' if loop else 'false'}\n"
         if reverse:
             text += "type = reverse\n"
+        for key, value in data:
+            text += f'data = "{key}", "{value}"\n'
         if speed:
             text += f'data = "Walk speed", "{speed:.3f}"\n'
             # the Character entity plays a step sound (step_<material of the patch>) on these events
@@ -270,10 +281,17 @@ def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights)
         found.append(name)
         if name in ("walk", "run"):
             # the speed of a cycle is the speed of the walk it is made of (a run made of the walk walks)
-            speed = actions[src][2] / 100.0 * k
+            speed = actions[src][2] / 1000.0 * FPS * k
             section(name, start, end, speed)
             # walking back plays the cycle the other way
             section("back " + name, end, start, -speed)
+        elif name.startswith("idle"):
+            # not looped: at its end the entity picks the next idle action; blended, as a gesture
+            # does not end in exactly the pose the stand begins with (ours, 0.2 s)
+            data = [("Blend time", "0.2")]
+            if name in IDLE_PROBABILITY:
+                data.append(("Probability", f"{IDLE_PROBABILITY[name]:g}"))
+            section(name, start, end, 0, loop=False, data=data)
         else:
             section(name, start, end, 0, loop=name != "dead")
     path.parent.mkdir(parents=True, exist_ok=True)
