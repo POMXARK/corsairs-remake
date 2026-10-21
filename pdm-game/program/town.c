@@ -777,8 +777,9 @@ void Town_AutoPlan()
 		Town_PlanAdd("talk", "Billy___Town_Guard", "PdmA_Wine_good_end");
 		return;
 	}
-	// 4: out to sea and back to the pier (Sea_ToPort), then into the tavern
-	if (TownAuto == 4) { Town_PlanAdd("go", "sea", ""); }
+	// 4: out to sea and back to the pier (Sea_ToPort), then into the tavern; 5: the same, the ship
+	// sails into the port by the harbour (sea.c Sea_AtHarbour)
+	if (TownAuto == 4 || TownAuto == 5) { Town_PlanAdd("go", "sea", ""); }
 	Town_PlanAdd("go", "tavern", "");
 	if (TownAuto == 2) { Town_PlanAdd("talk", "", ""); }
 	Town_PlanAdd("go", "street", "");

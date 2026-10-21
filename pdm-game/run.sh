@@ -8,6 +8,7 @@
 # SCENE=town starts in the town TOWN (default City_GrandaAvilia), TOWN_AUTO=1 walks into its tavern and out,
 # TOWN_AUTO=2 also talks to the first character of the tavern with a dialog, TOWN_AUTO=3 (TOWN=City_HighRock)
 # does the errand of the guard Billy (the first quest of the town), TOWN_AUTO=4 sails out and back to the pier,
+# TOWN_AUTO=5 sails out and into the port by the harbour of the island,
 # SEA_WAVES=sines makes the waves of the engine demos (a sum of sines) instead of the FFT sea (with RECONVERT=1);
 # SCENE=story runs the self-test of the story machine (every action of the original) and quits.
 # SOUND_FX_ONLY=1 mutes the music and the ambience of the locations, to hear the steps and the effects.

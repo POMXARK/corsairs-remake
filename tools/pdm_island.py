@@ -7,7 +7,7 @@ model, in metres by the scale of the ships, with their textures in textures/isla
 The island entity takes models/islands/<Name>/<Name>.gm and the depth map round it, foam/islands/<Name>.tga
 and .ini: made here from the same model (the engine would trace it at the first start, minutes in Debug).
 
-Where the ship of the hero appears at the island goes to <data>/islands/<Name>.json (pdm_data2c.py puts
+Where the ship of the hero appears at the island, and the harbour it sails into, go to <data>/islands/<Name>.json (pdm_data2c.py puts
 it into PdmIslands): the open water nearest the harbour of the town, facing it. The harbour is the
 shallows strip of the model (wsea*), or the middle of the island when there is none.
 
@@ -173,7 +173,8 @@ def convert(res, out, island, name, k, data=None):
         dst = Path(data) / "islands" / f"{name}.json"
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(json.dumps({"model": name, "port_x": round(x, 1), "port_z": round(z, 1),
-                                   "port_ay": round(ay, 3)}, indent=1) + "\n")
+                                   "port_ay": round(ay, 3), "harbour_x": round(float(port[0]), 1),
+                                   "harbour_z": round(float(port[2]), 1)}, indent=1) + "\n")
         line += f", the ship at {x:.0f}, {z:.0f} heading {math.degrees(ay):.0f}"
     print(line)
 

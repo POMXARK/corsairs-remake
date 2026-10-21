@@ -66,6 +66,16 @@ float fogHeight = 150.0;
 #define SEA_WIND_VEER 0.08
 #define SEA_WIND_VEER_PERIOD 61.0
 float seaTime = 0.0;
+// sailing into the port (ours): the ship enters it when it comes back to the harbour as near as
+// where it appeared plus SEA_PORT_REACH m, after it has sailed SEA_PORT_ARM m farther off than that
+#define SEA_PORT_REACH 30.0
+#define SEA_PORT_ARM 100.0
+// TOWN_AUTO=5: the ship starts this much farther off on the line to the harbour and sails in by itself
+#define SEA_AUTO_OFFSET 250.0
+int seaHero = -1;
+string seaIsland = "";
+float seaPortDistance = 0.0;
+bool seaPortArmed = false;
 float cameraAngle = 1.6;
 bool seaActive = false;
 // ours until the islands (P5): Enter at sea brings the ship back to the port it left
@@ -90,8 +100,22 @@ void Sea_Start(string islandKey)
 		z = stf(PdmIslands.(islandKey).port_z);
 		ay = stf(PdmIslands.(islandKey).port_ay);
 	}
+	seaIsland = "";
+	seaPortArmed = false;
+	if (CheckAttribute(&PdmIslands, islandKey + ".harbour_x"))
+	{
+		seaIsland = islandKey;
+		seaPortDistance = Sea_HarbourDistance(x, z);
+		if (TownAuto == 5 && seaPortDistance > 0.0)
+		{
+			float k = 1.0 + SEA_AUTO_OFFSET / seaPortDistance;
+			x = stf(PdmIslands.(islandKey).harbour_x) + k * (x - stf(PdmIslands.(islandKey).harbour_x));
+			z = stf(PdmIslands.(islandKey).harbour_z) + k * (z - stf(PdmIslands.(islandKey).harbour_z));
+		}
+	}
 	int hero = Sea_AddShip(PlayerCard, PlayerShipCard.type_key, x, z, ay);
 	SeaShips[hero].MainCharacter = 1;
+	seaHero = hero;
 	Sea_CreateCamera(hero);
 	SetEventHandler("Sea_Tick", "Sea_Tick", 0);
 	SetEventHandler("Sea_ToPort", "Sea_ToPort", 0);
@@ -390,6 +414,24 @@ void Sea_CreateCamera(int i)
 	SendMessage(&Scene, "si", "SetActiveCamera", &ShipCamera);
 }
 
+float Sea_HarbourDistance(float x, float z)
+{
+	float dx = x - stf(PdmIslands.(seaIsland).harbour_x);
+	float dz = z - stf(PdmIslands.(seaIsland).harbour_z);
+	return sqrt(dx * dx + dz * dz);
+}
+
+// the ship entity writes its position into ship.pos of its character every frame
+bool Sea_AtHarbour()
+{
+	if (seaIsland == "" || seaHero < 0 || !CheckAttribute(&SeaShips[seaHero], "ship.pos.x")) { return false; }
+	float d = Sea_HarbourDistance(stf(SeaShips[seaHero].ship.pos.x), stf(SeaShips[seaHero].ship.pos.z));
+	if (d > seaPortDistance + SEA_PORT_ARM) { seaPortArmed = true; }
+	if (!seaPortArmed || d > seaPortDistance + SEA_PORT_REACH) { return false; }
+	Trace("PDM: sea, the ship at the harbour of " + seaIsland + ", " + d + " m");
+	return true;
+}
+
 // SHIP_CAMERA.AngleY: the camera angle around the ship, 0 behind the stern
 void Sea_Tick()
 {
@@ -399,6 +441,7 @@ void Sea_Tick()
 	float gust = SEA_GUST * sin(SEA_PI2 * seaTime / SEA_GUST_PERIOD) + SEA_GUST_FAST * sin(SEA_PI2 * seaTime / SEA_GUST_FAST_PERIOD);
 	Weather.Wind.Speed = SEA_WIND_SPEED * (1.0 + gust);
 	Weather.Wind.Angle = SEA_WIND_VEER * sin(SEA_PI2 * seaTime / SEA_WIND_VEER_PERIOD);
+	if (Sea_AtHarbour()) { PostEvent("Sea_ToPort", 0); return; }
 	PostEvent("Sea_Tick", SEA_TICK_MS);
 }
 
