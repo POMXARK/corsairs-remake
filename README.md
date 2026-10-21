@@ -37,6 +37,7 @@ does it all from a menu: `pdm-game/game.sh` (Linux), `pdm-game/game.bat` (Window
 
 [![P1: the hero of the original, Nicolas Sharp, on his pink Principio](pdm-game/media/pdm-game.jpg)](pdm-game/media/pdm-game.mp4)
 [![P2: the fleet review, all 43 hulls of Ships.idf with the flags and arms of their nations](pdm-game/media/pdm-review.jpg)](pdm-game/media/pdm-review.mp4)
+[![P5: the world map of the original, the ship sails from Granda Avilia to Highrock](pdm-game/media/pdm-map.jpg)](pdm-game/media/pdm-map.mp4)
 
 The fleet review (`SCENE=review`, 2× speed): every hull of `Ships.idf` on the water in turn, masts and
 yards as model nodes, deck guns, the flag of its nation at the mastheads and the stern, the arms on the

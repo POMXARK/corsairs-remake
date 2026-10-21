@@ -6,7 +6,6 @@
 // (exit_r of tools/pdm_island.py) or on M.
 // TOWN_AUTO=6 sails by itself from the island it left to Highrock (or from Highrock to Granda Avilia).
 
-#define MSG_INTERFACE_MSG_TO_NODE 45001
 // the map picture and its texture of tools/pdm_ui.py (a power of two)
 #define MAP_W 1200
 #define MAP_H 900
