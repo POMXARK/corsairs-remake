@@ -17,8 +17,9 @@ The actions are WORLDS/CHARACTERS/<anim>.idf (the file anim_types.idf gives the 
 and last frame (reversed when first > last), speed; the seated ones (drink, salor, hubernator) have
 only do_some1..8 and talk_1..12, with a weight instead of the speed. The speed is the walk
 speed in hundredths of a unit per second: a foot on the ground moves 0.031 units a frame in the
-hero's walk (speed 30) and 0.06 in his run (60), so the original plays 10 frames a second. The run
-alone is played RUN_RATE times faster (ours), its walk speed with it, so the feet do not slide.
+hero's walk (speed 30) and 0.06 in his run (60), so the original plays 10 frames a second. The walk
+and the run alone are played WALK_RATE and RUN_RATE times faster (ours), their walk speed with them,
+so the feet do not slide.
 
 Standing, the Character entity picks one of the idle actions at random each time the last one ends
 (weighted by "Probability"), as zombi.dll does: stand_calm 4 times in 5, else one of do_some1..3.
@@ -42,8 +43,11 @@ from storm_formats import write_an  # noqa: E402
 # the hero is 0.78 units tall: a unit is 2.3 m. The towns are in the same units
 DEFAULT_SCALE = 2.3
 FPS = 10.0
-# ours: the run of the original at 10 frames a second looks slow; only it is sped up
-RUN_RATE = 1.3
+# ours: at 10 frames a second the walk of the original (a cycle of 20 frames, two steps) is 60 steps
+# a minute at 0.7 m/s, half the pace of a man (120 steps, 1.4 m/s); the walk and the run alone are
+# played twice as fast, the gestures stay at the frame rate of the original
+WALK_RATE = 2.0
+RUN_RATE = 2.0
 
 # Storm action <- the PDM actions to take it from, the first one the character has
 ACTIONS = {
@@ -306,7 +310,7 @@ def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights,
         found.append(name)
         if name in ("walk", "run"):
             # the speed of a cycle is the speed of the walk it is made of (a run made of the walk walks)
-            rate = RUN_RATE if name == "run" else 1.0
+            rate = RUN_RATE if name == "run" else WALK_RATE
             speed = actions[src][2] / 100.0 * k * rate
             section(name, start, end, speed, rate=rate)
             # walking back plays the cycle the other way
