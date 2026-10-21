@@ -22,6 +22,7 @@ aref PlayerShipType;
 #include "data\pdm_logic.c"
 #include "data\pdm_world.c"
 #include "data\pdm_voices.c"
+#include "data\pdm_screens.c"
 #include "data\pdm_sound.c"
 #include "sound.c"
 #include "story.c"
@@ -30,6 +31,7 @@ aref PlayerShipType;
 #include "review.c"
 #include "menu.c"
 #include "map.c"
+#include "screens.c"
 
 void MapKey(string controlName, int keyCode)
 {
@@ -43,6 +45,7 @@ void Main()
 	PdmLogic_Init();
 	PdmWorld_Init();
 	PdmVoices_Init();
+	PdmScreens_Init();
 	PdmSound_Init();
 	makearef(PlayerCard, PdmCharacters.Nicolas_Sharp);
 	// an attribute name in .(...) has to be a variable
@@ -55,6 +58,7 @@ void Main()
 	Trace(report);
 
 	MapKey("Pdm_Quit", 27);
+	Screen_Init();
 	SetEventHandler("Control Activation", "Pdm_Control", 0);
 
 	Render.BackColor = argb(255, 0, 0, 0);
@@ -68,7 +72,7 @@ void Main()
 		ExitProgram();
 		return;
 	}
-	if (StartScene == "menu" || StartScene == "menu-newgame")
+	if (StartScene == "menu" || StartScene == "menu-newgame" || StartScene == "screens")
 	{
 		Menu_Start();
 		return;
@@ -82,6 +86,10 @@ void Main()
 void Pdm_Control()
 {
 	string control = GetEventData();
+	// Escape on a screen goes back, the keys of the scene wait under it
+	if (control == "Pdm_Quit" && Screen_Escape()) { return; }
+	if (screenOverGame) { return; }
+	if (control == "Screen_Status") { Screen_Status(); return; }
 	Sea_Control(control);
 	// Escape in a dialog only leaves it
 	if (control == "Pdm_Quit" && townTalkNpc < 0)

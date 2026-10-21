@@ -1,7 +1,7 @@
 // The main menu of the original (MENU.dll): the screen is [MainMenu] of INI/menu.ini converted by
 // tools/pdm_ui.py into resource\ini\interfaces\mainmenu.ini. "Новая Игра" starts the game in the town of the hero,
-// "Выход" quits; the other screens come with the later stages (P9). Without a game "Сохранить" and
-// "Продолжить" cannot be chosen, as in the original.
+// "Выход" quits; "Настройки", "Загрузить" and "Авторы" open their pages (screens.c), what they do comes
+// with the later stages (P9).
 // SCENE=menu-newgame presses "Новая Игра" by itself after a while (the test without key presses).
 
 #define MSG_INTERFACE_INIT 45010
@@ -44,15 +44,14 @@ void Menu_Start()
 	LayerAddObject(INTERFACE_REALIZE, &GameInterface, -100);
 	SetEventHandler("ievnt_command", "Menu_Command", 0);
 	SetEventHandler("Menu_NewGame", "Menu_NewGame", 0);
-	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\mainmenu.ini");
-	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_SAVEGAME", 0);
-	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_RESUMEGAME", 0);
+	Screen_Show("mainmenu");
 	Sound_Music("Main");
 	Trace("PDM menu: main menu");
 	if (StartScene == "menu-newgame")
 	{
 		PostEvent("ievnt_command", 6000, "ss", "click", "LB_NEWGAME");
 	}
+	if (StartScene == "screens") { PostEvent("Screen_Tour", SCREEN_AUTO_MS); }
 }
 
 void Menu_Command()
@@ -61,10 +60,14 @@ void Menu_Command()
 	string node = GetEventData();
 	if (command != "click" && command != "activate") { return; }
 	Trace("PDM menu: " + node);
+	if (screenName != "mainmenu" || node != "LB_EXIT") { if (Screen_Click(node)) { return; } }
+	if (screenName == "messagebox" && node == "LB_YES" && screenMessageYes == "exit") { ExitProgram(); }
+	if (screenName != "mainmenu") { return; }
 	// the button is still being pressed: the interface goes away after the event, not inside it,
 	// or the engine touches the deleted button (a crash on Enter)
 	if (node == "LB_NEWGAME" && !menuStarting) { menuStarting = true; PostEvent("Menu_NewGame", 0); return; }
-	if (node == "LB_EXIT") { ExitProgram(); }
+	// "Выход" asks first, as in the original: t_Exit in the message box, "Да" quits
+	if (node == "LB_EXIT") { Screen_Message(PdmScreens.mainmenu.t.exit, "exit"); }
 }
 
 void Menu_NewGame()
@@ -73,6 +76,7 @@ void Menu_NewGame()
 	DelEventHandler("Menu_NewGame", "Menu_NewGame");
 	SendMessage(&GameInterface, "l", MSG_INTERFACE_RELEASE);
 	DeleteClass(&GameInterface);
+	screenName = "";
 	Pdm_NewGame();
 	// the hero starts in the town of his address (Highrock), coming from his ship at the pier:
 	// the sea has no islands yet (P4)

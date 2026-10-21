@@ -10,6 +10,7 @@
 # does the errand of the guard Billy (the first quest of the town), TOWN_AUTO=4 sails out and back to the pier,
 # TOWN_AUTO=5 sails out and into the port by the harbour of the island,
 # SEA_WAVES=sines makes the waves of the engine demos (a sum of sines) instead of the FFT sea (with RECONVERT=1);
+# SCENE=screens shows every screen of the interface in turn, then F1 (the status) in the town, and quits;
 # SCENE=story runs the self-test of the story machine (every action of the original) and quits.
 # SOUND_FX_ONLY=1 mutes the music and the ambience of the locations, to hear the steps and the effects.
 set -euo pipefail
@@ -38,7 +39,7 @@ if [ ! -f "$DIR/resource/.converted" ]; then
 fi
 # the screens of the interface (INI/menu.ini, the world map of INI/map.ini), their pictures, texts and fonts, the dialog window and the voices;
 # again for a map made before it took clicks
-grep -A4 '^\[MAP\]' "$DIR/resource/ini/interfaces/mainmap.ini" 2>/dev/null | grep -qs 'command = click' && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR" MainMenu
+grep -A4 '^\[MAP\]' "$DIR/resource/ini/interfaces/mainmap.ini" 2>/dev/null | grep -qs 'command = click' && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
 # the towns and interiors (WORLDS/locations/*.loc), their patches and the characters with animation
 [ -f "$DIR/program/data/pdm_world.c" ] || python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"
 # the islands (DESC/<Island>.def, WORLDS/islands_x.idf), where the ship appears at each and their names

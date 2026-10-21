@@ -580,7 +580,7 @@ float Town_FogDensity()
 void Town_Control()
 {
 	string control = GetEventData();
-	if (control == "Town_Talk" && townLoaded && townTalkNpc < 0) { Town_Talk(); }
+	if (control == "Town_Talk" && townLoaded && townTalkNpc < 0 && screenName == "") { Town_Talk(); }
 }
 
 // the key of the dialog of the NPC i, "" if he has none
@@ -726,6 +726,8 @@ void Town_DialogClose()
 	Town_WanderHold(townTalkNpc, false);
 	townTalkNpc = -1;
 	Town_Refresh();
+	// the store or the shipyard the dialog asked for
+	PostEvent("Screen_Pending", 0);
 	if (townAutoTalking)
 	{
 		townAutoTalking = false;
