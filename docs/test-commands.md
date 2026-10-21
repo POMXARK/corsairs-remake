@@ -51,6 +51,7 @@ python3 -I corsairs-remake/tools/pdm_world.py $PDM corsairs-remake/pdm-game tave
 python3 -I corsairs-remake/tools/pdm_sound.py $PDM corsairs-remake/pdm-game          # звук и музыка
 python3 -I corsairs-remake/tools/pdm_ui.py $PDM corsairs-remake/pdm-game MainMenu    # экраны, диалог, голоса
 python3 -I corsairs-remake/tools/pdm_character.py $PDM <out> <model.cff> <anim.idf>  # один персонаж
+python3 -I corsairs-remake/tools/pdm_anim_check.py corsairs-remake/pdm-game/resource [модель …] [--all]  # рывки анимаций: шов цикла, скачок кадра, поза без blend
 ```
 
 ## Запись видео

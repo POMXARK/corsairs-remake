@@ -16,10 +16,9 @@ hierarchy: joint = the pivot in the parent's frame, rotation = R_parent^T * R_pa
 The actions are WORLDS/CHARACTERS/<anim>.idf (the file anim_types.idf gives the model): name, first
 and last frame (reversed when first > last), speed; the seated ones (drink, salor, hubernator) have
 only do_some1..8 and talk_1..12, with a weight instead of the speed. The speed is the walk
-speed in thousandths of a unit a frame: a foot on the ground moves 0.031 units a frame in the
-hero's walk (speed 30) and 0.06 in his run (60). The core (CORE.dll) steps the game at most every
-30 ms; at 20 frames a second the hero makes 120 steps a minute at 1.4 m/s, a walk of a man, so the
-actions are played at 20 frames a second and a walk goes speed / 1000 * FPS units a second.
+speed in hundredths of a unit per second: a foot on the ground moves 0.031 units a frame in the
+hero's walk (speed 30) and 0.06 in his run (60), so the original plays 10 frames a second. The run
+alone is played RUN_RATE times faster (ours), its walk speed with it, so the feet do not slide.
 
 Standing, the Character entity picks one of the idle actions at random each time the last one ends
 (weighted by "Probability"), as zombi.dll does: stand_calm 4 times in 5, else one of do_some1..3.
@@ -42,7 +41,9 @@ from storm_formats import write_an  # noqa: E402
 
 # the hero is 0.78 units tall: a unit is 2.3 m. The towns are in the same units
 DEFAULT_SCALE = 2.3
-FPS = 20.0
+FPS = 10.0
+# ours: the run of the original at 10 frames a second looks slow; only it is sped up
+RUN_RATE = 1.3
 
 # Storm action <- the PDM actions to take it from, the first one the character has
 ACTIONS = {
@@ -251,20 +252,44 @@ def step_frames(heights, start, end):
     return first, second
 
 
-def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights):
+# a step between two frames is a jump when it is this many times the median step of the action and
+# above JUMP_DEG (degrees, the largest over the bones); tools/pdm_anim_check.py reports by the same
+JUMP_RATIO = 3.0
+JUMP_DEG = 6.0
+
+
+def pose_step(rotations, f1, f2):
+    """The largest turn of a bone between the frames f1 and f2, in degrees."""
+    def angle(q1, q2):
+        return math.degrees(2 * math.acos(min(1.0, abs(sum(a * b for a, b in zip(q1, q2))))))
+    return max(angle(bone[f1], bone[f2]) for bone in rotations[1:])
+
+
+def jump_frame(rotations, start, end):
+    """The first frame after which the action start..end jumps, or None."""
+    steps = [pose_step(rotations, f, f + 1) for f in range(start, end)]
+    if not steps:
+        return None
+    limit = max(JUMP_DEG, JUMP_RATIO * sorted(steps)[len(steps) // 2])
+    return next((start + i for i, step in enumerate(steps) if step > limit), None)
+
+
+def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights, rotations):
     """The Storm actions the Character entity looks for, from the PDM ones (ACTIONS); heights: the
     height of the pelvis per frame, for the steps."""
     text = f"; converted by tools/pdm_character.py, {FPS:g} frames a second as in the original\n"
     text += f"animation = {an_name}.an\n"
     found = []
 
-    def section(name, start, end, speed, loop=True, data=()):
+    def section(name, start, end, speed, loop=True, data=(), rate=1.0):
         nonlocal text
         reverse = start > end
         start, end = min(start, end, frames - 1), min(max(start, end), frames - 1)
         text += f"\n[{name}]\nstart_time = {start}\nend_time = {end}\nloop = {'true' if loop else 'false'}\n"
         if reverse:
             text += "type = reverse\n"
+        if rate != 1.0:
+            text += f"speed = {rate:g}\n"
         for key, value in data:
             text += f'data = "{key}", "{value}"\n'
         if speed:
@@ -281,17 +306,27 @@ def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights)
         found.append(name)
         if name in ("walk", "run"):
             # the speed of a cycle is the speed of the walk it is made of (a run made of the walk walks)
-            speed = actions[src][2] / 1000.0 * FPS * k
-            section(name, start, end, speed)
+            rate = RUN_RATE if name == "run" else 1.0
+            speed = actions[src][2] / 100.0 * k * rate
+            section(name, start, end, speed, rate=rate)
             # walking back plays the cycle the other way
-            section("back " + name, end, start, -speed)
+            section("back " + name, end, start, -speed, rate=rate)
         elif name.startswith("idle"):
+            # some gestures of the original run on into the next action of the file (do_some1 of
+            # the hero, 85-125, into stap_back_calm from 120): played to the end they jump; cut there
+            jump = jump_frame(rotations, start, end) if start < end else None
+            if jump is not None and jump > (start + end) // 2:
+                end = jump
             # not looped: at its end the entity picks the next idle action; blended, as a gesture
             # does not end in exactly the pose the stand begins with (ours, 0.2 s)
             data = [("Blend time", "0.2")]
             if name in IDLE_PROBABILITY:
                 data.append(("Probability", f"{IDLE_PROBABILITY[name]:g}"))
             section(name, start, end, 0, loop=False, data=data)
+        elif name == "talk":
+            # the talk of the soldiers stands otherwise than their idle_1 (75-100 degrees): blended
+            # as the gestures (ours)
+            section(name, start, end, 0, data=[("Blend time", "0.2")])
         else:
             section(name, start, end, 0, loop=name != "dead")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -343,7 +378,7 @@ def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: fl
     # anim_types.idf names the files in either case (traktir_man.idf for Traktir_Man.idf)
     anims = index_files(res / "WORLDS" / "CHARACTERS")
     found = write_ani(out / "animation" / f"{name}.ani", name, read_actions(anims[anim.lower()]), k, frames,
-                      [p[1] for p in root_positions])
+                      [p[1] for p in root_positions], rotations)
     missing = []
     for stem in sorted(used):
         src = textures.get(stem)
