@@ -410,6 +410,127 @@ def clean_patch(triangles):
     return [(tuple((v[0] * SNAP, v[2], v[1] * SNAP) for v in tri), 0) for tri in out]
 
 
+# ---------- what stands on the floor ----------
+# The original stops the hero at the geometry of the location; the engine only walks the patch, and
+# the patches run under tables, barrels, carts and the corners of houses. The floor is cut into
+# CELL squares; a square where the location model crosses the height of a body over that floor is
+# cut out of the patch.
+
+CELL = 0.15  # metres
+BODY = (0.35, 1.6)  # metres above the floor: what a walking body bumps into
+REACH = 1  # cells: a blocked square grows by this, the body is not a point
+FREE = 0.45  # metres around a point of the location (a character, an exit) stay walkable
+
+
+def cell_range(lo, hi):
+    return range(math.floor(lo / CELL), math.floor(hi / CELL) + 1)
+
+
+def blocked_cells(model: Path, triangles, points, boxes):
+    """{(i, j): [floor heights]} of the squares a body cannot stand on."""
+    floors = {}  # the floor heights over the centre of a square
+    for t in triangles:
+        height, poly = plane(t), ccw([(p[0], p[2]) for p in t])
+        x0, z0, x1, z1 = bounds(poly)
+        for i in cell_range(x0, x1):
+            for j in cell_range(z0, z1):
+                x, z = (i + 0.5) * CELL, (j + 0.5) * CELL
+                if all(area2([poly[k - 1], poly[k], (x, z)]) >= -EPS for k in range(3)):
+                    floors.setdefault((i, j), []).append(height(x, z))
+
+    hit = {}
+    lo, hi = BODY
+    for m in cff2gm.cff_to_meshes(model, place=lambda p: tuple(c * K for c in p)):
+        for tri in m.triangles:
+            pts = [m.vertices[k][0] for k in tri]
+            ys = [p[1] for p in pts]
+            x0, z0, x1, z1 = bounds([(p[0], p[2]) for p in pts])
+            for i in cell_range(x0, x1):
+                for j in cell_range(z0, z1):
+                    hs = [h for h in floors.get((i, j), ()) if max(ys) > h + lo and min(ys) < h + hi]
+                    if not hs:
+                        continue
+                    # the part of the triangle over the square: (x, z, y) clipped in x/z
+                    part = [(p[0], p[2], p[1]) for p in pts]
+                    sx, sz = i * CELL, j * CELL
+                    for a, b in (((sx, sz), (sx + CELL, sz)), ((sx + CELL, sz), (sx + CELL, sz + CELL)),
+                                 ((sx + CELL, sz + CELL), (sx, sz + CELL)), ((sx, sz + CELL), (sx, sz))):
+                        part = clip3(part, a, b)
+                        if not part:
+                            break
+                    if not part:
+                        continue
+                    ylo, yhi = min(p[2] for p in part), max(p[2] for p in part)
+                    for h in hs:
+                        if yhi > h + lo and ylo < h + hi:
+                            hit.setdefault((i, j), []).append(h)
+
+    grown = {}
+    for (i, j), hs in hit.items():
+        for di in range(-REACH, REACH + 1):
+            for dj in range(-REACH, REACH + 1):
+                grown.setdefault((i + di, j + dj), []).extend(hs)
+
+    def free(i, j):
+        x, z = (i + 0.5) * CELL, (j + 0.5) * CELL
+        return (any(math.dist((x, z), p) < FREE for p in points)
+                or any(b[0] - CELL <= x <= b[2] + CELL and b[1] - CELL <= z <= b[3] + CELL for b in boxes))
+    return {c: hs for c, hs in grown.items() if not free(*c)}
+
+
+def clip3(poly, a, b):
+    """clip() for points (x, z, y): the y rides along."""
+    def side(p):
+        return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+    out = []
+    for k, cur in enumerate(poly):
+        prev = poly[k - 1]
+        sc, sp = side(cur), side(prev)
+        if (sc >= -EPS) != (sp >= -EPS):
+            t = sp / (sp - sc)
+            out.append(tuple(prev[n] + t * (cur[n] - prev[n]) for n in range(3)))
+        if sc >= -EPS:
+            out.append(cur)
+    return out
+
+
+def cut_obstacles(triangles, blocked):
+    """The patch triangles without the blocked squares of their floor."""
+    out = []
+    for t in triangles:
+        height, poly = plane(t), ccw([(p[0], p[2]) for p in t])
+        x0, z0, x1, z1 = bounds(poly)
+        cells = {(i, j) for i in cell_range(x0, x1) for j in cell_range(z0, z1)
+                 if any(abs(h - height((i + 0.5) * CELL, (j + 0.5) * CELL)) < LEVEL
+                        for h in blocked.get((i, j), ()))}
+        # the squares merged into rectangles: runs along x, equal runs of the next rows joined
+        runs = {}
+        for i, j in sorted(cells, key=lambda c: (c[1], c[0])):
+            row = runs.setdefault(j, [])
+            if row and row[-1][1] == i - 1:
+                row[-1][1] = i
+            else:
+                row.append([i, i])
+        rects, open_, last = [], {}, None
+        for j in sorted(runs):
+            if last is not None and j != last + 1:
+                rects += [(i0, s, i1, last) for (i0, i1), s in open_.items()]
+                open_ = {}
+            nxt = {run: open_.pop(run, j) for run in map(tuple, runs[j])}
+            rects += [(i0, s, i1, last) for (i0, i1), s in open_.items()]
+            open_, last = nxt, j
+        rects += [(i0, s, i1, last) for (i0, i1), s in open_.items()]
+        pieces = [poly]
+        for i0, j0, i1, j1 in rects:
+            hole = [(i0 * CELL, j0 * CELL), ((i1 + 1) * CELL, j0 * CELL),
+                    ((i1 + 1) * CELL, (j1 + 1) * CELL), (i0 * CELL, (j1 + 1) * CELL)]
+            hb = bounds(hole)
+            pieces = [q for p in pieces for q in (subtract(p, hole) if overlaps(bounds(p), hb) else [p])]
+        for p in pieces:
+            out += [tuple((q[0], height(*q), q[1]) for q in (p[0], p[k], p[k + 1])) for k in range(1, len(p) - 1)]
+    return out
+
+
 class World:
     def __init__(self, res: Path, game: Path):
         self.res, self.game = res, game
@@ -444,14 +565,19 @@ class World:
         self.done_models[stem] = len(meshes)
         return stem
 
-    def patch(self, name: str, points):
+    def patch(self, name: str, points, loc):
         cff = self.models.get(Path(name).name.lower())
         if cff is None:
             print(f"  missing patch {name}")
             return None
         triangles = patch_triangles(cff)
         # the floor goes last: where the patch has a floor of its own, that one is kept
-        triangles = clean_patch(triangles + implicit_floor(cff, triangles, points))
+        triangles = triangles + implicit_floor(cff, triangles, points)
+        keep = [(p["pos"][0] * K, p["pos"][2] * K) for p in loc["points"]]
+        boxes = [tuple(c * K for c in p["box"]) for p in loc["points"] if p["type"] == 1]
+        triangles = cut_obstacles(triangles, blocked_cells(self.models[Path(loc["model"]).name.lower()],
+                                                           triangles, keep, boxes))
+        triangles = clean_patch(triangles)
         # named by the patch: locations with one model can have different patches
         stem = cff.stem.lower()
         write_ptc(triangles, self.out / "models" / "locations" / f"{stem}.ptc")
@@ -463,7 +589,7 @@ class World:
         model = self.model(loc["model"])
         # only an interior walks on the ground inside its walls; the walls of a town are houses
         points = [] if loc["interiors"] else [(p["pos"][0] * K, p["pos"][2] * K) for p in loc["points"]]
-        patch = self.patch(loc["patch"], points) if model else None
+        patch = self.patch(loc["patch"], points, loc) if model else None
         at = f"PdmLocations.{key}"
         add = self.lines.append
         add(f'\t{at}.id = "{key}";')
