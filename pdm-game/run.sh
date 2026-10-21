@@ -8,6 +8,7 @@
 # SCENE=town starts in the town TOWN (default City_GrandaAvilia), TOWN_AUTO=1 walks into its tavern and out,
 # TOWN_AUTO=2 also talks to the first character of the tavern with a dialog, TOWN_AUTO=3 (TOWN=City_HighRock)
 # does the errand of the guard Billy (the first quest of the town), TOWN_AUTO=4 sails out and back to the pier,
+# SEA_WAVES=sines makes the waves of the engine demos (a sum of sines) instead of the FFT sea (with RECONVERT=1);
 # SCENE=story runs the self-test of the story machine (every action of the original) and quits.
 # SOUND_FX_ONLY=1 mutes the music and the ambience of the locations, to hear the steps and the effects.
 set -euo pipefail
@@ -22,7 +23,7 @@ if [ ! -f "$DIR/resource/.converted" ]; then
     # the tables, characters, ships and the story data as JSON in data/
     python3 -I "$TOOLS/pdm2storm.py" "$PDM" "$DIR" --only actions,dialogs,tables,desc,characters,ships,quests
     # the sea, the sky and the sail settings of the engine demos
-    python3 -I "$DEMOS/sea/make_sea.py" "$DIR/resource"
+    python3 -I "$DEMOS/sea/make_sea.py" "$DIR/resource" --waves "${SEA_WAVES:-fft}"
     python3 -I "$DEMOS/ship/make_ship.py" "$DIR/resource"
     # every hull of WORLDS/Ships.idf (the forts are parts of the islands)
     for hull in $(python3 -I -c 'import json,sys; print(" ".join(sorted({dict(o)["filename"].lower() for o in json.load(open(sys.argv[1]))["objects"]} - {"fort"})))' \
@@ -38,6 +39,8 @@ fi
 [ -f "$DIR/resource/ini/interfaces/mainmenu.ini" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR" MainMenu
 # the towns and interiors (WORLDS/locations/*.loc), their patches and the characters with animation
 [ -f "$DIR/program/data/pdm_world.c" ] || python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"
+# the islands (DESC/<Island>.def, WORLDS/islands_x.idf) and where the ship appears at each
+[ -d "$DIR/data/islands" ] || python3 -I "$TOOLS/pdm_island.py" "$PDM" "$DIR/resource" all --data "$DIR/data"
 # the music, the sounds and their aliases, the sounds of the kinds of location
 [ -f "$DIR/program/data/pdm_sound.c" ] || python3 -I "$TOOLS/pdm_sound.py" "$PDM" "$DIR"
 python3 -I "$TOOLS/pdm_data2c.py" "$DIR/data" "$DIR/program"

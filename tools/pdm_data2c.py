@@ -16,6 +16,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from pdm_island import island_model  # noqa: E402
+
 
 def key(name: str, used: set) -> str:
     k = re.sub(r"[^A-Za-z0-9_]", "_", name.strip()) or "x"
@@ -91,7 +94,13 @@ def main():
         t["speedrate"] = t["speedrate"].replace(",", ".")
     emit("PdmShipTypes", [(t["filename"].lower(), t) for t in ship_types], "PdmData_ShipTypes")
     # islands_x.idf is the map of the release (29 objects; Islands.idf is an older one of 11)
-    emit("PdmIslands", [(t["name"], t) for t in table(data, "islands_x")], "PdmData_Islands")
+    # pdm_island.py: the model of the island and where the ship of the hero appears at it
+    islands = table(data, "islands_x")
+    for t in islands:
+        place = data / "islands" / f"{island_model(t['name'])}.json"
+        if place.is_file():
+            t.update(load(place))
+    emit("PdmIslands", [(t["name"], t) for t in islands], "PdmData_Islands")
     for name in ("nations", "Goods", "Towns", "Cannons", "Items", "relations"):
         emit("Pdm" + name.capitalize(), [(t["name"], t) for t in table(data, name)], "PdmData_" + name.capitalize())
 

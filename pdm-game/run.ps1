@@ -1,4 +1,4 @@
-# Windows version of run.sh: converts the installed original (PDM 1.061) on the first run and starts
+﻿# Windows version of run.sh: converts the installed original (PDM 1.061) on the first run and starts
 # the engine in pdm-game/. The variables are those of run.sh: $env:PDM, RECONVERT, SCENE, TOWN,
 # TOWN_AUTO, SOUND_FX_ONLY.
 # Usage: run.ps1 [path to engine.exe] [engine options]
@@ -24,7 +24,7 @@ if (-not (Test-Path "$Demo/resource/.converted"))
     # the tables, characters, ships and the story data as JSON in data/
     Invoke-Python "$Tools/pdm2storm.py" $Pdm $Demo --only actions,dialogs,tables,desc,characters,ships,quests
     # the sea, the sky and the sail settings of the engine demos
-    Invoke-Python "$Demos/sea/make_sea.py" "$Demo/resource"
+    Invoke-Python "$Demos/sea/make_sea.py" "$Demo/resource" --waves $(if ($env:SEA_WAVES) { $env:SEA_WAVES } else { "fft" })
     Invoke-Python "$Demos/ship/make_ship.py" "$Demo/resource"
     # every hull of WORLDS/Ships.idf (the forts are parts of the islands)
     $ships = Get-Content -Raw "$Demo/data/tables/WORLDS/Ships.json" | ConvertFrom-Json
@@ -44,6 +44,8 @@ if (-not ((Test-Path "$Demo/resource/ini/interfaces/mainmenu.ini") -and (Test-Pa
 }
 # the towns and interiors, their patches and the characters with animation (several minutes)
 if (-not (Test-Path "$Demo/program/data/pdm_world.c")) { Invoke-Python "$Tools/pdm_world.py" $Pdm $Demo }
+# the islands and where the ship appears at each
+if (-not (Test-Path "$Demo/data/islands")) { Invoke-Python "$Tools/pdm_island.py" $Pdm "$Demo/resource" all --data "$Demo/data" }
 # the music, the sounds and their aliases
 if (-not (Test-Path "$Demo/program/data/pdm_sound.c")) { Invoke-Python "$Tools/pdm_sound.py" $Pdm $Demo }
 Invoke-Python "$Tools/pdm_data2c.py" "$Demo/data" "$Demo/program"

@@ -51,6 +51,8 @@ python3 -I corsairs-remake/tools/pdm_world.py $PDM corsairs-remake/pdm-game tave
 python3 -I corsairs-remake/tools/pdm_sound.py $PDM corsairs-remake/pdm-game          # звук и музыка
 python3 -I corsairs-remake/tools/pdm_ui.py $PDM corsairs-remake/pdm-game MainMenu    # экраны, диалог, голоса
 python3 -I corsairs-remake/tools/pdm_character.py $PDM <out> <model.cff> <anim.idf>  # один персонаж
+python3 -I corsairs-remake/tools/pdm_island.py $PDM corsairs-remake/pdm-game/resource all --data corsairs-remake/pdm-game/data  # острова, карты глубин, места корабля (~2 мин)
+python3 -I corsairs-remake/engine/demos/sea/make_sea.py corsairs-remake/pdm-game/resource --waves fft   # волны FFT (без --waves — синусоиды демо)
 python3 -I corsairs-remake/tools/pdm_anim_check.py corsairs-remake/pdm-game/resource [модель …] [--all]  # рывки анимаций: шов цикла, скачок кадра, поза без blend
 ```
 

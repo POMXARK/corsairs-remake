@@ -215,16 +215,20 @@ def write_vant_texture(dst: Path, size=128):
 # The flags: the flag entity draws them as cloth in the wind from four labels of a group flag<N>: f1 and
 # f4 the edge at the mast (top, bottom), f2 and f3 the free edge (top, bottom). A DEF Flag item is only
 # the point the flag hangs from; sub 2 is the pennant of the foremast. Length aft and height, metres:
-# the ensign on the stern staff (a flag of the hull) is big, the flags at the mastheads small and long.
-FLAG_SIZE = {0: (2.0, 0.8), 2: (4.0, 0.35), "stern": (4.2, 2.6)}
+# the flags at the mastheads are small and long; the ensign on the stern staff (a flag of the hull)
+# follows the hull, STERN_FLAG below.
+FLAG_SIZE = {0: (2.0, 0.8), 2: (4.0, 0.35)}
+# ours: the ensign is as long as this share of the hull and 0.6 of that high (1.6 m on the pink, 4 m on
+# the frigate); a fixed 4.2 m flag covered a third of the small hulls and swung into the stern
+STERN_FLAG = 0.12
 # the atlas of the flags: a column per nation of WORLDS/nations.idf, in its order (the .nation of a
 # character is that index); the script returns the column in GetRiggingData/GetShipFlagTexNum
 FLAG_COLUMNS = 8
 
 
-def flag_labels(n, sub, at, stern=False):
-    """The labels of flag n hanging from the point at (in its node)."""
-    length, height = FLAG_SIZE["stern" if stern else sub if sub in FLAG_SIZE else 0]
+def flag_labels(n, sub, at, stern=0.0):
+    """The labels of flag n hanging from the point at (in its node); stern: the hull length, for the ensign."""
+    length, height = (STERN_FLAG * stern, 0.6 * STERN_FLAG * stern) if stern else FLAG_SIZE[sub if sub in FLAG_SIZE else 0]
     x, y, z = at
     return [(f"flag{n}", "f1", (x, y, z)), (f"flag{n}", "f4", (x, y - height, z)),
             (f"flag{n}", "f2", (x, y, z - length)), (f"flag{n}", "f3", (x, y - height, z - length))]
@@ -419,12 +423,14 @@ def main():
         # are square sails ("sails"); the corners go in the order the sail entity expects
         group = f"sail{'f' if it['sub'] == 4 else 's'}{it['index']}"
         node.labels += [(group, f"sail{n + 1}", place(c)) for n, c in enumerate(sail["corners"])]
+    hull_z = [v[0][2] for m in nodes[""].meshes for v in m.vertices]
+    hull_length = max(hull_z) - min(hull_z)
     for it, pos in placed(items, "Flag"):
         mast = node_of(it)
         node = nodes[mast]
         n = sum(1 for nd in nodes.values() for g, *_ in nd.labels if g.startswith("flag")) // 4 + 1
         at = tuple(v * k - c for v, c in zip(pos, node.origin))
-        node.labels += flag_labels(n, it["sub"], at, stern=not mast and it["sub"] == 0)
+        node.labels += flag_labels(n, it["sub"], at, stern=hull_length if not mast and it["sub"] == 0 else 0.0)
     flags = sum(1 for nd in nodes.values() for g, *_ in nd.labels if g.startswith("flag")) // 4
     print(f"  {ropes} ropes, {vants} shrouds, {len(yards)} sails, {flags} flags, {len(masts)} masts, {emblems} arms")
 

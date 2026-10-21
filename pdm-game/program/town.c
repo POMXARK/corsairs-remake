@@ -528,7 +528,7 @@ void Town_Go(string link)
 	if (link == "sea")
 	{
 		Town_Release();
-		Sea_Start();
+		Sea_Start(townIsland);
 		return;
 	}
 	if (to == "" || !CheckAttribute(&PdmLocations, to))

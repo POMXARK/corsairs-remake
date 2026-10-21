@@ -75,7 +75,7 @@ void Main()
 	Pdm_NewGame();
 	if (StartScene == "review") { Review_Start(); }
 	else if (StartScene == "town") { Town_Start(StartTown, "sea"); }
-	else { Sea_Start(); }
+	else { Sea_Start(PlayerCard.address.island); }
 }
 
 void Pdm_Control()

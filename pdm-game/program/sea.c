@@ -11,6 +11,7 @@
 
 // shared/messages.h and shared/sea_ai/script_defines.h
 #define MSG_SHIP_CREATE 50300
+#define MSG_ISLAND_LOAD_GEO 50100
 #define AI_MESSAGE_SET_LAYERS 51015
 #define AI_CAMERAS_SET_CAMERA 55001
 
@@ -30,6 +31,12 @@ object Flag;
 // the flag of a ship: the column and the row in the flag atlas of pdm_ship.py (a column per nation)
 int SeaFlagTexture[2];
 object SeaCameras;
+// the island of the town the ship sails from (tools/pdm_island.py) and the entity that pushes the ships
+// off its shore; touch registers the ships created after it
+object Island;
+object Touch;
+// touch pushes a ship back where the depth map is this shallow under its hull (the island demo)
+#define SEA_COLLISION_DEPTH -4.0
 object ShipCamera;
 #define SEA_MAX_SHIPS 48
 // the most sails with the coat of arms on one ship
@@ -47,21 +54,43 @@ float seaSpeedScale = 1.0;
 
 float fogHeight = 150.0;
 #define SEA_TICK_MS 40
+// gusts (ours): the wind of the weather swings by these shares of its speed and radians of its angle
+// over the periods in s, incommensurate so the gusts do not repeat; the sail entity reads the
+// weather every frame: the belly and the ripples of the sails, the flags and the ship speed follow
+#define SEA_PI2 6.2831853
+#define SEA_WIND_SPEED 10.0
+#define SEA_GUST 0.18
+#define SEA_GUST_FAST 0.07
+#define SEA_GUST_PERIOD 23.0
+#define SEA_GUST_FAST_PERIOD 4.7
+#define SEA_WIND_VEER 0.08
+#define SEA_WIND_VEER_PERIOD 61.0
+float seaTime = 0.0;
 float cameraAngle = 1.6;
 bool seaActive = false;
 // ours until the islands (P5): Enter at sea brings the ship back to the port it left
 #define SEA_PORT_KEY 13
 #define SEA_AUTO_PORT_MS 5000
 
-// The hero on his ship; the camera flies round it until the player takes the mouse, the run needs no input.
-void Sea_Start()
+// The hero on his ship at the harbour of an island (a key of PdmIslands); the camera flies round it
+// until the player takes the mouse, the run needs no input.
+void Sea_Start(string islandKey)
 {
 	Sea_MapShipKeys();
 	MapKey("Sea_ToPort", SEA_PORT_KEY);
 	Sound_StopLocation();
 	Sound_Music("Freesailing");
 	Sea_CreateWorld();
-	int hero = Sea_AddShip(PlayerCard, PlayerShipCard.type_key, 0.0, 0.0, 0.0);
+	float x = 0.0;
+	float z = 0.0;
+	float ay = 0.0;
+	if (Sea_CreateIsland(islandKey))
+	{
+		x = stf(PdmIslands.(islandKey).port_x);
+		z = stf(PdmIslands.(islandKey).port_z);
+		ay = stf(PdmIslands.(islandKey).port_ay);
+	}
+	int hero = Sea_AddShip(PlayerCard, PlayerShipCard.type_key, x, z, ay);
 	SeaShips[hero].MainCharacter = 1;
 	Sea_CreateCamera(hero);
 	SetEventHandler("Sea_Tick", "Sea_Tick", 0);
@@ -99,6 +128,8 @@ void Sea_Release()
 	DeleteClass(&Vant);
 	DeleteClass(&Rope);
 	DeleteClass(&Sail);
+	DeleteClass(&Touch);
+	DeleteClass(&Island);
 	DeleteClass(&Sea);
 	DeleteClass(&Sky);
 	DeleteClass(&Weather);
@@ -133,7 +164,7 @@ void Sea_CreateWorld()
 	// the direction the wind blows to, about y from +z, and its speed in m/s; the sails take
 	// 12 m/s as full wind
 	Weather.Wind.Angle = 0.0;
-	Weather.Wind.Speed = 10.0;
+	Weather.Wind.Speed = SEA_WIND_SPEED;
 	Weather.isDone = "";
 
 	SetEventHandler("WhrCalcFogColor", "Sea_FogColor", 0);
@@ -158,14 +189,20 @@ void Sea_CreateWorld()
 	LayerAddObject(REALIZE, &Sea, 65530);
 	Sea.Sea2.WaterColor = argb(0, 30, 90, 115);
 	Sea.Sea2.SkyColor = argb(0, 205, 255, 255);
+	// the 64 frames of demos/sea/make_sea.py are waves running round a tile of 128 / Scale m, a wave
+	// of k crests per tile goes 1.6 * sqrt(k) times round a loop: deep water (period sqrt(2 pi L / g))
+	// only when the loop is 1.6 / sqrt(g Scale / (2 pi 128)) s, so AnimSpeed = 64 / that: 3.42 frames
+	// a second for the swell (waves of 24..142 m), 8.61 for the ripples (4..22 m). The day weather of
+	// TEHO (1.5 / 15) played the swell twice slower and the ripples twice faster than the sea, and its
+	// MoveSpeed slid the whole picture, a texture crawling over the water: the frames move the waves
 	Sea.Sea2.Amp1 = 3.0;
-	Sea.Sea2.AnimSpeed1 = 1.5;
+	Sea.Sea2.AnimSpeed1 = 3.42;
 	Sea.Sea2.Scale1 = 0.6;
-	Sea.Sea2.MoveSpeed1 = "2.0, 0.0, 0.0";
+	Sea.Sea2.MoveSpeed1 = "0.0, 0.0, 0.0";
 	Sea.Sea2.Amp2 = 0.8;
-	Sea.Sea2.AnimSpeed2 = 15.0;
+	Sea.Sea2.AnimSpeed2 = 8.61;
 	Sea.Sea2.Scale2 = 3.8;
-	Sea.Sea2.MoveSpeed2 = "1.0, 0.0, 1.0";
+	Sea.Sea2.MoveSpeed2 = "0.0, 0.0, 0.0";
 	Sea.Sea2.PosShift = 1.0;
 	Sea.Sea2.BumpScale = 0.05;
 	Sea.Sea2.Reflection = 0.6;
@@ -237,6 +274,30 @@ ref Sea_RiggingData()
 // A ship of the type typeKey (a key of PdmShipTypes, a record of WORLDS\Ships.idf) under the character
 // card (a record of PdmCharacters, or any object with .id and .nation) at x, z heading ay.
 // Returns its index in SeaShips.
+// The island comes before touch and the ships: they look it up once, when they are created. The depth
+// map round it is traced by the engine at the first start and saved in foam\islands.
+bool Sea_CreateIsland(string islandKey)
+{
+	if (islandKey == "" || !CheckAttribute(&PdmIslands, islandKey + ".model")) { return false; }
+	string model = PdmIslands.(islandKey).model;
+	CreateEntity(&Island, "island");
+	// lit by the sun of the weather, as the ships; no precomputed vertex colours
+	Island.LightingPath = "";
+	Island.dynamicLightsOn = 0;
+	Island.Technique = "DLightModel";
+	Island.FogDensity = 0.0015;
+	Island.ImmersionDistance = 3000.0;
+	Island.ImmersionDepth = 25.0;
+	SendMessage(&Island, "lsss", MSG_ISLAND_LOAD_GEO, "islands", "islands\" + model, model);
+	// before the sea: the sea is drawn over the shallows
+	LayerAddObject(REALIZE, &Island, 4);
+	CreateEntity(&Touch, "touch");
+	LayerAddObject(EXECUTE, &Touch, 1);
+	Touch.CollisionDepth = SEA_COLLISION_DEPTH;
+	Trace("PDM: sea at the island " + islandKey + " (" + model + ")");
+	return true;
+}
+
 int Sea_AddShip(aref card, string typeKey, float x, float z, float ay)
 {
 	if (seaShipCount == 0) { Sea_CreateRigging(); }
@@ -275,6 +336,10 @@ int Sea_AddShip(aref card, string typeKey, float x, float z, float ay)
 	SeaShipTypes[i].TurnDependWeight = 0.2;
 	SeaShipTypes[i].TurnDependSpeed = 0.3;
 	SeaShipTypes[i].WaterLine = 0.0;
+	// how fast the hull follows the sea under it, a share per second (ship.cpp ShipRocking): without
+	// it the engine takes 1.0 and the hull shook with every ripple; the usual values of the TEHO ships
+	SeaShipTypes[i].Rocking.y = 0.4;
+	SeaShipTypes[i].Rocking.az = 0.035;
 	// how fast the ship follows its target speed (x sideways, y turning, z ahead) and stops
 	SeaShipTypes[i].InertiaAccelerationX = 0.2;
 	SeaShipTypes[i].InertiaBrakingX = 2.0;
@@ -330,6 +395,10 @@ void Sea_Tick()
 {
 	cameraAngle = cameraAngle + 0.006;
 	ShipCamera.AngleY = cameraAngle;
+	seaTime = seaTime + SEA_TICK_MS / 1000.0;
+	float gust = SEA_GUST * sin(SEA_PI2 * seaTime / SEA_GUST_PERIOD) + SEA_GUST_FAST * sin(SEA_PI2 * seaTime / SEA_GUST_FAST_PERIOD);
+	Weather.Wind.Speed = SEA_WIND_SPEED * (1.0 + gust);
+	Weather.Wind.Angle = SEA_WIND_VEER * sin(SEA_PI2 * seaTime / SEA_WIND_VEER_PERIOD);
 	PostEvent("Sea_Tick", SEA_TICK_MS);
 }
 
