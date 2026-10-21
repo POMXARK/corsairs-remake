@@ -16,6 +16,8 @@
 string screenName = "";
 // the screen is over the town or the sea, not over the menu
 bool screenOverGame = false;
+// the main menu is open over the game (Escape): its pages go back to it, "Продолжить" back to the game (ours)
+bool screenGameMenu = false;
 // the screen Screen_Go opens, "" closes it; "click" and "activate" of one press change the page once
 string screenNext = "";
 bool screenGoing = false;
@@ -61,6 +63,7 @@ string Screen_Target(string node)
 string Screen_Parent(string name)
 {
 	if (name == "keycontrols") { return "options"; }
+	if (screenGameMenu && name != "mainmenu") { return "mainmenu"; }
 	if (screenOverGame) { return ""; }
 	return "mainmenu";
 }
@@ -88,6 +91,16 @@ void Screen_Close()
 	LayerFreeze(EXECUTE, false);
 	screenName = "";
 	screenOverGame = false;
+	screenGameMenu = false;
+}
+
+// Escape in the game: the main menu over it, as in the original, the game stands still under it
+void Screen_GameMenu()
+{
+	if (screenName != "") { return; }
+	Trace("PDM screen: the menu over the game");
+	screenGameMenu = true;
+	Screen_Open("mainmenu");
 }
 
 void Screen_Show(string name)
@@ -111,6 +124,8 @@ void Screen_Fill()
 		// without a game "Сохранить" and "Продолжить" cannot be chosen, as in the original
 		SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_SAVEGAME", screenOverGame);
 		SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_RESUMEGAME", screenOverGame);
+		// a new game over a running one needs the town taken down first: not yet
+		SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_NEWGAME", !screenOverGame);
 		return;
 	}
 	if (findSubStr(screenName, "messagebox", 0) == 0) { Screen_Text("EDITTEXT", screenMessage); return; }
@@ -324,6 +339,13 @@ void Screen_Command()
 	string command = GetEventData();
 	string node = GetEventData();
 	if (command != "click" && command != "activate") { return; }
+	if (screenName == "mainmenu")
+	{
+		if (node == "LB_RESUMEGAME") { Screen_Escape(); return; }
+		if (node == "LB_EXIT") { Screen_Message(PdmScreens.mainmenu.t.exit, "exit"); return; }
+		if (node == "LB_NEWGAME") { return; }
+	}
+	if (screenName == "messagebox" && node == "LB_YES" && screenMessageYes == "exit") { ExitProgram(); return; }
 	Screen_Click(node);
 }
 
@@ -352,9 +374,12 @@ void Screen_Go()
 // Escape on a screen: back, as its Exit
 bool Screen_Escape()
 {
-	if (screenName == "" || screenName == "mainmenu") { return false; }
+	if (screenName == "") { return false; }
+	if (screenName == "mainmenu" && !screenGameMenu) { return false; }
 	if (screenGoing) { return true; }
 	screenNext = Screen_Parent(screenName);
+	// the menu over the game goes back to the game
+	if (screenName == "mainmenu") { screenNext = ""; }
 	screenGoing = true;
 	PostEvent("Screen_Go", 0);
 	return true;

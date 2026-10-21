@@ -278,11 +278,13 @@ def jump_frame(rotations, start, end):
     return next((start + i for i, step in enumerate(steps) if step > limit), None)
 
 
-def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights, rotations):
+def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights, rotations, head=None):
     """The Storm actions the Character entity looks for, from the PDM ones (ACTIONS); heights: the
-    height of the pelvis per frame, for the steps."""
+    height of the pelvis per frame, for the steps; head: the bone the engine turns to look at someone."""
     text = f"; converted by tools/pdm_character.py, {FPS:g} frames a second as in the original\n"
     text += f"animation = {an_name}.an\n"
+    if head is not None:
+        text += f'data = "Head bone index", "{head}"\n'
     found = []
 
     def section(name, start, end, speed, loop=True, data=(), rate=1.0):
@@ -363,6 +365,8 @@ def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: fl
     for part, mesh in enumerate(meshes):
         mesh.vertices = [(p, n, uv, bone[part]) for p, n, uv, _ in mesh.vertices]
     drawn = drawn_blades([m.texture for m in meshes], parents)
+    # the head: the first part painted with a head or a face (doc-Head, hub-spa-face); a chicken has none
+    head = next((part for part, m in enumerate(meshes) if "head" in m.texture.lower() or "face" in m.texture.lower()), None)
     meshes = [m for part, m in enumerate(meshes) if part not in drawn]
 
     bone_parents = [-1] + [bone[parents[part]] for part in order[1:]]
@@ -382,7 +386,8 @@ def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: fl
     # anim_types.idf names the files in either case (traktir_man.idf for Traktir_Man.idf)
     anims = index_files(res / "WORLDS" / "CHARACTERS")
     found = write_ani(out / "animation" / f"{name}.ani", name, read_actions(anims[anim.lower()]), k, frames,
-                      [p[1] for p in root_positions], rotations)
+                      [p[1] for p in root_positions], rotations,
+                      head=order.index(head) if head is not None else None)
     missing = []
     for stem in sorted(used):
         src = textures.get(stem)

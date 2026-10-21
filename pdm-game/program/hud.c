@@ -8,7 +8,7 @@
 // in with the name of the place it leads to; Space goes through it (the original "Действие").
 // Top right at sea the navigator (NAVIGATOR.dll): the map of the island round the ship in the brooch, the letters
 // of the compass and the wind arrow turned with the heading, the speeds of the ship and the wind on its plate.
-// F2 at sea does the possible action: lands at the harbour (ours: the original lands by the menu only).
+// Space at sea does the possible action: lands at the harbour (ours: the original lands by the menu only).
 
 // shared/battle_interface/msg_control.h and log_and_action.h
 #define BI_IN_CREATE_SHIP 46011
@@ -19,7 +19,6 @@
 // the keys of the original (controls.ini): Tab the icons, arrows and Enter in them, F2 the possible action,
 // Space the action on the land
 #define HUD_KEY_MENU 9
-#define HUD_KEY_FAST 113
 #define HUD_KEY_ACTION 32
 // the layout of the original is for 800x600 (ours: everything scales with the height of the window)
 #define HUD_BASE_H 600.0
@@ -96,7 +95,9 @@ void Hud_CreateLog()
 	act.text1.font = "PDM_LOGBOOK_18";
 	act.text1.scale = 1.0;
 	act.text1.color = argb(255, 255, 230, 160);
-	act.text1.pos.x = hudW - Hud_Px(48.0);
+	// the note ends at the right edge of the icon: "Выход в море" is wider than the icon (ours)
+	act.text1.align = "right";
+	act.text1.pos.x = hudW - Hud_Px(16.0);
 	act.text1.pos.y = Hud_Px(top + 54.0);
 	act.text1.text = "";
 	act.text1.refreshable = 1;
@@ -111,7 +112,8 @@ void Hud_CreateLog()
 	hudAction = "";
 	Hud_SetAction("Nothing", "");
 	SetEventHandler("BI_FastCommand", "Hud_FastCommand", 0);
-	MapKey("BIFastCommand", HUD_KEY_FAST);
+	// Space is the action on the land and at sea, as F2 of controls.ini (ours: one key for both)
+	MapKey("BIFastCommand", HUD_KEY_ACTION);
 }
 
 void Hud_DefineAction(string name, int icon)
@@ -140,7 +142,7 @@ void Hud_SetAction(string name, string note)
 	SendMessage(&ScreenLog, "ls", LOG_SET_ACTIVE_ACTION, name);
 }
 
-// F2 (Space on the land): the action of the icon; deleting the log entity here is not safe, the actions post
+// Space: the action of the icon; deleting the log entity here is not safe, the actions post
 void Hud_FastCommand()
 {
 	string action = GetEventData();
@@ -410,7 +412,7 @@ void Hud_SeaState()
 	hudMapFree = map != 0;
 }
 
-// every tick of the sea: the possible action of F2
+// every tick of the sea: the possible action of Space
 void Hud_SeaTick()
 {
 	if (!hudSea) { return; }

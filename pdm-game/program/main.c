@@ -22,6 +22,7 @@ aref PlayerShipType;
 #include "data\pdm_logic.c"
 #include "data\pdm_world.c"
 #include "data\pdm_voices.c"
+#include "data\pdm_voice_lines.c"
 #include "data\pdm_screens.c"
 #include "data\pdm_sound.c"
 #include "data\pdm_hud.c"
@@ -48,6 +49,7 @@ void Main()
 	PdmLogic_Init();
 	PdmWorld_Init();
 	PdmVoices_Init();
+	PdmVoiceLines_Init();
 	PdmScreens_Init();
 	PdmSound_Init();
 	PdmHud_Init();
@@ -97,9 +99,11 @@ void Pdm_Control()
 	Sea_Control(control);
 	// Escape in a dialog only leaves it, in the commands of the toolbar only closes them (the script hears the
 	// key before the battle interface does, the menu is still open)
+	// Escape in the game opens the main menu over it: "Продолжить" goes back, "Выход" asks and quits (ours)
 	if (control == "Pdm_Quit" && townTalkNpc < 0 && !Hud_MenuOpen())
 	{
-		Trace("PDM: quit");
-		ExitProgram();
+		// the main menu before a game: "Выход" asks, as its button does
+		if (screenName == "mainmenu") { Screen_Message(PdmScreens.mainmenu.t.exit, "exit"); return; }
+		Screen_GameMenu();
 	}
 }

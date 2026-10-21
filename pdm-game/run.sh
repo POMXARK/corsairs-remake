@@ -50,6 +50,8 @@ grep -qs '"label"' "$DIR/data/islands/Highrock.json" || python3 -I "$TOOLS/pdm_i
 [ -f "$DIR/program/data/pdm_sound.c" ] || python3 -I "$TOOLS/pdm_sound.py" "$PDM" "$DIR"
 python3 -I "$TOOLS/pdm_data2c.py" "$DIR/data" "$DIR/program"
 python3 -I "$TOOLS/pdm_logic2c.py" "$DIR/data" "$DIR/program"
+# the neural voice-over of the speeches (docs/voice-over.md): binds the files that exist, none is fine
+[ -f "$DIR/program/data/pdm_voice_lines.c" ] || python3 -I "$TOOLS/pdm_voice_lines.py" "$DIR"
 # the scene to start with: menu, sea (the hero on his ship), review (all ship types side by side) or story
 echo "string StartScene = \"${SCENE:-menu}\";" > "$DIR/program/data/start.c"
 echo "string StartTown = \"${TOWN:-City_GrandaAvilia}\";" >> "$DIR/program/data/start.c"

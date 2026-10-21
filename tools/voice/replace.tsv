@@ -1,0 +1,3 @@
+# What the TTS reads wrong and how to say it: <what><TAB><how>, applied by pdm_voice_lines.py to the chunks.
+# "+" before a vowel is a stress mark (Qwen3-TTS, ESpeech read it; check your model on a few lines first).
+# Хайрок	Хайр+ок

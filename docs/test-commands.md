@@ -34,7 +34,7 @@ RECONVERT=1 corsairs-remake/pdm-game/run.sh build/Debug/engine   # всё ско
 | `SCENE=review` | смотр флота: все типы кораблей рядом |
 | `SCENE=town` | город `TOWN` (по умолчанию `City_GrandaAvilia`) |
 | `TOWN_AUTO=1` | герой сам идёт от причала в таверну и обратно |
-| `TOWN_AUTO=2` | то же и разговор с первым NPC таверны, у которого есть диалог |
+| `TOWN_AUTO=2` | то же и разговор с первым NPC таверны, у которого есть диалог: герой идёт к нему пешком (без телепорта), к стоящему за прилавком — к ближнему краю его точки, цель шагами по 0,25 м сдвигается к герою, пока Goto не примет её; заходит только в ту дверь, к которой шёл |
 | `TOWN_AUTO=4` | герой выходит в море, через 5 с возвращается к причалу (`Sea_ToPort`) и идёт в таверну; в каждом выходе стоит 1,5 с под значком действия (справа сверху), на море видна картинка корабля с полосами |
 | `TOWN_AUTO=5` | герой выходит в море, корабль ставится на 250 м дальше от гавани и плывёт к ней сам (время ×6); у гавани — заход в порт (`Sea_AtHarbour`), затем таверна; запускать с `TOWN=City_HighRock`: у Granda Avilia в данных нет гавани (harbour 0,0), корабль проходит мимо и уходит на карту мира |
 | `TOWN_AUTO=6` | герой выходит в море, оттуда на карту мира, автотест кликает по Хайроку на карте (так же, как мышь: `mousepos` → `Map_Click`), корабль плывёт к нему (из Хайрока — к Granda Avilia), выходит в море в 400 м от гавани, заходит в порт и идёт в таверну; в море время ×6 (так же в `TOWN_AUTO=5`) |
@@ -156,11 +156,40 @@ SCENE=town TOWN_AUTO=1 SOUND_FX_ONLY=1 RECORD_AUDIO=1 \
 python3 corsairs-remake/tools/audio_peaks.py videos/steps-test.mp4 6 8
 ```
 
+## Озвучка реплик
+
+Полностью — `docs/voice-over.md`. Из `corsairs-remake`:
+
+```bash
+python3 -I tools/pdm_voice_lines.py pdm-game                 # реплики → data/voice/lines.jsonl; два прогона — один md5
+python3 -I tools/pdm_voice_lines.py pdm-game --bind          # привязать готовые wav (program/data/pdm_voice_lines.c)
+python3 -I tools/pdm_voice_refs.py pdm-game                  # текст образцов Whisper'ом
+python3 -I tools/comfy_voice_batch.py pdm-game --limit 10    # проба через ComfyUI
+python3 -I tools/pdm_voice_check.py pdm-game                 # CER и темп → redo.txt / listen.txt
+```
+
+Проверка движка без нейросети — тоны на реплики падре Игнасио и `TOWN_AUTO=2` со звуком (`voice-over.md`, шаг 8): слышно приветствие, затем тон узла, ответ обрывает тон.
+
+## 3D-модели нейросетью
+
+Полностью — `docs/ai-models.md`. Из `corsairs-remake`:
+
+```bash
+python3 -I tools/pdm_model_views.py pdm-game hero1                 # 4 вида → data/ai_models/views/hero1_*.png
+python3 -I tools/comfy_model_batch.py pdm-game --only hero1        # GLB через ComfyUI → data/ai_models/glb
+python3 -I tools/pdm_glb2gm.py pdm-game hero1                      # в игру; два прогона — один md5
+python3 -I tools/pdm_glb2gm.py pdm-game hero1 --restore            # вернуть оригинал
+```
+
 ## Мир и патчи
 
 ```bash
 # вид сверху: зелёный — пол после вырезания препятствий, красный — модель в полосе тела, синий — точки .loc
 python3 corsairs-remake/tools/ptc_top.py $RES $RES/WORLDS/locations/tavern_spa.loc <out>.png
+
+# невидимые стены: швы пола (за ребром без соседа снова пол той же высоты) и несвязные части пола;
+# на ровном полу швов быть не должно, части — только дворы за стенами (~10 с на город)
+python3 -I corsairs-remake/tools/ptc_seams.py $RES City_GrandaAvilia tavern_spa
 
 # материалы пола в патчах (по ним выбираются звуки шагов)
 strings corsairs-remake/pdm-game/resource/models/locations/*.ptc | grep -o "snd_[a-z]*" | sort | uniq -c

@@ -21,6 +21,8 @@
 #define MSG_CHARACTER_GETPOS 30202
 #define MSG_CHARACTER_TELEPORT_AY 30211
 #define MSG_CHARACTER_TURNBYCHR 30341
+#define MSG_CHARACTER_HEADLOOK_DEFAULT 30380
+#define MSG_CHARACTER_HEADLOOK_CHARACTER 30382
 #define MSG_NPCHARACTER_SETTASK 30400
 #define MSG_CAMERA_SETTARGET 30500
 #define MSG_CAMERA_FOLLOW 30510
@@ -31,6 +33,9 @@
 #define TOWN_TALK_BACK 1.0
 #define TOWN_TALK_SIDE 0.5
 #define TOWN_TALK_HEIGHT 1.8
+// metres around an exit box that still take the exit: the patch is cut at the walls by the reach of
+// the body and the floor of City_Tendales ends 0.2 m short of the box of its sea exit (ours)
+#define TOWN_EXIT_REACH 0.5
 // townsfolk walk as zombi.dll of the original: models of class 3, 9, 10 (anim_types.idf) outside a
 // tavern and a residence go from point to point of type 3, never the one they stand at, come there
 // within 2 units (4.6 m) and stand 3 to 12 actions before they go on (rand % 10 + 3)
@@ -77,9 +82,17 @@ bool townAutoDone = false;
 bool townAutoTalking = false;
 int townAutoWait = 0;
 int townAutoPicks = 0;
+// the link of the door the autotest is sent to: a door it passes on the way is not taken
+string townAutoLink = "";
+// the one the autotest talks to stands at townAutoGoX/Z; the hero walks to a spot townAutoK steps of
+// TOWN_AUTO_STEP short of him; townAutoLastX/Z: where the hero was at the last look
+float townAutoGoX, townAutoGoY, townAutoGoZ, townAutoLastX, townAutoLastZ;
+int townAutoK = 0;
 object TownVisited;
 
 #define TOWN_TALK_DIST 3.0
+#define TOWN_AUTO_COUNTER 0.3
+#define TOWN_AUTO_STEP 0.25
 object TownDialog;
 // the NPC talked to (-1: no dialog), his dialog and its node on the screen
 int townTalkNpc = -1;
@@ -176,7 +189,8 @@ void Town_MapKeys()
 	MapKey("ChrTurnHR", 68);
 	MapKey("ChrRun", 16);
 	MapKey("ChrTurnH", 256);
-	MapKey("ChrCamTurnV", 257);
+	// the mouse up looks up: 4 is INVERSE_CONTROL of menu.c, included after this file
+	Menu_MapKey("ChrCamTurnV", 257, 4);
 	MapKey("Town_Talk", 69);
 	// polled by the dialog entity while it is open: arrows pick an answer, Space, Enter or the left
 	// button say it, PageUp/PageDown page a long speech, Escape leaves
@@ -188,6 +202,20 @@ void Town_MapKeys()
 	MapKey("DlgScrollUp", 33);
 	MapKey("DlgScrollDown", 34);
 	MapKey("DlgCancel", 27);
+}
+
+// while a dialog is open the hero stands: the camera looks at the speaker, not after him
+void Town_LockHero(bool lock)
+{
+	LockControl("ChrForward", lock);
+	LockControl("ChrBackward", lock);
+	LockControl("ChrTurnHL", lock);
+	LockControl("ChrTurnHR", lock);
+	LockControl("ChrRun", lock);
+	LockControl("ChrTurnH", lock);
+	LockControl("ChrCamTurnV", lock);
+	LockControl("Town_Talk", lock);
+	LockControl("BIFastCommand", lock);
 }
 
 void Town_Load(string loc, string from)
@@ -245,9 +273,7 @@ void Town_Load(string loc, string from)
 	SendMessage(&Scene, "si", "SetActiveCamera", &TownCamera);
 
 	Town_PlaceCharacters(data);
-	// the action of the original on the land is Space (a control has one key: F2 of the sea is taken off)
 	Hud_CreateLog();
-	MapKey("BIFastCommand", HUD_KEY_ACTION);
 	// the voices of many when the location is full of people
 	Sound_Location(data.sound, townNpcCount > 2);
 	townLoaded = true;
@@ -493,18 +519,19 @@ string Town_Norm(string s)
 	return out;
 }
 
-// the exit point whose box the character stands in, -1 if none
+// the exit point whose box the character stands in or by (TOWN_EXIT_REACH), -1 if none
 int Town_ExitAt(aref data, ref chr)
 {
 	float x, y, z;
 	SendMessage(chr, "leee", MSG_CHARACTER_GETPOS, &x, &y, &z);
 	int n = sti(data.points);
 	string at;
+	float r = TOWN_EXIT_REACH;
 	for (int i = 0; i < n; i++)
 	{
 		at = "p" + i;
 		if (sti(data.(at).type) != 1) { continue; }
-		if (x >= stf(data.(at).bx0) && x <= stf(data.(at).bx1) && z >= stf(data.(at).bz0) && z <= stf(data.(at).bz1))
+		if (x >= stf(data.(at).bx0) - r && x <= stf(data.(at).bx1) + r && z >= stf(data.(at).bz0) - r && z <= stf(data.(at).bz1) + r)
 		{
 			return i;
 		}
@@ -530,7 +557,7 @@ void Town_Tick()
 	if (link == "sea") { Hud_SetAction("ToSea", note); }
 	else { Hud_SetAction("ToDoor", note); }
 	// the autotest walks in and stands a moment under the icon
-	if (TownAuto && exit != townArriveExit) { PostEvent("Town_ExitGo", HUD_AUTO_EXIT_MS, "l", townGen); }
+	if (TownAuto && exit != townArriveExit && link == townAutoLink) { PostEvent("Town_ExitGo", HUD_AUTO_EXIT_MS, "l", townGen); }
 }
 
 // Space (BI_FastCommand of hud.c): through the exit the hero stands in. Called in the frame of the log
@@ -662,9 +689,11 @@ void Town_TalkTo(int i)
 	// the window shows "name lastname" of the speaker
 	TownNpc[i].name = PdmCharacters.(id).name;
 	TownNpc[i].lastname = "";
-	// the hero stops, the speaker and the hero face each other
+	// the hero stops and faces the speaker; the speaker keeps the turn of his point (a drinker stays
+	// on his bench, a keeper behind his counter) and only turns his head to the hero (ours)
 	if (TownAuto) { SendMessage(&TownHero, "ls", MSG_NPCHARACTER_SETTASK, "Stay"); }
-	SendMessage(&TownNpc[i], "li", MSG_CHARACTER_TURNBYCHR, &TownHero);
+	Town_LockHero(true);
+	SendMessage(&TownNpc[i], "li", MSG_CHARACTER_HEADLOOK_CHARACTER, &TownHero);
 	SendMessage(&TownHero, "li", MSG_CHARACTER_TURNBYCHR, &TownNpc[i]);
 	Town_TalkCamera(i);
 	CreateEntity(&TownDialog, "dialog");
@@ -708,6 +737,8 @@ void Town_DialogNode(string node)
 	aref nd;
 	makearef(nd, PdmDialogs.(townTalkKey).(node));
 	TownDialog.Text = nd.text;
+	// the neural voice of the speech (docs/voice-over.md), said after the greeting; the entity cuts the last one
+	if (CheckAttribute(&PdmVoiceLines, townTalkKey + "." + node)) { TownDialog.voice = PdmVoiceLines.(townTalkKey).(node); }
 	DeleteAttribute(&TownDialog, "Links");
 	int n = GetAttributesNum(nd);
 	int shown = 0;
@@ -755,6 +786,8 @@ void Town_DialogClose()
 	DeleteClass(&TownDialog);
 	SendMessage(&TownCamera, "li", MSG_CAMERA_SETTARGET, &TownHero);
 	SendMessage(&TownCamera, "l", MSG_CAMERA_FOLLOW);
+	SendMessage(&TownNpc[townTalkNpc], "l", MSG_CHARACTER_HEADLOOK_DEFAULT);
+	Town_LockHero(false);
 	string id = TownNpc[townTalkNpc].id;
 	Trace("PDM dialog: closed, " + id + " has the dialog " + PdmCharacters.(id).dialog_key);
 	Town_WanderHold(townTalkNpc, false);
@@ -851,19 +884,21 @@ void Town_AutoDoor(string link)
 	aref data;
 	makearef(data, PdmLocations.(townHere));
 	int door = Town_FindPoint(data, 1, link);
+	townAutoLink = link;
 	if (door < 0)
 	{
 		Trace("PDM town: autotest finds no door " + link);
 		PostEvent("Town_AutoQuit", 0);
 		return;
 	}
-	// the exit point itself can lie behind the wall: walk to the spot of its box nearest to the
-	// arrival point, half a metre inside the box: Goto point stops some 0.2 m short
+	// the exit point itself lies in the door, the half of the box in the house is cut off the floor:
+	// walk to the spot of the box nearest to the arrival point, Goto point stops some 0.2 m short,
+	// within TOWN_EXIT_REACH
 	string at = "p" + door;
-	float x0 = stf(data.(at).bx0) + 0.5;
-	float z0 = stf(data.(at).bz0) + 0.5;
-	float x1 = stf(data.(at).bx1) - 0.5;
-	float z1 = stf(data.(at).bz1) - 0.5;
+	float x0 = stf(data.(at).bx0);
+	float z0 = stf(data.(at).bz0);
+	float x1 = stf(data.(at).bx1);
+	float z1 = stf(data.(at).bz1);
 	float cx = (x0 + x1) * 0.5;
 	float cz = (z0 + z1) * 0.5;
 	float bestDist = 1000000.0;
@@ -922,9 +957,57 @@ void Town_AutoTalkGo(string who, string want)
 	Town_WanderHold(townAutoNpc, true);
 	float x, y, z;
 	SendMessage(&TownNpc[townAutoNpc], "leee", MSG_CHARACTER_GETPOS, &x, &y, &z);
-	Trace("PDM dialog: autotest goes to " + TownNpc[townAutoNpc].id);
-	SendMessage(&TownHero, "lsfff", MSG_NPCHARACTER_SETTASK, "Goto point", x, y, z);
+	// a trader stands behind his counter, the box of his point (type 5): Goto point finds no way there and
+	// the hero does not move. Ours: to the spot of the box nearest to the hero, TOWN_AUTO_COUNTER off it
+	aref data;
+	makearef(data, PdmLocations.(townHere));
+	string at = "p" + TownNpc[townAutoNpc].wander.point;
+	if (!sti(TownNpc[townAutoNpc].wander.on) && stf(data.(at).bx0) < stf(data.(at).bx1))
+	{
+		float hx, hy, hz;
+		SendMessage(&TownHero, "leee", MSG_CHARACTER_GETPOS, &hx, &hy, &hz);
+		float bx = hx;
+		float bz = hz;
+		if (bx < stf(data.(at).bx0)) { bx = stf(data.(at).bx0); }
+		if (bx > stf(data.(at).bx1)) { bx = stf(data.(at).bx1); }
+		if (bz < stf(data.(at).bz0)) { bz = stf(data.(at).bz0); }
+		if (bz > stf(data.(at).bz1)) { bz = stf(data.(at).bz1); }
+		float len = sqrt((hx - bx) * (hx - bx) + (hz - bz) * (hz - bz));
+		if (len > TOWN_AUTO_COUNTER)
+		{
+			x = bx + (hx - bx) * TOWN_AUTO_COUNTER / len;
+			z = bz + (hz - bz) * TOWN_AUTO_COUNTER / len;
+		}
+	}
+	townAutoGoX = x;
+	townAutoGoY = y;
+	townAutoGoZ = z;
+	townAutoK = 0;
+	Town_AutoTalkStep();
+	Trace("PDM dialog: autotest goes to " + TownNpc[townAutoNpc].id + " at " + x + ", " + z);
 	PostEvent("Town_AutoTalk", 1000);
+}
+
+// one sits at a table, off the patch, or on a bit of it the tables cut off the floor (pdm_world.py):
+// Goto point takes no spot without a node of the patch (AICharacter::CmdGotoPoint returns false), and
+// on a cut off bit it finds no way and the hero stands. Ours: the spot steps TOWN_AUTO_STEP from the one
+// to talk to towards the hero till Goto point takes it; Town_AutoTalk steps on while the hero stands
+void Town_AutoTalkStep()
+{
+	float hx, hy, hz;
+	SendMessage(&TownHero, "leee", MSG_CHARACTER_GETPOS, &hx, &hy, &hz);
+	townAutoLastX = hx;
+	townAutoLastZ = hz;
+	float far = sqrt((hx - townAutoGoX) * (hx - townAutoGoX) + (hz - townAutoGoZ) * (hz - townAutoGoZ));
+	int ok = 0;
+	float t;
+	while (ok == 0 && townAutoK * TOWN_AUTO_STEP < far)
+	{
+		t = townAutoK * TOWN_AUTO_STEP / far;
+		ok = SendMessage(&TownHero, "lsfff", MSG_NPCHARACTER_SETTASK, "Goto point",
+			townAutoGoX + (hx - townAutoGoX) * t, townAutoGoY, townAutoGoZ + (hz - townAutoGoZ) * t);
+		townAutoK++;
+	}
 }
 
 // talks as soon as the hero is near enough, at most 90 s later: an NPC walks a town slowly
@@ -937,6 +1020,13 @@ void Town_AutoTalk()
 	if (d > TOWN_TALK_DIST * TOWN_TALK_DIST && townAutoWait < 180)
 	{
 		townAutoWait++;
+		// standing still for a second: no way to that spot, the next one
+		if (townAutoWait % 2 == 0)
+		{
+			if (abs(hx - townAutoLastX) + abs(hz - townAutoLastZ) < 0.05) { Town_AutoTalkStep(); }
+			townAutoLastX = hx;
+			townAutoLastZ = hz;
+		}
 		// every 10 s where the hero is: a stop on the way shows in the log
 		if (townAutoWait % 20 == 0) { Town_AutoWhere(); }
 		PostEvent("Town_AutoTalk", 500);
