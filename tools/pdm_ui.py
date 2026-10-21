@@ -228,6 +228,7 @@ class Converter:
                 full = image.resize((1024, 768), Image.LANCZOS)
                 tex, tw, th = self.texture(full, stem)
                 nodes.append(("PICTURE", "BACKGROUND"))
+                self.back = (tex, 768 / th)
                 lines += ["[BACKGROUND]", "position = 0,0,800,600", f"textureName = {tex}",
                           f"textureRect = 0,0,1,{768 / th:g}", ""]
             elif low.startswith("title"):
@@ -319,8 +320,15 @@ class Converter:
         font = self.font(a["font"])
         line_h = round(self.fonts[font][2]) + 2
         ix, iy = int(a["xl"]), int(a["yl"])
-        nodes = [("PICTURE", "MAP"), ("PICTURE", "SHIP"), ("FORMATEDTEXT", "ISLANDS")]
-        lines = ["[MAP]", f"position = {x},{y},{x + w},{y + h}", f"textureName = {tex}",
+        # on a wide window map.c draws the background in two halves and repeats a strip of its middle
+        # between them (BACK_TILE<n>, ours): the frame grows longer without stretching
+        back, bv = self.back
+        nodes, lines = [], []
+        for name in ["BACK_RIGHT"] + [f"BACK_TILE{i}" for i in range(MAP_BACK_TILES)]:
+            nodes.append(("PICTURE", name))
+            lines += [f"[{name}]", "position = 0,0,0,0", f"textureName = {back}", f"textureRect = 0,0,1,{bv:g}", ""]
+        nodes += [("PICTURE", "MAP"), ("PICTURE", "SHIP"), ("FORMATEDTEXT", "ISLANDS")]
+        lines += ["[MAP]", f"position = {x},{y},{x + w},{y + h}", f"textureName = {tex}",
                  f"textureRect = 0,0,{w / tw:g},{h / th:g}", "",
                  "[SHIP]", f"position = {x},{y},{x + ship.width},{y + ship.height}", f"textureName = {stex}",
                  f"textureRect = 0,0,{ship.width / sw:g},{ship.height / sh:g}", "",
@@ -427,6 +435,8 @@ class Converter:
 
 # the screens of the game; the common files (interfaces.ini, pictures, strings) list what is converted,
 # so every run converts all of them and the screens of the command line come on top
+# pictures of the strip that lengthens the map frame on a wide window: 8 x 200 px covers 32:9
+MAP_BACK_TILES = 8
 SCREENS = [("menu.ini", "MainMenu"), ("map.ini", "MainMap")]
 
 

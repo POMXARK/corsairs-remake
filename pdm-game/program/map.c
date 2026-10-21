@@ -16,6 +16,13 @@
 #define MAP_VIEW_Y 27
 #define MAP_VIEW_W 587
 #define MAP_VIEW_H 484
+// the background is cut here, the strip MAP_BACK_TILE wide before the cut lengthens it on a wide window,
+// MAP_BACK_TILES pictures of it in mainmap.ini (tools/pdm_ui.py); its texture is 768 of 1024 high (ours)
+#define MAP_BACK_SPLIT 320
+#define MAP_BACK_SPLIT_Y 300
+#define MAP_BACK_TILE 200
+#define MAP_BACK_TILES 8
+#define MAP_BACK_V 0.75
 // IMAGES\MAP\ship.tga
 #define MAP_SHIP_W 35
 #define MAP_SHIP_H 24
@@ -35,6 +42,11 @@ float mapToY = 0.0;
 string mapTarget = "";
 string mapFrom = "";
 bool mapActive = false;
+// the window over the map on this screen: wider than map_rect on a wide window (Map_Layout)
+int mapViewX = MAP_VIEW_X;
+int mapViewY = MAP_VIEW_Y;
+int mapViewW = MAP_VIEW_W;
+int mapViewH = MAP_VIEW_H;
 int mapIslandCount = 0;
 // the keys of PdmIslands in the order of the list
 object MapIslands;
@@ -76,6 +88,7 @@ void Map_Start(string fromIsland)
 	SetEventHandler("Map_Exit", "Map_Exit", 0);
 	SetEventHandler("Map_AutoSail", "Map_AutoSail", 0);
 	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\mainmap.ini");
+	Map_Layout();
 	Map_FillIslands();
 	Map_View();
 	Sound_StopLocation();
@@ -111,20 +124,100 @@ void Map_FillIslands()
 	SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, "ISLANDS", 1, from);
 }
 
+// The screen of the original is 4:3. On a wider window (ScreenLeft of the xinterface: how far its 800 x 600
+// rect moved in) the background is cut at MAP_BACK_SPLIT and its halves go to the edges; the strip before the
+// cut repeats between them (BACK_TILE<n> of tools/pdm_ui.py), so the frame of the map grows longer and nothing
+// is stretched. On a narrower one (5:4, ScreenTop) the same is done up and down. The window over the map grows
+// with the frame and shows more of the parchment, the panel with the list keeps to the right top corner (ours).
+// The messages take positions on the whole window, not in the 800 x 600 rect.
+void Map_Layout()
+{
+	int edge = 0;
+	int top = 0;
+	if (CheckAttribute(&GameInterface, "ScreenLeft")) { edge = sti(GameInterface.ScreenLeft); }
+	if (CheckAttribute(&GameInterface, "ScreenTop")) { top = sti(GameInterface.ScreenTop); }
+	int width = 800 + 2 * edge;
+	int height = 600 + 2 * top;
+	mapViewX = MAP_VIEW_X;
+	mapViewY = MAP_VIEW_Y;
+	mapViewW = MAP_VIEW_W + 2 * edge;
+	mapViewH = MAP_VIEW_H + 2 * top;
+	int i, at, w;
+	string node;
+	if (top > 0)
+	{
+		Map_BackPiece("BACKGROUND", 0, 0, 0, 0, 800, MAP_BACK_SPLIT_Y);
+		Map_BackPiece("BACK_RIGHT", 0, MAP_BACK_SPLIT_Y + 2 * top, 0, MAP_BACK_SPLIT_Y, 800, 600 - MAP_BACK_SPLIT_Y);
+		at = MAP_BACK_SPLIT_Y;
+		for (i = 0; i < MAP_BACK_TILES; i++)
+		{
+			node = "BACK_TILE" + i;
+			w = Map_TileSize(MAP_BACK_SPLIT_Y + 2 * top - at);
+			Map_BackPiece(node, 0, at, 0, MAP_BACK_SPLIT_Y - MAP_BACK_TILE, 800, w);
+			at = at + w;
+		}
+	}
+	else
+	{
+		Map_BackPiece("BACKGROUND", 0, 0, 0, 0, MAP_BACK_SPLIT, 600);
+		Map_BackPiece("BACK_RIGHT", MAP_BACK_SPLIT + 2 * edge, 0, MAP_BACK_SPLIT, 0, 800 - MAP_BACK_SPLIT, 600);
+		at = MAP_BACK_SPLIT;
+		for (i = 0; i < MAP_BACK_TILES; i++)
+		{
+			node = "BACK_TILE" + i;
+			w = Map_TileSize(MAP_BACK_SPLIT + 2 * edge - at);
+			Map_BackPiece(node, at, 0, MAP_BACK_SPLIT - MAP_BACK_TILE, 0, w, 600);
+			at = at + w;
+		}
+	}
+	SendMessage(&GameInterface, "lslllll", MSG_INTERFACE_MSG_TO_NODE, "MAP", 0, mapViewX, mapViewY, mapViewX + mapViewW, mapViewY + mapViewH);
+	// -1: the position message of every node (inode.cpp), the rects of mainmap.ini moved right
+	int dx = 2 * edge;
+	Map_MoveNode("ISLANDS", 650 + dx, 125, 758 + dx, 386);
+	Map_MoveNode("LB_EXIT", 657 + dx, 34, 771 + dx, 75);
+	Map_MoveNode("LB_ISLANDUP", 763 + dx, 123, 784 + dx, 141);
+	Map_MoveNode("LB_ISLANDDOWN", 763 + dx, 370, 784 + dx, 388);
+	// a string collection moves its strings by the change of its rect, the 800 x 600 one at edge, top: by
+	// edge to the right and back up to the top of the window, as the nodes above
+	Map_MoveNode("TITLES", dx, 0, dx + 800, 600);
+	Trace("PDM map: window " + width + " x " + height + ", the map in it " + mapViewW + " x " + mapViewH);
+}
+
+// how much of the strip still goes before the second half: whole strips, the rest, then none
+int Map_TileSize(int left)
+{
+	if (left > MAP_BACK_TILE) { return MAP_BACK_TILE; }
+	if (left < 0) { return 0; }
+	return left;
+}
+
+// the piece of the background at u, v (in its 800 x 600) w x h big, put at x, y
+void Map_BackPiece(string node, int x, int y, int u, int v, int w, int h)
+{
+	SendMessage(&GameInterface, "lslllll", MSG_INTERFACE_MSG_TO_NODE, node, 0, x, y, x + w, y + h);
+	SendMessage(&GameInterface, "lslffff", MSG_INTERFACE_MSG_TO_NODE, node, 1,
+		u / 800.0, (u + w) / 800.0, v * MAP_BACK_V / 600.0, (v + h) * MAP_BACK_V / 600.0);
+}
+
+void Map_MoveNode(string node, int left, int top, int right, int bottom)
+{
+	SendMessage(&GameInterface, "lsllllll", MSG_INTERFACE_MSG_TO_NODE, node, -1, 4, left, top, right, bottom);
+}
+
 // the window over the map follows the ship
 void Map_View()
 {
-	float left = mapX - MAP_VIEW_W / 2;
-	float top = mapY - MAP_VIEW_H / 2;
-	if (left > MAP_W - MAP_VIEW_W) { left = MAP_W - MAP_VIEW_W; }
-	if (top > MAP_H - MAP_VIEW_H) { top = MAP_H - MAP_VIEW_H; }
+	float left = mapX - mapViewW / 2;
+	float top = mapY - mapViewH / 2;
+	if (left > MAP_W - mapViewW) { left = MAP_W - mapViewW; }
+	if (top > MAP_H - mapViewH) { top = MAP_H - mapViewH; }
 	if (left < 0.0) { left = 0.0; }
 	if (top < 0.0) { top = 0.0; }
 	SendMessage(&GameInterface, "lslffff", MSG_INTERFACE_MSG_TO_NODE, "MAP", 1,
-		left / MAP_TEX_W, (left + MAP_VIEW_W) / MAP_TEX_W, top / MAP_TEX_H, (top + MAP_VIEW_H) / MAP_TEX_H);
+		left / MAP_TEX_W, (left + mapViewW) / MAP_TEX_W, top / MAP_TEX_H, (top + mapViewH) / MAP_TEX_H);
 	// an int takes a float rounded down
-	int x = MAP_VIEW_X + mapX - left - MAP_SHIP_W / 2;
-	int y = MAP_VIEW_Y + mapY - top - MAP_SHIP_H / 2;
+	int x = mapViewX + mapX - left - MAP_SHIP_W / 2;
+	int y = mapViewY + mapY - top - MAP_SHIP_H / 2;
 	SendMessage(&GameInterface, "lslllll", MSG_INTERFACE_MSG_TO_NODE, "SHIP", 0, x, y, x + MAP_SHIP_W, y + MAP_SHIP_H);
 	// the picture faces right: sailing west it is mirrored
 	if (mapTarget != "" && mapToX < mapX)
