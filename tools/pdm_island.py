@@ -7,9 +7,10 @@ model, in metres by the scale of the ships, with their textures in textures/isla
 The island entity takes models/islands/<Name>/<Name>.gm and the depth map round it, foam/islands/<Name>.tga
 and .ini: made here from the same model (the engine would trace it at the first start, minutes in Debug).
 
-Where the ship of the hero appears at the island, and the harbour it sails into, go to <data>/islands/<Name>.json (pdm_data2c.py puts
-it into PdmIslands): the open water nearest the harbour of the town, facing it. The harbour is the
-shallows strip of the model (wsea*), or the middle of the island when there is none.
+Where the ship of the hero appears at the island, the harbour it sails into and how far from the harbour
+the world map opens (exit_r) go to <data>/islands/<Name>.json (pdm_data2c.py puts it into PdmIslands):
+the open water nearest the harbour of the town, facing it. The harbour is the shallows strip of the
+model (wsea*), or the middle of the island when there is none.
 
 usage: pdm_island.py <PDM_dir> <resource_out> <Island|all> [--name Name] [--scale K] [--data DIR]
 """
@@ -42,6 +43,8 @@ HMAP_MAXDEPTH = 20.0
 # the ship keeps this far from land and from water shallower than a hull (ours)
 PORT_CLEARANCE = 120.0
 LAND_DEPTH = -6.0
+# the ship leaves for the world map this far beyond the farthest corner of the island from the harbour (ours)
+MAP_EXIT_MARGIN = 600.0
 
 
 def island_model(name):
@@ -170,11 +173,14 @@ def convert(res, out, island, name, k, data=None):
     if data:
         port = np.mean(harbour, axis=0) if harbour else centre
         x, z, ay = port_place(h, centre, step, (port[0], port[2]))
+        corners = [(centre[0] + sx * size[0] / 2, centre[2] + sz * size[2] / 2) for sx in (-1, 1) for sz in (-1, 1)]
+        exit_r = max(math.hypot(cx - port[0], cz - port[2]) for cx, cz in corners) + MAP_EXIT_MARGIN
         dst = Path(data) / "islands" / f"{name}.json"
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(json.dumps({"model": name, "port_x": round(x, 1), "port_z": round(z, 1),
                                    "port_ay": round(ay, 3), "harbour_x": round(float(port[0]), 1),
-                                   "harbour_z": round(float(port[2]), 1)}, indent=1) + "\n")
+                                   "harbour_z": round(float(port[2]), 1),
+                                   "exit_r": round(exit_r)}, indent=1) + "\n")
         line += f", the ship at {x:.0f}, {z:.0f} heading {math.degrees(ay):.0f}"
     print(line)
 

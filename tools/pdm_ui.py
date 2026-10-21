@@ -2,7 +2,8 @@
 into XINTERFACE screens of Storm Engine.
 
 Usage: pdm_ui.py <Sea Dogs install dir with RESOURCE> <game dir> [Section ...]
-The sections default to MainMenu. Writes into <game dir>/resource:
+The screens are always [MainMenu] of INI/menu.ini and [MainMap] of INI/map.ini (the world map), the
+sections of the command line come from menu.ini. Writes into <game dir>/resource:
   ini/interfaces/{interfaces,defaultnode,pictures}.ini and <section>.ini per screen,
   ini/texts/language.ini and texts/russian/common.ini (the strings of TEXTS/RUSSIAN/INI/interface.ini),
   ini/fonts.ini and textures/fonts/*.tx (the fonts of INI/fonts.ini rendered from a free font),
@@ -106,13 +107,18 @@ class Converter:
         self.pdm = Original(pdm)
         self.game = Path(game)
         self.resource = self.game / "resource"
-        menu_ini = self.pdm.find("INI/menu.ini")
-        self.ini = read_ini(menu_ini)
-        self.base = "IMAGES/" + dict(self.ini["Common"])["path"]
+        self.menu = self.read_screens("menu.ini")
         self.strings = self.read_strings()
         self.fonts = {}     # name -> (size of the virtual screen, line height of the atlas)
         self.pictures = {}  # group -> (texture, width, height, [(name, x1, y1, x2, y2)], size of a button)
         self.skipped = []
+
+    def read_screens(self, file):
+        """INI/<file>: the screens of one DLL; the paths of their pictures start at [Common] path."""
+        self.ini = read_ini(self.pdm.find("INI/" + file))
+        self.ini_name = file
+        self.base = "IMAGES/" + dict(self.ini["Common"])["path"]
+        return self.ini
 
     # ---------- texts and fonts ----------
 
@@ -170,7 +176,7 @@ class Converter:
         """<file>-nor.tga and -hi.tga in one atlas: TEXTBUTTON draws a left and a right piece of their
         own width and stretches the middle, so the halves are the pieces and the middle is 2 pixels."""
         stem = re.split(r"[\\/]", file)[-1].lower()
-        group = "PDM_" + stem.upper()
+        group = "PDM_" + stem.upper().replace("-", "_")
         if group in self.pictures:
             return group, self.pictures[group][4]
         nor, hi = self.image(file + "-nor.tga"), self.image(file + "-hi.tga")
@@ -204,11 +210,15 @@ class Converter:
             y = int(a.get("yl", 0))
         return x, y
 
-    def screen(self, section):
+    def screen(self, file, section):
+        self.read_screens(file)
         nodes, lines, titles = [], [], []
-        buttons = []
+        buttons, chart = [], {}
         for key, value in self.ini[section]:
             low = key.lower()
+            if section == "MainMap" and low in ("map_pos", "map_rect", "editisland"):
+                chart[low] = value
+                continue
             if low == "background":
                 image = self.image(value)
                 if image is None:
@@ -237,7 +247,12 @@ class Converter:
                 titles.append(f"string = {key_name},font:{name},pos:{{{x},{y}}},fc:{{{rgb(a.get('rgb'), '255,255,255')}}},"
                               f"bc:{{0,0,0,0}},scale:{1 / FONT_OVERSAMPLE:.3f},state:{{{state}}}")
             elif low.startswith("lb_"):
-                buttons.append((key, attrs(value)))
+                a = attrs(value)
+                if "file" not in a or not text_key(a.get("txt", "")) and "scroll" not in a["file"]:
+                    # the buttons of the message box of the map, drawn by MAP.dll over map_message.tga
+                    self.skipped.append(f"{section}.{key}: a button of a message box")
+                    continue
+                buttons.append((key, a))
             elif low == "ramka" or low.startswith("vignette"):
                 # frames\%s%d.tga and frames\decor\%s%d.tga are not in the installed game
                 self.skipped.append(f"{section}.{key}: the frame pieces are missing from the original")
@@ -246,6 +261,10 @@ class Converter:
             else:
                 self.skipped.append(f"{section}.{key}")
 
+        if chart:
+            n, l = self.chart(chart)
+            nodes += n
+            lines += l
         if titles:
             nodes.append(("STRINGCOLLECTION", "TITLES"))
             lines += ["[TITLES]"] + titles + [""]
@@ -258,9 +277,10 @@ class Converter:
             x, y = self.position(a, w, h)
             node = names[i]
             nodes.append(("TEXTBUTTON", node))
-            lines += [f"[{node}]", f"position = {x},{y},{x + w},{y + h}",
-                      f"string = {text_key(a.get('txt', ''))}",
-                      f"group = {group}", f"font = {font}", f"fontScale = {1 / FONT_OVERSAMPLE:.3f}",
+            string = text_key(a.get("txt", ""))
+            lines += [f"[{node}]", f"position = {x},{y},{x + w},{y + h}"]
+            lines += [f"string = {string}"] if string else []
+            lines += [f"group = {group}", f"font = {font}", f"fontScale = {1 / FONT_OVERSAMPLE:.3f}",
                       f"strOffset = {round((h - line_h) / 2)}",
                       f"fontColor = {rgb(a.get('rgbn'), '255,255,255')}",
                       f"fontColorSelected = {rgb(a.get('rgba'), '255,255,255')}",
@@ -273,13 +293,43 @@ class Converter:
                 lines.append(f"command = downstep,select:{names[i + 1]}")
             lines += ["command = deactivate", ""]
 
-        head = [f"; converted by tools/pdm_ui.py from [{section}] of INI/menu.ini of the original", f"[MAIN]"]
+        head = [f"; converted by tools/pdm_ui.py from [{section}] of INI/{self.ini_name} of the original", f"[MAIN]"]
         head += [f"item = {kind},{name}" for kind, name in nodes]
-        if names:
+        if chart:
+            head.append("start = ISLANDS")
+        elif names:
             head.append(f"start = {names[0]}")
         out = self.resource / f"ini/interfaces/{section.lower()}.ini"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text("\n".join(head + [""] + lines), encoding="utf-8")
+
+    # ---------- the world map ----------
+
+    def chart(self, chart):
+        """The map of MAP.dll: MAP\\$\\map_open.tga (the explored Caribbean with the islands drawn, 1200 x 900)
+        seen through a window of map_rect at map_pos, the ship of the hero (ship.tga) on it and the list of
+        the islands at EditIsland. program/map.c moves the window and the ship; the list it fills itself."""
+        x, y = (int(v) for v in chart["map_pos"].split(","))
+        _, _, w, h = (int(v) for v in chart["map_rect"].split(","))
+        full = self.image(f"{LANGUAGE}\\map_open.tga")
+        tex, tw, th = self.texture(full, "map_open")
+        ship = self.keyed(self.image("ship.tga"))
+        stex, sw, sh = self.texture(ship, "map_ship")
+        a = attrs(chart["editisland"])
+        font = self.font(a["font"])
+        line_h = round(self.fonts[font][2]) + 2
+        ix, iy = int(a["xl"]), int(a["yl"])
+        nodes = [("PICTURE", "MAP"), ("PICTURE", "SHIP"), ("FORMATEDTEXT", "ISLANDS")]
+        lines = ["[MAP]", f"position = {x},{y},{x + w},{y + h}", f"textureName = {tex}",
+                 f"textureRect = 0,0,{w / tw:g},{h / th:g}", "",
+                 "[SHIP]", f"position = {x},{y},{x + ship.width},{y + ship.height}", f"textureName = {stex}",
+                 f"textureRect = 0,0,{ship.width / sw:g},{ship.height / sh:g}", "",
+                 "[ISLANDS]", f"position = {ix},{iy},{ix + int(a['dx'])},{iy + int(a['dy'])}",
+                 f"font = {font}", f"fontScale = {1 / FONT_OVERSAMPLE:.3f}", f"lineSpace = {line_h}",
+                 f"color = {rgb(a.get('rgb'), '255,255,255')}", "backColor = 96,255,196,0", "backOffset = 2,0,2,0",
+                 "wrapoff = 1", "command = activate", "command = click", "command = upstep", "command = downstep", ""]
+        self.map_size = full.size
+        return nodes, lines
 
     # ---------- the dialog ----------
 
@@ -335,6 +385,7 @@ class Converter:
 
     def common(self):
         ini = self.resource / "ini"
+        self.read_screens("menu.ini")
         cursor = self.image(dict(self.ini["Common"])["cursor"])
         tex, _, _ = self.texture(self.keyed(cursor), "cursor")
         (ini / "interfaces/interfaces.ini").write_text(
@@ -376,15 +427,15 @@ class Converter:
 
 # the screens of the game; the common files (interfaces.ini, pictures, strings) list what is converted,
 # so every run converts all of them and the screens of the command line come on top
-SCREENS = ["MainMenu"]
+SCREENS = [("menu.ini", "MainMenu"), ("map.ini", "MainMap")]
 
 
 def main():
     pdm, game = sys.argv[1], sys.argv[2]
-    sections = SCREENS + [s for s in sys.argv[3:] if s not in SCREENS]
+    sections = SCREENS + [("menu.ini", s) for s in sys.argv[3:] if ("menu.ini", s) not in SCREENS]
     c = Converter(pdm, game)
-    for section in sections:
-        c.screen(section)
+    for file, section in sections:
+        c.screen(file, section)
     c.dialog()
     c.common()
     print(f"pdm_ui: {len(sections)} screens, the dialog, {c.voices} voices, {len(c.strings)} strings, {len(c.fonts)} fonts, "

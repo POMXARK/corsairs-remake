@@ -22,7 +22,8 @@ void Menu_MapKey(string controlName, int keyCode, int flags)
 	if (flags != 0) { SetControlFlags(control, flags); }
 }
 
-void Menu_Start()
+// the controls XINTERFACE reads, for the menu and the world map (map.c)
+void Menu_InterfaceKeys()
 {
 	// key codes are Windows virtual keys, 256/257 are the mouse axes
 	Menu_MapKey("ILClick", 1, 0);
@@ -32,7 +33,11 @@ void Menu_Start()
 	Menu_MapKey("IUp", 38, 0);
 	Menu_MapKey("IDown", 40, 0);
 	Menu_MapKey("IAction", 13, 0);
+}
 
+void Menu_Start()
+{
+	Menu_InterfaceKeys();
 	CreateEntity(&GameInterface, "xinterface");
 	LayerAddObject(INTERFACE_EXECUTE, &GameInterface, -100);
 	LayerAddObject(INTERFACE_REALIZE, &GameInterface, -100);

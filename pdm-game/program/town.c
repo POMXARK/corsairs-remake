@@ -547,6 +547,8 @@ void Town_Go(string link)
 void Sea_ToPort()
 {
 	if (!seaActive) { return; }
+	// the ship came over the world map to another island: its town
+	if (seaIsland != "" && seaIsland != townIsland) { townStreet = PdmIslands.(seaIsland).town; }
 	Sea_Release();
 	Trace("PDM: sea, to the port of " + townStreet);
 	if (townStreet == "")
@@ -555,6 +557,7 @@ void Sea_ToPort()
 		Town_Start(PdmIslands.(island).town, "sea");
 		return;
 	}
+	townIsland = Town_IslandOf(townStreet);
 	if (townIsland != "") { Sound_TownMusic(sti(PdmIslands.(townIsland).nation)); }
 	Town_Load(townStreet, "sea");
 	PostEvent("Town_Tick", TOWN_TICK_MS);
@@ -779,7 +782,8 @@ void Town_AutoPlan()
 	}
 	// 4: out to sea and back to the pier (Sea_ToPort), then into the tavern; 5: the same, the ship
 	// sails into the port by the harbour (sea.c Sea_AtHarbour)
-	if (TownAuto == 4 || TownAuto == 5) { Town_PlanAdd("go", "sea", ""); }
+	// 6: out to sea, over the world map to the next island and into its port (map.c)
+	if (TownAuto == 4 || TownAuto == 5 || TownAuto == 6) { Town_PlanAdd("go", "sea", ""); }
 	Town_PlanAdd("go", "tavern", "");
 	if (TownAuto == 2) { Town_PlanAdd("talk", "", ""); }
 	Town_PlanAdd("go", "street", "");

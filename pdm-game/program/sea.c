@@ -81,6 +81,15 @@ bool seaActive = false;
 // ours until the islands (P5): Enter at sea brings the ship back to the port it left
 #define SEA_PORT_KEY 13
 #define SEA_AUTO_PORT_MS 5000
+// M opens the world map (ours: the original opens it by sailing off the island)
+#define SEA_MAP_KEY 77
+#define SEA_AUTO_MAP_MS 3000
+// coming from the map the ship appears this far out from its place at the harbour, sailing in (ours)
+#define SEA_ARRIVE_OFFSET 400.0
+// TOWN_AUTO=5 and 6: the ship sails in at about 2 m/s, minutes of sea; the autotest runs the time faster (ours)
+#define SEA_AUTO_TIME_SCALE 6.0
+bool seaFromMap = false;
+bool seaAutoMapDone = false;
 
 // The hero on his ship at the harbour of an island (a key of PdmIslands); the camera flies round it
 // until the player takes the mouse, the run needs no input.
@@ -88,6 +97,7 @@ void Sea_Start(string islandKey)
 {
 	Sea_MapShipKeys();
 	MapKey("Sea_ToPort", SEA_PORT_KEY);
+	MapKey("Sea_ToMap", SEA_MAP_KEY);
 	Sound_StopLocation();
 	Sound_Music("Freesailing");
 	Sea_CreateWorld();
@@ -106,9 +116,12 @@ void Sea_Start(string islandKey)
 	{
 		seaIsland = islandKey;
 		seaPortDistance = Sea_HarbourDistance(x, z);
-		if (TownAuto == 5 && seaPortDistance > 0.0)
+		float offset = 0.0;
+		if (TownAuto == 5) { offset = SEA_AUTO_OFFSET; }
+		if (seaFromMap) { offset = SEA_ARRIVE_OFFSET; }
+		if (offset > 0.0 && seaPortDistance > 0.0)
 		{
-			float k = 1.0 + SEA_AUTO_OFFSET / seaPortDistance;
+			float k = 1.0 + offset / seaPortDistance;
 			x = stf(PdmIslands.(islandKey).harbour_x) + k * (x - stf(PdmIslands.(islandKey).harbour_x));
 			z = stf(PdmIslands.(islandKey).harbour_z) + k * (z - stf(PdmIslands.(islandKey).harbour_z));
 		}
@@ -119,10 +132,14 @@ void Sea_Start(string islandKey)
 	Sea_CreateCamera(hero);
 	SetEventHandler("Sea_Tick", "Sea_Tick", 0);
 	SetEventHandler("Sea_ToPort", "Sea_ToPort", 0);
+	SetEventHandler("Sea_ToMap", "Sea_ToMap", 0);
 	PostEvent("Sea_Tick", SEA_TICK_MS);
 	seaActive = true;
-	// TOWN_AUTO=4: the autotest sails out and comes back by itself
+	seaFromMap = false;
+	// TOWN_AUTO=4: the autotest sails out and comes back by itself; 6: out to the world map once
 	if (TownAuto == 4) { PostEvent("Sea_ToPort", SEA_AUTO_PORT_MS); }
+	if (TownAuto == 6 && !seaAutoMapDone) { seaAutoMapDone = true; PostEvent("Sea_ToMap", SEA_AUTO_MAP_MS); }
+	if (TownAuto == 5 || TownAuto == 6) { SetTimeScale(SEA_AUTO_TIME_SCALE); }
 	Trace("PDM: sea loaded");
 }
 
@@ -130,14 +147,33 @@ void Sea_Control(string control)
 {
 	// the scene is changed outside the input handler
 	if (control == "Sea_ToPort" && seaActive) { PostEvent("Sea_ToPort", 0); }
+	if (control == "Sea_ToMap" && seaActive) { PostEvent("Sea_ToMap", 0); }
+}
+
+// from the world map (map.c) to the sea at an island, the ship sailing in to its harbour
+void Sea_Arrive(string islandKey)
+{
+	seaFromMap = true;
+	Sea_Start(islandKey);
+}
+
+void Sea_ToMap()
+{
+	if (!seaActive) { return; }
+	string island = seaIsland;
+	Sea_Release();
+	Trace("PDM: sea, to the world map from " + island);
+	Map_Start(island);
 }
 
 // deletes what Sea_Start made, so that the next voyage starts afresh
 void Sea_Release()
 {
 	seaActive = false;
+	SetTimeScale(1.0);
 	DelEventHandler("Sea_Tick", "Sea_Tick");
 	DelEventHandler("Sea_ToPort", "Sea_ToPort");
+	DelEventHandler("Sea_ToMap", "Sea_ToMap");
 	DelEventHandler("WhrCalcFogColor", "Sea_FogColor");
 	DelEventHandler("SeaGetLayers", "Sea_ShipLayers");
 	DelEventHandler("Shp_UpdParams", "Sea_ShipParameters");
@@ -421,11 +457,19 @@ float Sea_HarbourDistance(float x, float z)
 	return sqrt(dx * dx + dz * dz);
 }
 
-// the ship entity writes its position into ship.pos of its character every frame
-bool Sea_AtHarbour()
+// the distance of the ship of the hero from the harbour, -1 out of an island; the ship entity writes its
+// position into ship.pos of its character every frame
+float Sea_HeroHarbourDistance()
 {
-	if (seaIsland == "" || seaHero < 0 || !CheckAttribute(&SeaShips[seaHero], "ship.pos.x")) { return false; }
-	float d = Sea_HarbourDistance(stf(SeaShips[seaHero].ship.pos.x), stf(SeaShips[seaHero].ship.pos.z));
+	if (seaIsland == "" || seaHero < 0 || !CheckAttribute(&SeaShips[seaHero], "ship.pos.x")) { return -1.0; }
+	return Sea_HarbourDistance(stf(SeaShips[seaHero].ship.pos.x), stf(SeaShips[seaHero].ship.pos.z));
+}
+
+// the port is the town of the island, as Town_Load knows it (Telltak's Grot is not a town yet)
+bool Sea_AtHarbour(float d)
+{
+	string town = PdmIslands.(seaIsland).town;
+	if (d < 0.0 || town == "" || !CheckAttribute(&PdmLocations, town)) { return false; }
 	if (d > seaPortDistance + SEA_PORT_ARM) { seaPortArmed = true; }
 	if (!seaPortArmed || d > seaPortDistance + SEA_PORT_REACH) { return false; }
 	Trace("PDM: sea, the ship at the harbour of " + seaIsland + ", " + d + " m");
@@ -441,7 +485,13 @@ void Sea_Tick()
 	float gust = SEA_GUST * sin(SEA_PI2 * seaTime / SEA_GUST_PERIOD) + SEA_GUST_FAST * sin(SEA_PI2 * seaTime / SEA_GUST_FAST_PERIOD);
 	Weather.Wind.Speed = SEA_WIND_SPEED * (1.0 + gust);
 	Weather.Wind.Angle = SEA_WIND_VEER * sin(SEA_PI2 * seaTime / SEA_WIND_VEER_PERIOD);
-	if (Sea_AtHarbour()) { PostEvent("Sea_ToPort", 0); return; }
+	float d = Sea_HeroHarbourDistance();
+	if (Sea_AtHarbour(d)) { PostEvent("Sea_ToPort", 0); return; }
+	if (d > 0.0 && CheckAttribute(&PdmIslands, seaIsland + ".exit_r") && d > stf(PdmIslands.(seaIsland).exit_r))
+	{
+		PostEvent("Sea_ToMap", 0);
+		return;
+	}
 	PostEvent("Sea_Tick", SEA_TICK_MS);
 }
 

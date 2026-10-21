@@ -38,7 +38,7 @@ if (-not (Test-Path "$Demo/resource/.converted"))
     New-Item -ItemType File -Force -Path "$Demo/resource/.converted" | Out-Null
 }
 # the screens of the interface, the dialog window and the voices
-if (-not ((Test-Path "$Demo/resource/ini/interfaces/mainmenu.ini") -and (Test-Path "$Demo/program/data/pdm_voices.c")))
+if (-not ((Test-Path "$Demo/resource/ini/interfaces/mainmap.ini") -and (Test-Path "$Demo/program/data/pdm_voices.c")))
 {
     Invoke-Python "$Tools/pdm_ui.py" $Pdm $Demo MainMenu
 }

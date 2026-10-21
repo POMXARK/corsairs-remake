@@ -29,6 +29,7 @@ aref PlayerShipType;
 #include "town.c"
 #include "review.c"
 #include "menu.c"
+#include "map.c"
 
 void MapKey(string controlName, int keyCode)
 {

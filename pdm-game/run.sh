@@ -36,8 +36,8 @@ if [ ! -f "$DIR/resource/.converted" ]; then
     mkdir -p "$DIR/resource/sounds" "$DIR/resource/ini/aliases"
     touch "$DIR/resource/.converted"
 fi
-# the screens of the interface (INI/menu.ini ...), their pictures, texts and fonts, the dialog window and the voices
-[ -f "$DIR/resource/ini/interfaces/mainmenu.ini" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR" MainMenu
+# the screens of the interface (INI/menu.ini, the world map of INI/map.ini), their pictures, texts and fonts, the dialog window and the voices
+[ -f "$DIR/resource/ini/interfaces/mainmap.ini" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR" MainMenu
 # the towns and interiors (WORLDS/locations/*.loc), their patches and the characters with animation
 [ -f "$DIR/program/data/pdm_world.c" ] || python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"
 # the islands (DESC/<Island>.def, WORLDS/islands_x.idf) and where the ship appears at each
