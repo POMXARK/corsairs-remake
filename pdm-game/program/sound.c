@@ -29,7 +29,10 @@ int soundLoops[2];
 void Sound_Init()
 {
 	CreateEntity(&Sound, "Sound");
-	SendMessage(&Sound, "lfff", MSG_SOUND_SET_MASTER_VOLUME, 0.8, 0.5, 1.0);
+	// SOUND_FX_ONLY=1 (run.sh): no music, for the tests of the effects
+	float music = 0.5;
+	if (SoundFxOnly) { music = 0.0; }
+	SendMessage(&Sound, "lfff", MSG_SOUND_SET_MASTER_VOLUME, 0.8, music, 1.0);
 	soundLoops[0] = 0;
 	soundLoops[1] = 0;
 }
@@ -72,7 +75,7 @@ int Sound_Loop(string alias)
 void Sound_Location(string kind, bool many)
 {
 	Sound_StopLocation();
-	if (!CheckAttribute(&PdmLocSounds, kind)) { return; }
+	if (SoundFxOnly || !CheckAttribute(&PdmLocSounds, kind)) { return; }
 	soundLoops[0] = Sound_Loop(PdmLocSounds.(kind).day);
 	if (many) { soundLoops[1] = Sound_Loop(PdmLocSounds.(kind).many); }
 	SendMessage(&Sound, "ls", MSG_SOUND_SCHEME_SET, PdmLocSounds.(kind).scheme);

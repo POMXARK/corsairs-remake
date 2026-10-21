@@ -8,6 +8,7 @@
 # SCENE=town starts in the town TOWN (default City_GrandaAvilia), TOWN_AUTO=1 walks into its tavern and out,
 # TOWN_AUTO=2 also talks to the first character of the tavern with a dialog,
 # SCENE=story runs the self-test of the story machine (every action of the original) and quits.
+# SOUND_FX_ONLY=1 mutes the music and the ambience of the locations, to hear the steps and the effects.
 set -euo pipefail
 ENGINE="$(realpath "$1")"
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -44,6 +45,7 @@ python3 -I "$TOOLS/pdm_logic2c.py" "$DIR/data" "$DIR/program"
 echo "string StartScene = \"${SCENE:-menu}\";" > "$DIR/program/data/start.c"
 echo "string StartTown = \"${TOWN:-City_GrandaAvilia}\";" >> "$DIR/program/data/start.c"
 echo "int TownAuto = ${TOWN_AUTO:-0};" >> "$DIR/program/data/start.c"
+echo "int SoundFxOnly = ${SOUND_FX_ONLY:-0};" >> "$DIR/program/data/start.c"
 ln -sfn "$(dirname "$ENGINE")/resource/techniques" "$DIR/resource/techniques"
 
 cd "$DIR"
