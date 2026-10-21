@@ -8,7 +8,8 @@ The island entity takes models/islands/<Name>/<Name>.gm and the depth map round 
 and .ini: made here from the same model (the engine would trace it at the first start, minutes in Debug).
 
 Where the ship of the hero appears at the island, the harbour it sails into and how far from the harbour
-the world map opens (exit_r) go to <data>/islands/<Name>.json (pdm_data2c.py puts it into PdmIslands):
+the world map opens (exit_r) and its Russian name from TEXTS/RUSSIAN/GOODS/ISLANDS/<Island>.nme (label, the
+list of the map) go to <data>/islands/<Name>.json (pdm_data2c.py puts it into PdmIslands):
 the open water nearest the harbour of the town, facing it. The harbour is the shallows strip of the
 model (wsea*), or the middle of the island when there is none.
 
@@ -175,12 +176,15 @@ def convert(res, out, island, name, k, data=None):
         x, z, ay = port_place(h, centre, step, (port[0], port[2]))
         corners = [(centre[0] + sx * size[0] / 2, centre[2] + sz * size[2] / 2) for sx in (-1, 1) for sz in (-1, 1)]
         exit_r = max(math.hypot(cx - port[0], cz - port[2]) for cx, cz in corners) + MAP_EXIT_MARGIN
+        nme = index_files(res / "TEXTS" / "RUSSIAN" / "GOODS" / "ISLANDS").get(island.lower() + ".nme")
+        label = nme.read_bytes().decode("cp1251").strip() if nme else name
         dst = Path(data) / "islands" / f"{name}.json"
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(json.dumps({"model": name, "port_x": round(x, 1), "port_z": round(z, 1),
                                    "port_ay": round(ay, 3), "harbour_x": round(float(port[0]), 1),
                                    "harbour_z": round(float(port[2]), 1),
-                                   "exit_r": round(exit_r)}, indent=1) + "\n")
+                                   "exit_r": round(exit_r), "label": label}, indent=1, ensure_ascii=False) + "\n",
+                       encoding="utf-8")
         line += f", the ship at {x:.0f}, {z:.0f} heading {math.degrees(ay):.0f}"
     print(line)
 

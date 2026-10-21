@@ -36,12 +36,13 @@ if [ ! -f "$DIR/resource/.converted" ]; then
     mkdir -p "$DIR/resource/sounds" "$DIR/resource/ini/aliases"
     touch "$DIR/resource/.converted"
 fi
-# the screens of the interface (INI/menu.ini, the world map of INI/map.ini), their pictures, texts and fonts, the dialog window and the voices
-[ -f "$DIR/resource/ini/interfaces/mainmap.ini" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR" MainMenu
+# the screens of the interface (INI/menu.ini, the world map of INI/map.ini), their pictures, texts and fonts, the dialog window and the voices;
+# again for a map made before it took clicks
+grep -A4 '^\[MAP\]' "$DIR/resource/ini/interfaces/mainmap.ini" 2>/dev/null | grep -qs 'command = click' && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR" MainMenu
 # the towns and interiors (WORLDS/locations/*.loc), their patches and the characters with animation
 [ -f "$DIR/program/data/pdm_world.c" ] || python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"
-# the islands (DESC/<Island>.def, WORLDS/islands_x.idf) and where the ship appears at each
-[ -d "$DIR/data/islands" ] || python3 -I "$TOOLS/pdm_island.py" "$PDM" "$DIR/resource" all --data "$DIR/data"
+# the islands (DESC/<Island>.def, WORLDS/islands_x.idf), where the ship appears at each and their names
+grep -qs '"label"' "$DIR/data/islands/Highrock.json" || python3 -I "$TOOLS/pdm_island.py" "$PDM" "$DIR/resource" all --data "$DIR/data"
 # the music, the sounds and their aliases, the sounds of the kinds of location
 [ -f "$DIR/program/data/pdm_sound.c" ] || python3 -I "$TOOLS/pdm_sound.py" "$PDM" "$DIR"
 python3 -I "$TOOLS/pdm_data2c.py" "$DIR/data" "$DIR/program"

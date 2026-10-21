@@ -309,7 +309,8 @@ class Converter:
     def chart(self, chart):
         """The map of MAP.dll: MAP\\$\\map_open.tga (the explored Caribbean with the islands drawn, 1200 x 900)
         seen through a window of map_rect at map_pos, the ship of the hero (ship.tga) on it and the list of
-        the islands at EditIsland. program/map.c moves the window and the ship; the list it fills itself."""
+        the islands at EditIsland. program/map.c moves the window and the ship; the list it fills itself; a click
+        on the map sails to the island under it (ours)."""
         x, y = (int(v) for v in chart["map_pos"].split(","))
         _, _, w, h = (int(v) for v in chart["map_rect"].split(","))
         full = self.image(f"{LANGUAGE}\\map_open.tga")
@@ -329,7 +330,7 @@ class Converter:
             lines += [f"[{name}]", "position = 0,0,0,0", f"textureName = {back}", f"textureRect = 0,0,1,{bv:g}", ""]
         nodes += [("PICTURE", "MAP"), ("PICTURE", "SHIP"), ("FORMATEDTEXT", "ISLANDS")]
         lines += ["[MAP]", f"position = {x},{y},{x + w},{y + h}", f"textureName = {tex}",
-                 f"textureRect = 0,0,{w / tw:g},{h / th:g}", "",
+                 f"textureRect = 0,0,{w / tw:g},{h / th:g}", "command = click", "",
                  "[SHIP]", f"position = {x},{y},{x + ship.width},{y + ship.height}", f"textureName = {stex}",
                  f"textureRect = 0,0,{ship.width / sw:g},{ship.height / sh:g}", "",
                  "[ISLANDS]", f"position = {ix},{iy},{ix + int(a['dx'])},{iy + int(a['dy'])}",

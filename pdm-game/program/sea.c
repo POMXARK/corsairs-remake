@@ -88,6 +88,10 @@ bool seaActive = false;
 #define SEA_ARRIVE_OFFSET 400.0
 // TOWN_AUTO=5 and 6: the ship sails in at about 2 m/s, minutes of sea; the autotest runs the time faster (ours)
 #define SEA_AUTO_TIME_SCALE 6.0
+// R at sea runs the time x1, x3, x6 in turn, kept from island to island (ours: the islands are km apart)
+#define SEA_TIME_KEY 82
+#define SEA_TIME_FAST 3.0
+float seaTimeScale = 1.0;
 bool seaFromMap = false;
 bool seaAutoMapDone = false;
 
@@ -98,6 +102,7 @@ void Sea_Start(string islandKey)
 	Sea_MapShipKeys();
 	MapKey("Sea_ToPort", SEA_PORT_KEY);
 	MapKey("Sea_ToMap", SEA_MAP_KEY);
+	MapKey("Sea_Time", SEA_TIME_KEY);
 	Sound_StopLocation();
 	Sound_Music("Freesailing");
 	Sea_CreateWorld();
@@ -139,15 +144,39 @@ void Sea_Start(string islandKey)
 	// TOWN_AUTO=4: the autotest sails out and comes back by itself; 6: out to the world map once
 	if (TownAuto == 4) { PostEvent("Sea_ToPort", SEA_AUTO_PORT_MS); }
 	if (TownAuto == 6 && !seaAutoMapDone) { seaAutoMapDone = true; PostEvent("Sea_ToMap", SEA_AUTO_MAP_MS); }
-	if (TownAuto == 5 || TownAuto == 6) { SetTimeScale(SEA_AUTO_TIME_SCALE); }
+	if (TownAuto == 5 || TownAuto == 6) { seaTimeScale = SEA_AUTO_TIME_SCALE; }
+	SetTimeScale(seaTimeScale);
 	Trace("PDM: sea loaded");
 }
 
 void Sea_Control(string control)
 {
 	// the scene is changed outside the input handler
-	if (control == "Sea_ToPort" && seaActive) { PostEvent("Sea_ToPort", 0); }
+	if (control == "Sea_ToPort" && seaActive && Sea_PortTown() != "") { PostEvent("Sea_ToPort", 0); }
+	if (control == "Sea_Time" && seaActive) { Sea_NextTimeScale(); }
 	if (control == "Sea_ToMap" && seaActive) { PostEvent("Sea_ToMap", 0); }
+}
+
+void Sea_NextTimeScale()
+{
+	if (seaTimeScale < SEA_TIME_FAST) { seaTimeScale = SEA_TIME_FAST; }
+	else
+	{
+		if (seaTimeScale < SEA_AUTO_TIME_SCALE) { seaTimeScale = SEA_AUTO_TIME_SCALE; }
+		else { seaTimeScale = 1.0; }
+	}
+	SetTimeScale(seaTimeScale);
+	Trace("PDM: sea, time x" + seaTimeScale);
+}
+
+// the town Enter takes the ship to: of the island at sea, or the one it sailed from; "" where the island
+// has none (Emuno, Inachetla, Aliando, Chaktcha) or Town_Load does not know it
+string Sea_PortTown()
+{
+	string town = townStreet;
+	if (seaIsland != "") { town = PdmIslands.(seaIsland).town; }
+	if (town == "" || !CheckAttribute(&PdmLocations, town)) { return ""; }
+	return town;
 }
 
 // from the world map (map.c) to the sea at an island, the ship sailing in to its harbour
@@ -476,11 +505,15 @@ bool Sea_AtHarbour(float d)
 	return true;
 }
 
-// SHIP_CAMERA.AngleY: the camera angle around the ship, 0 behind the stern
+// SHIP_CAMERA.AngleY: the camera angle around the ship, 0 behind the stern; the autotests fly it round
+// the ship, the player turns it with the mouse
 void Sea_Tick()
 {
-	cameraAngle = cameraAngle + 0.006;
-	ShipCamera.AngleY = cameraAngle;
+	if (TownAuto != 0)
+	{
+		cameraAngle = cameraAngle + 0.006;
+		ShipCamera.AngleY = cameraAngle;
+	}
 	seaTime = seaTime + SEA_TICK_MS / 1000.0;
 	float gust = SEA_GUST * sin(SEA_PI2 * seaTime / SEA_GUST_PERIOD) + SEA_GUST_FAST * sin(SEA_PI2 * seaTime / SEA_GUST_FAST_PERIOD);
 	Weather.Wind.Speed = SEA_WIND_SPEED * (1.0 + gust);

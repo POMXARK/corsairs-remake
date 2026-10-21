@@ -1,10 +1,11 @@
 // The world map of the original (MAP.dll): the parchment of the Caribbean, IMAGES\MAP\RUSSIAN\map_open.tga
 // (1200 x 900, the islands drawn on it), seen through the window of [MainMap] of INI/map.ini; the screen is
 // converted by tools/pdm_ui.py into resource\ini\interfaces\mainmap.ini. The ship of the hero sails over it
-// to the island chosen in the list (Up/Down or the scroll buttons, Enter or a click to sail) and comes to
+// to the island chosen in the list (Up/Down or the scroll buttons, Enter or a click to sail) or clicked on
+// the map, and comes to
 // the sea at that island (sea.c Sea_Arrive). The sea opens the map when the ship sails off its island
 // (exit_r of tools/pdm_island.py) or on M.
-// TOWN_AUTO=6 sails by itself from the island it left to Highrock (or from Highrock to Granda Avilia).
+// TOWN_AUTO=6 clicks Highrock on the map (or Granda Avilia, leaving Highrock).
 
 // the map picture and its texture of tools/pdm_ui.py (a power of two)
 #define MAP_W 1200
@@ -34,6 +35,8 @@
 #define MAP_SPEED 40.0
 #define MAP_TICK_MS 40
 #define MAP_AUTO_MS 2000
+// a click on the map sails to the nearest island this many pixels of the map round it (ours)
+#define MAP_CLICK_R 60.0
 
 float mapX = 0.0;
 float mapY = 0.0;
@@ -47,6 +50,9 @@ int mapViewX = MAP_VIEW_X;
 int mapViewY = MAP_VIEW_Y;
 int mapViewW = MAP_VIEW_W;
 int mapViewH = MAP_VIEW_H;
+// the left top of the map picture in the window (Map_View)
+float mapLeft = 0.0;
+float mapTop = 0.0;
 int mapIslandCount = 0;
 // the keys of PdmIslands in the order of the list
 object MapIslands;
@@ -118,6 +124,7 @@ void Map_FillIslands()
 		MapIslands.(at) = key;
 		if (key == mapFrom) { from = mapIslandCount; }
 		name = island.class;
+		if (CheckAttribute(island, "label")) { name = island.label; }
 		SendMessage(&GameInterface, "lsle", MSG_INTERFACE_MSG_TO_NODE, "ISLANDS", 0, &name);
 		mapIslandCount++;
 	}
@@ -213,6 +220,8 @@ void Map_View()
 	if (top > MAP_H - mapViewH) { top = MAP_H - mapViewH; }
 	if (left < 0.0) { left = 0.0; }
 	if (top < 0.0) { top = 0.0; }
+	mapLeft = left;
+	mapTop = top;
 	SendMessage(&GameInterface, "lslffff", MSG_INTERFACE_MSG_TO_NODE, "MAP", 1,
 		left / MAP_TEX_W, (left + mapViewW) / MAP_TEX_W, top / MAP_TEX_H, (top + mapViewH) / MAP_TEX_H);
 	// an int takes a float rounded down
@@ -276,12 +285,38 @@ void Map_Command()
 	string command = GetEventData();
 	string node = GetEventData();
 	if (command != "click" && command != "activate") { return; }
+	if (node == "MAP") { Map_Click(); return; }
 	int index = SendMessage(&GameInterface, "lsl", MSG_INTERFACE_MSG_TO_NODE, "ISLANDS", 11);
 	if (node == "LB_ISLANDUP" && index > 0) { index--; }
 	if (node == "LB_ISLANDDOWN" && index + 1 < mapIslandCount) { index++; }
 	SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, "ISLANDS", 1, index);
 	// the button is still being pressed: the interface goes away after the event (menu.c)
 	if (node == "LB_EXIT") { PostEvent("Map_Exit", 0); }
+}
+
+// the island nearest to the mouse on the map, within MAP_CLICK_R; mousepos of the xinterface is on the
+// whole window, like the positions of the nodes
+void Map_Click()
+{
+	if (!CheckAttribute(&GameInterface, "mousepos.x")) { return; }
+	float x = stf(GameInterface.mousepos.x) - mapViewX + mapLeft;
+	float y = stf(GameInterface.mousepos.y) - mapViewY + mapTop;
+	float best = MAP_CLICK_R * MAP_CLICK_R;
+	int index = -1;
+	string at, key;
+	float dx, dy;
+	for (int i = 0; i < mapIslandCount; i++)
+	{
+		at = "i" + i;
+		key = MapIslands.(at);
+		dx = Map_IslandX(key) - x;
+		dy = Map_IslandY(key) - y;
+		if (dx * dx + dy * dy < best) { best = dx * dx + dy * dy; index = i; }
+	}
+	Trace("PDM map: click at " + x + ", " + y + ", island " + index);
+	if (index < 0) { return; }
+	SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, "ISLANDS", 1, index);
+	Map_SailTo(index);
 }
 
 void Map_Release()
@@ -314,18 +349,12 @@ void Map_Exit()
 	Sea_Arrive(mapFrom);
 }
 
+// clicks the island on the map the way the player does: mousepos is where it is on the window
 void Map_AutoSail()
 {
 	string to = "Highrock";
 	if (mapFrom == "Highrock") { to = "avilia"; }
-	string at;
-	for (int i = 0; i < mapIslandCount; i++)
-	{
-		at = "i" + i;
-		if (MapIslands.(at) == to)
-		{
-			SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, "ISLANDS", 1, i);
-			Map_SailTo(i);
-		}
-	}
+	GameInterface.mousepos.x = mapViewX + Map_IslandX(to) - mapLeft;
+	GameInterface.mousepos.y = mapViewY + Map_IslandY(to) - mapTop;
+	Map_Click();
 }

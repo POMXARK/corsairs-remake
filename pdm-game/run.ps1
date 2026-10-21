@@ -37,15 +37,16 @@ if (-not (Test-Path "$Demo/resource/.converted"))
     New-Item -ItemType Directory -Force -Path "$Demo/resource/sounds", "$Demo/resource/ini/aliases" | Out-Null
     New-Item -ItemType File -Force -Path "$Demo/resource/.converted" | Out-Null
 }
-# the screens of the interface, the dialog window and the voices
-if (-not ((Test-Path "$Demo/resource/ini/interfaces/mainmap.ini") -and (Test-Path "$Demo/program/data/pdm_voices.c")))
+# the screens of the interface, the dialog window and the voices; again for a map made before it took clicks
+$MainMap = "$Demo/resource/ini/interfaces/mainmap.ini"
+if (-not ((Test-Path $MainMap) -and ((Get-Content -Raw $MainMap) -match '\[MAP\][^\[]*command = click') -and (Test-Path "$Demo/program/data/pdm_voices.c")))
 {
     Invoke-Python "$Tools/pdm_ui.py" $Pdm $Demo MainMenu
 }
 # the towns and interiors, their patches and the characters with animation (several minutes)
 if (-not (Test-Path "$Demo/program/data/pdm_world.c")) { Invoke-Python "$Tools/pdm_world.py" $Pdm $Demo }
 # the islands and where the ship appears at each
-if (-not (Test-Path "$Demo/data/islands")) { Invoke-Python "$Tools/pdm_island.py" $Pdm "$Demo/resource" all --data "$Demo/data" }
+if (-not (Select-String -Quiet -Pattern '"label"' -Path "$Demo/data/islands/Highrock.json" -ErrorAction SilentlyContinue)) { Invoke-Python "$Tools/pdm_island.py" $Pdm "$Demo/resource" all --data "$Demo/data" }
 # the music, the sounds and their aliases
 if (-not (Test-Path "$Demo/program/data/pdm_sound.c")) { Invoke-Python "$Tools/pdm_sound.py" $Pdm $Demo }
 Invoke-Python "$Tools/pdm_data2c.py" "$Demo/data" "$Demo/program"
