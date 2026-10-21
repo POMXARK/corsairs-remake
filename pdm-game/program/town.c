@@ -542,6 +542,24 @@ void Town_Go(string link)
 	PostEvent("Town_Tick", TOWN_TICK_MS);
 }
 
+// the Sea_ToPort event of sea.c: back to the street of the town the hero sailed from, at its
+// pier; a game started at sea goes to the town of his address
+void Sea_ToPort()
+{
+	if (!seaActive) { return; }
+	Sea_Release();
+	Trace("PDM: sea, to the port of " + townStreet);
+	if (townStreet == "")
+	{
+		string island = PlayerCard.address.island;
+		Town_Start(PdmIslands.(island).town, "sea");
+		return;
+	}
+	if (townIsland != "") { Sound_TownMusic(sti(PdmIslands.(townIsland).nation)); }
+	Town_Load(townStreet, "sea");
+	PostEvent("Town_Tick", TOWN_TICK_MS);
+}
+
 ref Town_ShadowDensity()
 {
 	townShadow[0] = argb(255, 96, 96, 96);
@@ -759,6 +777,8 @@ void Town_AutoPlan()
 		Town_PlanAdd("talk", "Billy___Town_Guard", "PdmA_Wine_good_end");
 		return;
 	}
+	// 4: out to sea and back to the pier (Sea_ToPort), then into the tavern
+	if (TownAuto == 4) { Town_PlanAdd("go", "sea", ""); }
 	Town_PlanAdd("go", "tavern", "");
 	if (TownAuto == 2) { Town_PlanAdd("talk", "", ""); }
 	Town_PlanAdd("go", "street", "");

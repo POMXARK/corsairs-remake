@@ -81,6 +81,7 @@ void Main()
 void Pdm_Control()
 {
 	string control = GetEventData();
+	Sea_Control(control);
 	// Escape in a dialog only leaves it
 	if (control == "Pdm_Quit" && townTalkNpc < 0)
 	{

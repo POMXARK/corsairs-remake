@@ -1,6 +1,7 @@
 // The sea of the original world: the weather and the sea of the engine demos, the ship of the hero
 // built from its type in WORLDS\Ships.idf (the hull is models\ships\<filename>, assembled by
-// tools/pdm_ship.py from DESC\<filename>.def). A/D turn, W/S sails, the mouse turns the camera.
+// tools/pdm_ship.py from DESC\<filename>.def). A/D turn, W/S sails, the mouse turns the camera,
+// Enter goes back to the port.
 
 // shared/layers.h: mirrored into the sea reflection (sky in the first, ships in the second)
 #define SEA_REFLECTION 15
@@ -47,11 +48,16 @@ float seaSpeedScale = 1.0;
 float fogHeight = 150.0;
 #define SEA_TICK_MS 40
 float cameraAngle = 1.6;
+bool seaActive = false;
+// ours until the islands (P5): Enter at sea brings the ship back to the port it left
+#define SEA_PORT_KEY 13
+#define SEA_AUTO_PORT_MS 5000
 
 // The hero on his ship; the camera flies round it until the player takes the mouse, the run needs no input.
 void Sea_Start()
 {
 	Sea_MapShipKeys();
+	MapKey("Sea_ToPort", SEA_PORT_KEY);
 	Sound_StopLocation();
 	Sound_Music("Freesailing");
 	Sea_CreateWorld();
@@ -59,8 +65,43 @@ void Sea_Start()
 	SeaShips[hero].MainCharacter = 1;
 	Sea_CreateCamera(hero);
 	SetEventHandler("Sea_Tick", "Sea_Tick", 0);
+	SetEventHandler("Sea_ToPort", "Sea_ToPort", 0);
 	PostEvent("Sea_Tick", SEA_TICK_MS);
+	seaActive = true;
+	// TOWN_AUTO=4: the autotest sails out and comes back by itself
+	if (TownAuto == 4) { PostEvent("Sea_ToPort", SEA_AUTO_PORT_MS); }
 	Trace("PDM: sea loaded");
+}
+
+void Sea_Control(string control)
+{
+	// the scene is changed outside the input handler
+	if (control == "Sea_ToPort" && seaActive) { PostEvent("Sea_ToPort", 0); }
+}
+
+// deletes what Sea_Start made, so that the next voyage starts afresh
+void Sea_Release()
+{
+	seaActive = false;
+	DelEventHandler("Sea_Tick", "Sea_Tick");
+	DelEventHandler("Sea_ToPort", "Sea_ToPort");
+	DelEventHandler("WhrCalcFogColor", "Sea_FogColor");
+	DelEventHandler("SeaGetLayers", "Sea_ShipLayers");
+	DelEventHandler("Shp_UpdParams", "Sea_ShipParameters");
+	DelEventHandler("GetSailTextureData", "Sea_SailTextures");
+	DelEventHandler("GetRiggingData", "Sea_RiggingData");
+	DeleteClass(&ShipCamera);
+	DeleteClass(&SeaCameras);
+	for (int i = 0; i < seaShipCount; i++) { DeleteClass(&SeaShips[i]); }
+	seaShipCount = 0;
+	DeleteClass(&Flag);
+	DeleteClass(&VantL);
+	DeleteClass(&Vant);
+	DeleteClass(&Rope);
+	DeleteClass(&Sail);
+	DeleteClass(&Sea);
+	DeleteClass(&Sky);
+	DeleteClass(&Weather);
 }
 
 void Sea_MapShipKeys()
