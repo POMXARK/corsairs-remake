@@ -4,7 +4,7 @@
 #
 # Usage: game.sh                      the menu
 #        game.sh build debug|release  builds the engine (CMake + Conan + Ninja)
-#        game.sh run [debug|release] [menu|sea|town|review|quest|story]   starts the game
+#        game.sh run [debug|release] [menu|sea|battle|town|review|quest|story]   starts the game
 #        game.sh convert              converts the original once more (RECONVERT=1 of run.sh)
 #        game.sh package              the Release engine and the converted game in dist/, play.sh starts it
 #        game.sh logs | keys | check
@@ -109,6 +109,7 @@ keys() {
 Море           W/S — поднять/убрать паруса, A/D — руль, мышь — камера, Q/E — камера ближе/дальше,
                R — время ×1/×3/×6, M — карта мира, Пробел — в порт (у гавани, значок справа сверху)
                Tab — меню команд (в порт, карта, время), стрелки — выбор, Enter — выполнить, Esc — закрыть
+               F — залп бортами, которые смотрят на врага (в бою)
 Карта мира     вверх/вниз — остров, Enter/ЛКМ — плыть к нему, ЛКМ по острову на карте — туда же,
                «Выход» — назад в море
 Везде          Esc — меню игры: продолжить, настройки, выход (в диалоге — только из разговора)
@@ -137,7 +138,7 @@ menu() {
   3) Море                         8) Сконвертировать оригинал заново
   4) Смотр флота                  9) Собрать пакет для игры (dist/)
   5) Квест Хайрока (автотест)     c) Проверить окружение
-  k) Управление   l) Логи   q) Выход
+  b) Морской бой   k) Управление   l) Логи   q) Выход
 EOF
         read -rp "> " choice || exit 0
         case "$choice" in
@@ -146,6 +147,7 @@ EOF
             3) (run $cfg sea) ;;
             4) (run $cfg review) ;;
             5) (run $cfg quest) ;;
+            b) (run $cfg battle) ;;
             6) (build $cfg) ;;
             7) [ $cfg = debug ] && cfg=release || cfg=debug ;;
             8) (convert) ;;

@@ -11,6 +11,7 @@
 # TOWN_AUTO=5 sails out and into the port by the harbour of the island,
 # SEA_WAVES=sines makes the waves of the engine demos (a sum of sines) instead of the FFT sea (with RECONVERT=1);
 # SCENE=screens shows every screen of the interface in turn, then F1 (the status) in the town, and quits;
+# SCENE=battle starts at sea with a pirate attacking (F fires), TOWN_AUTO=7 fires by itself until he sinks and quits;
 # SCENE=story runs the self-test of the story machine (every action of the original) and quits.
 # SOUND_FX_ONLY=1 mutes the music and the ambience of the locations, to hear the steps and the effects.
 set -euo pipefail
@@ -21,21 +22,32 @@ DEMOS="$DIR/../engine/demos"
 PDM="${PDM:-$DIR/../../../Корсары}"
 [ "${RECONVERT:-0}" = 1 ] && rm -rf "$DIR/resource" "$DIR/data" "$DIR/convert-report.json"
 
+# every hull of WORLDS/Ships.idf (the forts are parts of the islands)
+hulls() {
+    for hull in $(python3 -I -c 'import json,sys; print(" ".join(sorted({dict(o)["filename"].lower() for o in json.load(open(sys.argv[1]))["objects"]} - {"fort"})))' \
+                  "$DIR/data/tables/WORLDS/Ships.json"); do
+        python3 -I "$TOOLS/pdm_ship.py" "$PDM" "$DIR/resource" "$hull" | tail -1
+    done
+}
+
 if [ ! -f "$DIR/resource/.converted" ]; then
     # the tables, characters, ships and the story data as JSON in data/
     python3 -I "$TOOLS/pdm2storm.py" "$PDM" "$DIR" --only actions,dialogs,tables,desc,characters,ships,quests
     # the sea, the sky and the sail settings of the engine demos
     python3 -I "$DEMOS/sea/make_sea.py" "$DIR/resource" --waves "${SEA_WAVES:-fft}"
     python3 -I "$DEMOS/ship/make_ship.py" "$DIR/resource"
-    # every hull of WORLDS/Ships.idf (the forts are parts of the islands)
-    for hull in $(python3 -I -c 'import json,sys; print(" ".join(sorted({dict(o)["filename"].lower() for o in json.load(open(sys.argv[1]))["objects"]} - {"fort"})))' \
-                  "$DIR/data/tables/WORLDS/Ships.json"); do
-        python3 -I "$TOOLS/pdm_ship.py" "$PDM" "$DIR/resource" "$hull" | tail -1
-    done
+    hulls
     # the settings of the rope and vant entities written by pdm_ship.py (rope width, shroud texture layout)
     cat "$DIR/resource/ini/rigging_pdm.ini" >> "$DIR/resource/ini/rigging.ini"
     mkdir -p "$DIR/resource/sounds" "$DIR/resource/ini/aliases"
     touch "$DIR/resource/.converted"
+fi
+# the battle (program/battle.c): the blast and the splash of the particles demo, the cannonball and the shot
+# holes of the battle demo; the hulls again where they were made before they had the gun labels
+if [ ! -f "$DIR/resource/particles/explosion.xps" ]; then
+    python3 -I "$DEMOS/particles/make_particles.py" "$DIR/resource"
+    python3 -I "$DEMOS/battle/make_battle.py" "$DIR/resource"
+    hulls
 fi
 # the screens of the interface (INI/menu.ini, the world map of INI/map.ini), their pictures, texts and fonts, the dialog window and the voices;
 # again for a map made before it took clicks

@@ -41,8 +41,9 @@ DATE = (2026, 1, 1, 0, 0, 0)
 # what pdm-game does not use: the first remake on free assets, the gallery videos, the second game
 GAME_SKIP = ("game/", "assets/", "media/", "pdm-game/media/", "pdm-sea/", "run.sh", "run.ps1", "run.bat")
 # the demos run.ps1 and the tools import or take fonts from: common (storm_formats, demo.ps1), sea and
-# ship (make_sea.py, make_ship.py), dialog (make_dialog.py, PT Serif), interface (Old Standard)
-KEEP_DEMOS = {"common", "sea", "ship", "dialog", "interface"}
+# ship (make_sea.py, make_ship.py), dialog (make_dialog.py, PT Serif), interface (Old Standard), particles
+# and battle with sound (make_particles.py, make_battle.py imports make_sound.py)
+KEEP_DEMOS = {"common", "sea", "ship", "dialog", "interface", "particles", "battle", "sound"}
 ENGINE_SKIP = ("tools/",)
 # but the build of the engine copies gltf2gm.py next to engine.exe (src/apps/engine/CMakeLists.txt)
 ENGINE_KEEP = ("tools/gltf2gm/",)

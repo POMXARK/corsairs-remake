@@ -19,6 +19,16 @@ if ((Get-Env 'RECONVERT' '0') -eq '1')
 {
     foreach ($path in 'resource', 'data', 'convert-report.json') { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$Demo/$path" }
 }
+# every hull of WORLDS/Ships.idf (the forts are parts of the islands)
+function Convert-Hulls
+{
+    $ships = Get-Content -Raw "$Demo/data/tables/WORLDS/Ships.json" | ConvertFrom-Json
+    $hulls = $ships.objects | ForEach-Object {
+        $o = @{}; foreach ($pair in $_) { $o[$pair[0]] = $pair[1] }; $o['filename'].ToLower()
+    } | Where-Object { $_ -ne 'fort' } | Sort-Object -Unique
+    foreach ($hull in $hulls) { Invoke-Python "$Tools/pdm_ship.py" $Pdm "$Demo/resource" $hull }
+}
+
 if (-not (Test-Path "$Demo/resource/.converted"))
 {
     # the tables, characters, ships and the story data as JSON in data/
@@ -26,16 +36,19 @@ if (-not (Test-Path "$Demo/resource/.converted"))
     # the sea, the sky and the sail settings of the engine demos
     Invoke-Python "$Demos/sea/make_sea.py" "$Demo/resource" --waves $(if ($env:SEA_WAVES) { $env:SEA_WAVES } else { "fft" })
     Invoke-Python "$Demos/ship/make_ship.py" "$Demo/resource"
-    # every hull of WORLDS/Ships.idf (the forts are parts of the islands)
-    $ships = Get-Content -Raw "$Demo/data/tables/WORLDS/Ships.json" | ConvertFrom-Json
-    $hulls = $ships.objects | ForEach-Object {
-        $o = @{}; foreach ($pair in $_) { $o[$pair[0]] = $pair[1] }; $o['filename'].ToLower()
-    } | Where-Object { $_ -ne 'fort' } | Sort-Object -Unique
-    foreach ($hull in $hulls) { Invoke-Python "$Tools/pdm_ship.py" $Pdm "$Demo/resource" $hull }
+    Convert-Hulls
     # the settings of the rope and vant entities written by pdm_ship.py
     Get-Content "$Demo/resource/ini/rigging_pdm.ini" | Add-Content "$Demo/resource/ini/rigging.ini"
     New-Item -ItemType Directory -Force -Path "$Demo/resource/sounds", "$Demo/resource/ini/aliases" | Out-Null
     New-Item -ItemType File -Force -Path "$Demo/resource/.converted" | Out-Null
+}
+# the battle: the blast and the splash, the cannonball and the shot holes; the hulls again where they were
+# made before they had the gun labels
+if (-not (Test-Path "$Demo/resource/particles/explosion.xps"))
+{
+    Invoke-Python "$Demos/particles/make_particles.py" "$Demo/resource"
+    Invoke-Python "$Demos/battle/make_battle.py" "$Demo/resource"
+    Convert-Hulls
 }
 # the screens of the interface, the dialog window and the voices; again for screens made before the map took
 # clicks or before the status

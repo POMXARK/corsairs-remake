@@ -39,6 +39,10 @@ def index_files(folder: Path):
 MAST_FILE = re.compile(r"_?ms_?(\d)")
 
 
+# the side of a gun by its turn about the vertical in quarters: 0 fore, pi/2 right, pi aft, -pi/2 left;
+# the names are the borts of SEA_AI (Cannons.Borts of the ship type)
+GUN_BORTS = ("cannonf", "cannonr", "cannonb", "cannonl")
+
 # the DEF sub of the sails with the coat of arms
 EMBLEM_SAIL = 6
 
@@ -49,19 +53,19 @@ class Node:
         self.origin, self.parent, self.meshes, self.labels = origin, parent, [], []
 
 
-def placed(items, kind="Model"):
+def placed(items, kind="Model", points=False):
     """Items of a class (or of several, "Model,Rey") with their offset summed along the link chain (the models are not rotated).
 
     The Patch item is skipped: a black lid over the hull facing down (ABrig_Patch.cff, texture "black"),
     a mask of the original against its sea inside the hull. Storm 2 does not need it and, with the faces
-    double-sided, it covered the deck."""
+    double-sided, it covered the deck. points: the items without a model too (a Flag always is a point)."""
     by_index = {}
     for it in items:
         by_index.setdefault(it["index"], it)
     out = []
     for it in items:
         # a Flag is a point (the masthead, the ensign staff): it has no model
-        if it["class"] not in kind.split(",") or not (it["file"] or kind == "Flag"):
+        if it["class"] not in kind.split(",") or not (it["file"] or points or kind == "Flag"):
             continue
         pos, link, seen = list(it["pos"]), it["link"], set()
         while link >= 0 and link in by_index and link not in seen:
@@ -423,6 +427,16 @@ def main():
         # are square sails ("sails"); the corners go in the order the sail entity expects
         group = f"sail{'f' if it['sub'] == 4 else 's'}{it['index']}"
         node.labels += [(group, f"sail{n + 1}", place(c)) for n, c in enumerate(sail["corners"])]
+    # the guns: a label per Cannon item (the deck guns and the ports of the lower decks) in the group of
+    # its side, its z axis along the shot; SEA_AI fires the side from these points (AICannon, ours)
+    guns = {}
+    for it, pos in placed(items, "Cannon", points=True):
+        r = it["rot"][1] % (2 * math.pi)
+        bort = GUN_BORTS[round(r / (math.pi / 2)) % 4]
+        guns[bort] = guns.get(bort, 0) + 1
+        at = tuple(v * k for v in pos)
+        nodes[""].labels.append((bort, f"gun{guns[bort]}", at, (round(math.sin(r), 6), round(math.cos(r), 6))))
+    print("  guns " + ", ".join(f"{b} {n}" for b, n in sorted(guns.items())))
     hull_z = [v[0][2] for m in nodes[""].meshes for v in m.vertices]
     hull_length = max(hull_z) - min(hull_z)
     for it, pos in placed(items, "Flag"):

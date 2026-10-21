@@ -165,6 +165,9 @@ void Hud_Start()
 	BattleInterface.MainChrIndex = seaHero;
 	BattleInterface.ShowNavigator = 1;
 	BattleInterface.ShowCommands = 1;
+	// no "battle on" border: the original has none, and without the attribute the engine draws a white
+	// one fixed to 1024x768 while an enemy is near
+	BattleInterface.battleborder.used = 0;
 
 	// the picture of the ship top left (its top 50 rows of 64, the rest keyed out); the bars right under it,
 	// on the plate of back.tga (64x20): the sails at 5 from its top, the hull at 15, as on ship_status.tga

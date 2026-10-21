@@ -31,6 +31,7 @@ aref PlayerShipType;
 // before sea.c and town.c: they use its defines
 #include "hud.c"
 #include "sea.c"
+#include "battle.c"
 #include "town.c"
 #include "review.c"
 #include "menu.c"
@@ -86,6 +87,7 @@ void Main()
 	Pdm_NewGame();
 	if (StartScene == "review") { Review_Start(); }
 	else if (StartScene == "town") { Town_Start(StartTown, "sea"); }
+	else if (StartScene == "battle") { Battle_Start(); }
 	else { Sea_Start(PlayerCard.address.island); }
 }
 

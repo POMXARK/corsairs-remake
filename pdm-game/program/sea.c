@@ -93,6 +93,8 @@ bool seaActive = false;
 float seaTimeScale = 1.0;
 bool seaFromMap = false;
 bool seaAutoMapDone = false;
+// SCENE=battle (battle.c): Sea_AddShip gives the ships to SEA_AI, an enemy comes after the hero
+bool seaBattle = false;
 
 // The hero on his ship at the harbour of an island (a key of PdmIslands); the camera flies round it
 // until the player takes the mouse, the run needs no input.
@@ -133,11 +135,12 @@ void Sea_Start(string islandKey)
 			ay = atan2(stf(PdmIslands.(islandKey).harbour_x) - x, stf(PdmIslands.(islandKey).harbour_z) - z);
 		}
 	}
+	// the ship entity steers the main character by the keys; SEA_AI takes it at its creation
+	seaHero = seaShipCount;
 	int hero = Sea_AddShip(PlayerCard, PlayerShipCard.type_key, x, z, ay);
-	SeaShips[hero].MainCharacter = 1;
-	seaHero = hero;
 	Sea_CreateCamera(hero);
 	Hud_Start();
+	if (seaBattle) { Battle_AddEnemy(x, z, ay); }
 	SetEventHandler("Sea_Tick", "Sea_Tick", 0);
 	SetEventHandler("Sea_ToPort", "Sea_ToPort", 0);
 	SetEventHandler("Sea_ToMap", "Sea_ToMap", 0);
@@ -157,6 +160,7 @@ void Sea_Control(string control)
 	// the scene is changed outside the input handler
 	if (control == "Sea_Time" && seaActive) { Sea_NextTimeScale(); }
 	if (control == "Sea_ToMap" && seaActive) { PostEvent("Sea_ToMap", 0); }
+	Battle_Control(control);
 }
 
 void Sea_NextTimeScale()
@@ -202,6 +206,7 @@ void Sea_Release()
 {
 	seaActive = false;
 	Hud_Release();
+	Battle_Release();
 	SetTimeScale(1.0);
 	DelEventHandler("Sea_Tick", "Sea_Tick");
 	DelEventHandler("Sea_ToPort", "Sea_ToPort");
@@ -215,6 +220,7 @@ void Sea_Release()
 	DeleteClass(&SeaCameras);
 	for (int i = 0; i < seaShipCount; i++) { DeleteClass(&SeaShips[i]); }
 	seaShipCount = 0;
+	seaHero = -1;
 	DeleteClass(&Flag);
 	DeleteClass(&VantL);
 	DeleteClass(&Vant);
@@ -440,7 +446,12 @@ int Sea_AddShip(aref card, string typeKey, float x, float z, float ay)
 	SeaShipTypes[i].InertiaAccelerationZ = 4.0;
 	SeaShipTypes[i].InertiaBrakingZ = 3.0;
 
+	DeleteAttribute(&SeaShips[i], "");
 	SeaShips[i].id = card.id;
+	if (CheckAttribute(card, "ship_key")) { SeaShips[i].ship_key = card.ship_key; }
+	// the keys steer the main character; in the battle autotest SEA_AI steers the hero (battle.c)
+	bool autopilot = seaBattle && TownAuto == 7;
+	if (i == seaHero && !autopilot) { SeaShips[i].MainCharacter = 1; }
 	SeaShips[i].index = i;
 	SeaShips[i].nation = sti(card.nation);
 	SeaShips[i].ship.pos.x = x;
@@ -449,8 +460,12 @@ int Sea_AddShip(aref card, string typeKey, float x, float z, float ay)
 	// a positive speed starts with the sails set
 	SeaShips[i].Ship.Speed.z = 1.0;
 
-	CreateEntity(&SeaShips[i], "ship");
-	SendMessage(&SeaShips[i], "laa", MSG_SHIP_CREATE, &SeaShips[i], &SeaShipTypes[i]);
+	if (seaBattle) { Battle_AddShip(i, x, z, ay); }
+	else
+	{
+		CreateEntity(&SeaShips[i], "ship");
+		SendMessage(&SeaShips[i], "laa", MSG_SHIP_CREATE, &SeaShips[i], &SeaShipTypes[i]);
+	}
 	// lit by the sun of the weather; without a technique the vertex colours are drawn as is
 	SendMessage(&SeaShips[i], "ls", 20510, "DLightModel");
 	Sea_UpdateSpeeds(i, 1.0);

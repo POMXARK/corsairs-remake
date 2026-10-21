@@ -32,7 +32,7 @@
 |---|---|
 | `game.bat` | меню со всеми действиями |
 | `game.bat build Debug` / `build Release` | только собрать движок |
-| `game.bat run Debug menu` | играть; вместо `menu` — `town`, `sea`, `review`, `quest`, `story` |
+| `game.bat run Debug menu` | играть; вместо `menu` — `town`, `sea`, `battle`, `review`, `quest`, `story` |
 | `game.bat convert` | сконвертировать оригинал заново |
 | `game.bat check` | проверить окружение: путь к оригиналу, движок, Python, CMake, Conan |
 | `game.bat logs` | хвост логов |

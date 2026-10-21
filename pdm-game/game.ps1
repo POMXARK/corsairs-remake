@@ -2,7 +2,7 @@
 # (build.ps1 of the game root), converts the installed original and starts the game (run.ps1).
 # Usage: game.ps1                       the menu
 #        game.ps1 build Debug|Release
-#        game.ps1 run [Debug|Release] [menu|sea|town|review|quest|story]
+#        game.ps1 run [Debug|Release] [menu|sea|battle|town|review|quest|story]
 #        game.ps1 convert | package | logs | keys | check
 # Paths are set in pdm-game/local.ps1 (not in git), e.g.  $env:PDM = 'D:\Games\Корсары'
 param([string]$Command = 'menu', [string]$Config = 'Debug', [string]$Scene = 'menu')
@@ -77,6 +77,7 @@ function Show-Keys
 Море           W/S — поднять/убрать паруса, A/D — руль, мышь — камера, Q/E — камера ближе/дальше,
                R — время ×1/×3/×6, M — карта мира, Пробел — в порт (у гавани, значок справа сверху)
                Tab — меню команд (в порт, карта, время), стрелки — выбор, Enter — выполнить, Esc — закрыть
+               F — залп бортами, которые смотрят на врага (в бою)
 Везде          Esc — меню игры: продолжить, настройки, выход (в диалоге — только из разговора)
 '@ | Write-Host
 }
@@ -102,7 +103,7 @@ function Show-Menu
   3) Море                         8) Сконвертировать оригинал заново
   4) Смотр флота                  9) Собрать пакет для игры (dist\)
   5) Квест Хайрока (автотест)     c) Проверить окружение
-  k) Управление   l) Логи   q) Выход
+  b) Морской бой   k) Управление   l) Логи   q) Выход
 "@
         $choice = Read-Host '>'
         try
@@ -114,6 +115,7 @@ function Show-Menu
                 '3' { Invoke-Run $cfg 'sea' }
                 '4' { Invoke-Run $cfg 'review' }
                 '5' { Invoke-Run $cfg 'quest' }
+                'b' { Invoke-Run $cfg 'battle' }
                 '6' { Invoke-Build $cfg }
                 '7' { $cfg = if ($cfg -eq 'Debug') { 'Release' } else { 'Debug' } }
                 '8' { Invoke-Convert }
