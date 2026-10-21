@@ -1,5 +1,5 @@
-"""Converts the sea toolbar of the original Sea Dogs (SQUAD_CONTROL.dll on TEXTURES/toolbar) and the action icon of
-the land for BATTLE_INTERFACE and ILogAndActions of Storm Engine.
+"""Converts the sea toolbar (SQUAD_CONTROL.dll) and the navigator (NAVIGATOR.dll) of the original Sea Dogs on
+TEXTURES/toolbar and the action icon of the land for BATTLE_INTERFACE and ILogAndActions of Storm Engine.
 
 Usage: pdm_hud.py <Sea Dogs install dir with RESOURCE> <game dir>
 Writes into <game dir>/resource/textures/battle_interface/pdm:
@@ -10,15 +10,22 @@ Writes into <game dir>/resource/textures/battle_interface/pdm:
                    on the plate, in a grid of 16x16: the cell ((icon * 4 + flag) * 2 + lit)
   status.tga.tx    ship_status.tga: the bars of the sails, the crew and the hull, empty on the top, full below
   back.tga.tx      the empty bars with the crew full (ours: the engine draws two gauges, the crew stays full)
+  nav_frame.tga.tx    the frame of the navigator (obrooch4: a ring with a plate below for the speeds)
+  nav_compass.tga.tx  the letters of the compass (compas-new), turned with the heading
+  nav_cannons.tga.tx  a white band round the frame: the navigator cuts the arcs of the broadsides out of it and
+                      tints them by their reload (ours: NAVIGATOR.dll shows the guns on a panel of their own)
+  nav_wind.tga.tx     the wind arrow across the map (wind.tf, its black background made transparent)
 and <game dir>/program/data/pdm_hud.c: the cells of the commands, the icons and the flags, the notes of the
 commands and the names of the exits ([main] of TEXTS/RUSSIAN/INI/interface.ini).
 The engine reads a picture grid with as many rows as columns (BIShipIcon::GetShipUVFromPictureIndex
 takes the rows for the columns), so the grids of the ships are square.
+The navigator draws its square textures on one square round the map: the frame and the compass take the middle
+NAV_FRAME of NAV texels (scaled 1.5 from 128), the band of the guns the ring outside the frame.
 """
 import sys
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS.parent / "engine/demos/common"))
@@ -26,6 +33,7 @@ from storm_formats import write_tx  # noqa: E402
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(TOOLS))
 from pdm_ui import LANGUAGE, Original  # noqa: E402
+from tf2tx import tf_image  # noqa: E402
 
 # the icons of the toolbar; SQUAD_CONTROL.dll gives follow_me followme, capture and boarding board,
 # sail_to chase, sea_map map2, land town, skip_time time
@@ -49,6 +57,12 @@ FLAG_AT = (1, 28)
 STATUS_EMPTY = (0, 0, 64, 20)
 STATUS_FULL = (0, 20, 64, 40)
 CREW_ROWS = (27, 33)
+# the navigator: its textures are NAV texels square, the pictures of 128 (frame and compass) take NAV_FRAME of them;
+# the band of the guns from just outside the ring of the frame (its radius 64 of 128), in texels of NAV
+NAV = 256
+NAV_FRAME = 192
+CANNON_BAND = (98, 110)
+SUPERSAMPLE = 4
 # the notes of the commands and the names of the exits of the land, keys of [main]
 NOTES = ["follow_me", "destroy", "capture", "run_away", "sea_map", "land", "boarding", "sail_to", "assault",
          "info_bar", "open_sea", "street", "tavern", "store", "shipyard", "townhall", "fort", "sea",
@@ -110,6 +124,40 @@ def back(status):
     return empty
 
 
+def toolbar(pdm, name):
+    path = pdm.find("TEXTURES/toolbar/" + name)
+    if path is None:
+        raise SystemExit(f"pdm_hud: no TEXTURES/toolbar/{name}")
+    return tf_image(path) if name.lower().endswith(".tf") else Image.open(path).convert("RGBA")
+
+
+def nav_square(image):
+    """A picture of 128 in the middle of the square of the navigator."""
+    canvas = Image.new("RGBA", (NAV, NAV))
+    offset = (NAV - NAV_FRAME) // 2
+    canvas.alpha_composite(image.resize((NAV_FRAME, NAV_FRAME), Image.LANCZOS), (offset, offset))
+    return canvas
+
+
+def nav_cannons():
+    big = NAV * SUPERSAMPLE
+    image = Image.new("RGBA", (big, big))
+    draw = ImageDraw.Draw(image)
+    c = big / 2
+    r_in, r_out = (r * SUPERSAMPLE for r in CANNON_BAND)
+    draw.ellipse((c - r_out, c - r_out, c + r_out, c + r_out), fill=(255, 255, 255, 230))
+    draw.ellipse((c - r_in, c - r_in, c + r_in, c + r_in), fill=(0, 0, 0, 0))
+    return image.resize((NAV, NAV), Image.LANCZOS)
+
+
+def nav_wind(pdm):
+    # black is the background; the arrow fades into it in the middle, so its brightness (tripled: the dark middle
+    # still shows on the map) is its alpha
+    image = toolbar(pdm, "wind.tf")
+    image.putdata([(r, g, b, min(255, 3 * max(r, g, b))) for r, g, b, _ in image.getdata()])
+    return image
+
+
 def strings(pdm):
     path = pdm.find(f"TEXTS/{LANGUAGE}/INI/interface.ini")
     found = {}
@@ -129,12 +177,17 @@ def main():
     status = picture(pdm, "ship_status.tga")
     write_tx(status, out / "status.tga.tx", mip_chain=False)
     write_tx(back(status), out / "back.tga.tx", mip_chain=False)
+    write_tx(nav_square(toolbar(pdm, "obrooch4.tga")), out / "nav_frame.tga.tx", mip_chain=False)
+    write_tx(nav_square(toolbar(pdm, "compas-new.tf")), out / "nav_compass.tga.tx", mip_chain=False)
+    write_tx(nav_cannons(), out / "nav_cannons.tga.tx", mip_chain=False)
+    write_tx(nav_wind(pdm), out / "nav_wind.tga.tx", mip_chain=False)
 
     texts = strings(pdm)
     lines = [f"\tPdmHud.command_cols = {COMMAND_COLS};",
              f"\tPdmHud.command_rows = {-(-len(COMMANDS) * 2 // COMMAND_COLS)};",
              f"\tPdmHud.ship_cols = {SHIP_COLS};",
-             f"\tPdmHud.flag_count = {FLAG_COUNT};"]
+             f"\tPdmHud.flag_count = {FLAG_COUNT};",
+             f"\tPdmHud.nav_scale = {NAV / NAV_FRAME:.6f};"]
     lines += [f"\tPdmHud.command.{name} = {i * 2};" for i, name in enumerate(COMMANDS)]
     lines += [f"\tPdmHud.icon.{icon} = {i};" for i, icon in enumerate(icons)]
     lines += [f"\tPdmHud.flag.{nation} = {f};" for nation, f in FLAGS.items()]

@@ -63,14 +63,14 @@ def decode_palette_indexed(indices, palette):
     return bytes(out)
 
 
-def convert_tf_to_tx(tf_path, tx_path):
-    """Convert a single .tf file to .tx format. Returns (ok, error_msg)."""
+def read_tf(tf_path):
+    """Decode a .tf file. Returns (width, height, mips, error_msg): the mips in B,G,R,A bytes, largest first."""
     with open(tf_path, 'rb') as f:
         data = f.read()
 
     # Parse header (16 bytes)
     if len(data) < 16:
-        return False, "file too small"
+        return 0, 0, None, "file too small"
 
     type_ = data[5]
     mm_count = data[6]
@@ -78,9 +78,9 @@ def convert_tf_to_tx(tf_path, tx_path):
     width, height = struct.unpack_from('<II', data, 8)
 
     if width == 0 or height == 0:
-        return False, f"zero dimensions {width}x{height}"
+        return 0, 0, None, f"zero dimensions {width}x{height}"
     if width > 4096 or height > 4096:
-        return False, f"dimensions too large {width}x{height}"
+        return 0, 0, None, f"dimensions too large {width}x{height}"
 
     offset = 16
     mips_rgba8 = []
@@ -92,12 +92,12 @@ def convert_tf_to_tx(tf_path, tx_path):
             break
         size = w * h * 2
         if offset + size > len(data):
-            return False, f"mip {mip_idx} (16-bit) overflows file"
+            return 0, 0, None, f"mip {mip_idx} (16-bit) overflows file"
         raw = data[offset:offset + size]
         offset += size
 
         if type_ not in DECODERS:
-            return False, f"unknown pixel type {type_}"
+            return 0, 0, None, f"unknown pixel type {type_}"
         mips_rgba8.append(DECODERS[type_](raw))
 
         w //= 2
@@ -107,7 +107,7 @@ def convert_tf_to_tx(tf_path, tx_path):
     palette = None
     if pal_count > 0:
         if offset + 1024 > len(data):
-            return False, "palette overflows file"
+            return 0, 0, None, "palette overflows file"
         palette = []
         for i in range(256):
             r = data[offset + i * 4]
@@ -125,7 +125,7 @@ def convert_tf_to_tx(tf_path, tx_path):
             break
         size = w * h
         if offset + size > len(data):
-            return False, f"mip {mip_idx} (palette) overflows file"
+            return 0, 0, None, f"mip {mip_idx} (palette) overflows file"
         indices = data[offset:offset + size]
         offset += size
 
@@ -140,11 +140,26 @@ def convert_tf_to_tx(tf_path, tx_path):
 
     # Decide which mips to use: prefer 16-bit, fall back to palette
     if mips_rgba8:
-        all_mips = mips_rgba8
-    elif pal_mips_rgba8:
-        all_mips = pal_mips_rgba8
-    else:
-        return False, "no texture data found"
+        return width, height, mips_rgba8, None
+    if pal_mips_rgba8:
+        return width, height, pal_mips_rgba8, None
+    return 0, 0, None, "no texture data found"
+
+
+def tf_image(tf_path):
+    """The largest mip of a .tf file as a PIL RGBA image (ours: for the converters that compose pictures)."""
+    from PIL import Image
+    width, height, mips, err = read_tf(tf_path)
+    if err:
+        raise ValueError(f"{tf_path}: {err}")
+    return Image.frombytes("RGBA", (width, height), mips[0], "raw", "BGRA")
+
+
+def convert_tf_to_tx(tf_path, tx_path):
+    """Convert a single .tf file to .tx format. Returns (ok, error_msg)."""
+    width, height, all_mips, err = read_tf(tf_path)
+    if err:
+        return False, err
 
     # Write .tx file
     # TX_FILE_HEADER (24 bytes): flags, width, height, nmips, format, mip_size

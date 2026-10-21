@@ -127,6 +127,10 @@ void Sea_Start(string islandKey)
 			float k = 1.0 + offset / seaPortDistance;
 			x = stf(PdmIslands.(islandKey).harbour_x) + k * (x - stf(PdmIslands.(islandKey).harbour_x));
 			z = stf(PdmIslands.(islandKey).harbour_z) + k * (z - stf(PdmIslands.(islandKey).harbour_z));
+			// sailing in: the bow to the harbour, port_ay is the heading out of the port (ours); the ship
+			// goes along (sin ay, cos ay). Avilia has no real harbour in the data (harbour 0,0, port next
+			// to it), the ship there misses the port and sails off to the world map
+			ay = atan2(stf(PdmIslands.(islandKey).harbour_x) - x, stf(PdmIslands.(islandKey).harbour_z) - z);
 		}
 	}
 	int hero = Sea_AddShip(PlayerCard, PlayerShipCard.type_key, x, z, ay);

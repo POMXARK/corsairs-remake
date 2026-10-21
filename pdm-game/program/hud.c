@@ -6,6 +6,8 @@
 // closes, as in the original. The commands are the transitions: "На землю" at the harbour of a town, "Карта" (the
 // world map), "Ускорение" (the time). On the land ILogAndActions shows the icon of the exit the hero stands
 // in with the name of the place it leads to; Space goes through it (the original "Действие").
+// Top right at sea the navigator (NAVIGATOR.dll): the map of the island round the ship in the brooch, the letters
+// of the compass and the wind arrow turned with the heading, the speeds of the ship and the wind on its plate.
 // F2 at sea does the possible action: lands at the harbour (ours: the original lands by the menu only).
 
 // shared/battle_interface/msg_control.h and log_and_action.h
@@ -21,6 +23,12 @@
 #define HUD_KEY_ACTION 32
 // the layout of the original is for 800x600 (ours: everything scales with the height of the window)
 #define HUD_BASE_H 600.0
+// the navigator: the size of its brooch (the frame of 128 of the original), its map inside the ring of the frame
+// (radius 58), the speeds on the plate below it (at 56 under the centre, 42 to the sides), all in pixels of 800x600
+#define HUD_NAV_FRAME 128.0
+#define HUD_NAV_MAP 58.0
+#define HUD_NAV_PLATE_Y 56.0
+#define HUD_NAV_PLATE_X 42.0
 // TOWN_AUTO: the autotest stands in an exit this long before it goes through, so its icon is on the video
 #define HUD_AUTO_EXIT_MS 1500
 
@@ -80,13 +88,16 @@ void Hud_CreateLog()
 	act.vertQ = sti(PdmHud.command_rows);
 	act.width = Hud_Px(64.0);
 	act.height = Hud_Px(64.0);
+	// at sea the navigator takes the top right corner, the icon goes under it
+	float top = 16.0;
+	if (hudSea) { top = HUD_NAV_FRAME + 24.0; }
 	act.left = hudW - Hud_Px(80.0);
-	act.top = Hud_Px(16.0);
+	act.top = Hud_Px(top);
 	act.text1.font = "PDM_LOGBOOK_18";
 	act.text1.scale = 1.0;
 	act.text1.color = argb(255, 255, 230, 160);
 	act.text1.pos.x = hudW - Hud_Px(48.0);
-	act.text1.pos.y = Hud_Px(70.0);
+	act.text1.pos.y = Hud_Px(top + 54.0);
 	act.text1.text = "";
 	act.text1.refreshable = 1;
 	Hud_DefineAction("Nothing", -1);
@@ -150,7 +161,7 @@ void Hud_Start()
 	Hud_CreateLog();
 	DeleteAttribute(&BattleInterface, "");
 	BattleInterface.MainChrIndex = seaHero;
-	BattleInterface.ShowNavigator = 0;
+	BattleInterface.ShowNavigator = 1;
 	BattleInterface.ShowCommands = 1;
 
 	// the picture of the ship top left (its top 50 rows of 64, the rest keyed out); the bars right under it,
@@ -187,6 +198,8 @@ void Hud_Start()
 	icon.shipnamefontoffset = Hud_Pos(0.0, 40.0);
 	// the commands in a row from the right of the picture, level with it
 	icon.commandlistverticaloffset = Hud_Px(-32.0);
+
+	Hud_Navigator();
 
 	aref list;
 	makearef(list, BattleInterface.CommandList);
@@ -236,6 +249,64 @@ void Hud_Start()
 	SeaShips[seaHero].Ship.SP = 100;
 	SeaShipTypes[seaHero].SP = 100;
 	SendMessage(&BattleInterface, "llaall", BI_IN_CREATE_SHIP, seaHero, &SeaShips[seaHero], &SeaShipTypes[seaHero], 1, BI_RELATION_FRIEND);
+}
+
+// The navigator reads its attributes in Init. Its square textures are nav_scale times the brooch (tools/pdm_hud.py),
+// the band of the guns round the brooch; the arcs of the sides are in degrees clockwise from the bow.
+void Hud_Navigator()
+{
+	BattleInterface.MaxWind = 30.0;
+	BattleInterface.MaxShipSpeed = 20.0;
+	BattleInterface.ShipSpeedScaler = 1.0;
+	aref nav;
+	makearef(nav, BattleInterface.navigation);
+	int size = Hud_Px(HUD_NAV_FRAME * stf(PdmHud.nav_scale));
+	nav.navigatorWidth = size;
+	nav.navigatorHeight = size;
+	nav.rightPos = hudW - Hud_Px(8.0) - (size - Hud_Px(HUD_NAV_FRAME)) / 2;
+	nav.topPos = Hud_Px(8.0) - (size - Hud_Px(HUD_NAV_FRAME)) / 2;
+	nav.mapRadius = Hud_Px(HUD_NAV_MAP);
+	nav.horizontRadius = 400;
+	nav.minScale = 0.5;
+	nav.maxScale = 2.0;
+	nav.curScale = 1.0;
+	nav.scaleStep = 0.02;
+	nav.shipShowRadius = 6.0;
+	nav.windWidth = Hud_Px(2.0 * HUD_NAV_MAP);
+	nav.windHeight = Hud_Px(2.0 * HUD_NAV_MAP);
+	// the colours of the needles of the original (object_*.tf): the enemy red, ours green
+	nav.argbSeaColor = argb(255, 24, 58, 86);
+	nav.argbFireZoneColor = argb(70, 255, 220, 150);
+	nav.argbEnemyShipColor = argb(255, 230, 40, 30);
+	nav.argbFrendShipColor = argb(255, 100, 250, 0);
+	nav.argbNeutralShipColor = argb(255, 255, 250, 255);
+	nav.argbDeadShipColor = argb(255, 60, 60, 60);
+	nav.argbReadyCannonColor = argb(255, 230, 200, 110);
+	nav.argbChargeCannonColor = argb(255, 200, 90, 40);
+	nav.argbDamageCannonColor = argb(255, 90, 30, 20);
+	// no arcs of the sides yet: the ship has no Cannons.Borts (П4), and without them the engine draws the arcs from
+	// the angle 0, a closed ring. With the guns: left 230..310, right 130..50, clear of the plate of the brooch
+	nav.leftChargeBegAngle = 0;
+	nav.leftChargeEndAngle = 0;
+	nav.rightChargeBegAngle = 0;
+	nav.rightChargeEndAngle = 0;
+	nav.forwardChargeBegAngle = 0;
+	nav.forwardChargeEndAngle = 0;
+	nav.backwardChargeBegAngle = 0;
+	nav.backwardChargeEndAngle = 0;
+	nav.speedShowFont = "PDM_LOGBOOK_16";
+	nav.fontScale = 1.0;
+	nav.speedOutYOffset = Hud_Px(HUD_NAV_PLATE_Y - 8.0);
+	nav.shipSpeedXOffset = Hud_Px(HUD_NAV_PLATE_X);
+	nav.windSpeedXOffset = -Hud_Px(HUD_NAV_PLATE_X);
+	nav.compasTexture = "battle_interface\pdm\nav_compass.tga";
+	nav.cannonsTexture = "battle_interface\pdm\nav_cannons.tga";
+	nav.emptyTexture = "battle_interface\pdm\nav_frame.tga";
+	nav.windTexture = "battle_interface\pdm\nav_wind.tga";
+	// no icons of the charge, the sails and the wind: the original has none on the navigator
+	nav.chargePictureSize = "0,0";
+	nav.sailstatePictureSize = "0,0";
+	nav.windPictureSize = "0,0";
 }
 
 void Hud_DefineCommand(string name, string picture, string note)

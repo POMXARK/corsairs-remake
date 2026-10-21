@@ -39,6 +39,7 @@ does it all from a menu: `pdm-game/game.sh` (Linux), `pdm-game/game.bat` (Window
 [![P2: the fleet review, all 43 hulls of Ships.idf with the flags and arms of their nations](pdm-game/media/pdm-review.jpg)](pdm-game/media/pdm-review.mp4)
 [![P5: the world map of the original, the ship sails from Granda Avilia to Highrock](pdm-game/media/pdm-map.jpg)](pdm-game/media/pdm-map.mp4)
 [![P5: the toolbar of the original: the ship picture with its flag and bars at sea, the action icon of the exit on land](pdm-game/media/pdm-hud.jpg)](pdm-game/media/pdm-hud.mp4)
+[![P5: the navigator of the original: the island map in the brooch, the compass turning with the course, the wind arrow and the wind and ship speeds](pdm-game/media/pdm-nav.jpg)](pdm-game/media/pdm-nav.mp4)
 
 The fleet review (`SCENE=review`, 2× speed): every hull of `Ships.idf` on the water in turn, masts and
 yards as model nodes, deck guns, the flag of its nation at the mastheads and the stern, the arms on the
