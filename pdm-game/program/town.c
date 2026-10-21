@@ -115,6 +115,8 @@ void Town_Start(string loc, string from)
 	townStreet = loc;
 	townIsland = Town_IslandOf(loc);
 	Trace("PDM town: " + loc + " of the island " + townIsland);
+	// the music of the towns of the nation of the island
+	if (townIsland != "") { Sound_TownMusic(sti(PdmIslands.(townIsland).nation)); }
 	SetEventHandler("EWhr_GetShadowDensity", "Town_ShadowDensity", 0);
 	SetEventHandler("EWhr_GetFogDensity", "Town_FogDensity", 0);
 	SetEventHandler("Town_Tick", "Town_Tick", 0);
@@ -209,6 +211,8 @@ void Town_Load(string loc, string from)
 	SendMessage(&Scene, "si", "SetActiveCamera", &TownCamera);
 
 	Town_PlaceCharacters(data);
+	// the voices of many when the location is full of people
+	Sound_Location(data.sound, townNpcCount > 2);
 	townLoaded = true;
 	if (TownAuto) { PostEvent("Town_AutoGo", 3000); }
 	Trace("PDM town: in " + loc + " from " + from + ", " + townNpcCount + " characters");

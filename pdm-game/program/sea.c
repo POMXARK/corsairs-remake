@@ -52,6 +52,8 @@ float cameraAngle = 1.6;
 void Sea_Start()
 {
 	Sea_MapShipKeys();
+	Sound_StopLocation();
+	Sound_Music("Freesailing");
 	Sea_CreateWorld();
 	int hero = Sea_AddShip(PlayerCard, PlayerShipCard.type_key, 0.0, 0.0, 0.0);
 	SeaShips[hero].MainCharacter = 1;

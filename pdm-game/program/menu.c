@@ -38,6 +38,7 @@ void Menu_Start()
 	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\mainmenu.ini");
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_SAVEGAME", 0);
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_RESUMEGAME", 0);
+	Sound_Music("Main");
 	Trace("PDM menu: main menu");
 	if (StartScene == "menu-newgame")
 	{

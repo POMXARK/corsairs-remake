@@ -53,6 +53,25 @@ ACTIONS = {
     "talk": ["talk_1", "stand_calm"],
 }
 
+# the blades of the original: a fighter holds his twice, in the scabbard on the belt and drawn in the
+# hand, and the game shows one of them; out of a fight the drawn one is left out
+BLADES = ("soldier_spa_palash", "pirat_sabel")
+
+
+def drawn_blades(textures, parents):
+    """The parts of the drawn blades: of the two parts of a blade, the one farther from the root."""
+    def depth(part):
+        n = 0
+        while parents[part] >= 0:
+            part, n = parents[part], n + 1
+        return n
+    out = set()
+    for blade in BLADES:
+        parts = [i for i, t in enumerate(textures) if Path(t).stem.lower() == blade]
+        if len(parts) == 2 and depth(parts[0]) != depth(parts[1]):
+            out.add(max(parts, key=depth))
+    return out
+
 
 def read_keys(path: Path):
     """The animation keys of every mesh of LOD 0: [(tx, ty, tz, rx, ry, rz)] per frame."""
@@ -268,6 +287,8 @@ def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: fl
     assert len(meshes) == len(keys), "a key list per mesh"
     for part, mesh in enumerate(meshes):
         mesh.vertices = [(p, n, uv, bone[part]) for p, n, uv, _ in mesh.vertices]
+    drawn = drawn_blades([m.texture for m in meshes], parents)
+    meshes = [m for part, m in enumerate(meshes) if part not in drawn]
 
     bone_parents = [-1] + [bone[parents[part]] for part in order[1:]]
     joints = [tuple(c * k for c in pos[order[0]][0])] + [tuple(c * k for c in pivots[part]) for part in order[1:]]

@@ -36,6 +36,8 @@ fi
 [ -f "$DIR/resource/ini/interfaces/mainmenu.ini" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR" MainMenu
 # the towns and interiors (WORLDS/locations/*.loc), their patches and the characters with animation
 [ -f "$DIR/program/data/pdm_world.c" ] || python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"
+# the music, the sounds and their aliases, the sounds of the kinds of location
+[ -f "$DIR/program/data/pdm_sound.c" ] || python3 -I "$TOOLS/pdm_sound.py" "$PDM" "$DIR"
 python3 -I "$TOOLS/pdm_data2c.py" "$DIR/data" "$DIR/program"
 python3 -I "$TOOLS/pdm_logic2c.py" "$DIR/data" "$DIR/program"
 # the scene to start with: menu, sea (the hero on his ship), review (all ship types side by side) or story

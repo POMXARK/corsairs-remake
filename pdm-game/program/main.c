@@ -1,7 +1,8 @@
 // The original Sea Dogs (PDM 1.061) on Storm Engine. The original has no scripts: its logic is C++
 // in the DLLs of MODULES. These scripts play the role of those DLLs on the data of the original,
 // which run.sh converts: data\pdm_data.c (written by tools/pdm_data2c.py) holds its tables and cards,
-// data\pdm_logic.c (tools/pdm_logic2c.py) its actions, story lines and dialogs, run by story.c.
+// data\pdm_logic.c (tools/pdm_logic2c.py) its actions, story lines and dialogs, run by story.c,
+// data\pdm_sound.c (tools/pdm_sound.py) its music and the sounds of the locations, played by sound.c.
 // Stages of the port: docs/port-plan.md.
 
 #define EXECUTE 0
@@ -21,6 +22,8 @@ aref PlayerShipType;
 #include "data\pdm_logic.c"
 #include "data\pdm_world.c"
 #include "data\pdm_voices.c"
+#include "data\pdm_sound.c"
+#include "sound.c"
 #include "story.c"
 #include "sea.c"
 #include "town.c"
@@ -39,6 +42,7 @@ void Main()
 	PdmLogic_Init();
 	PdmWorld_Init();
 	PdmVoices_Init();
+	PdmSound_Init();
 	makearef(PlayerCard, PdmCharacters.Nicolas_Sharp);
 	// an attribute name in .(...) has to be a variable
 	string shipKey = PlayerCard.ship_key;
@@ -55,6 +59,7 @@ void Main()
 	Render.BackColor = argb(255, 0, 0, 0);
 	CreateEntity(&Scene, "Scene");
 	LayerAddObject(EXECUTE, &Scene, 0);
+	Sound_Init();
 	// run.sh writes the scene to start with (SCENE=…) into data\start.c
 	if (StartScene == "story")
 	{
