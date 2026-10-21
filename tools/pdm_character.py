@@ -228,8 +228,23 @@ def read_actions(idf: Path):
     return actions
 
 
-def write_ani(path: Path, an_name: str, actions, k: float, frames: int):
-    """The Storm actions the Character entity looks for, from the PDM ones (ACTIONS)."""
+def step_frames(heights, start, end):
+    """The two frames of a walk cycle where a foot comes down: the pelvis is lowest when both feet
+    are on the ground, once a step, half a cycle apart."""
+    cycle = list(range(start, end + 1))
+    first = min(cycle, key=lambda f: heights[f])
+    n = len(cycle)
+
+    def apart(f):
+        d = abs(f - first) % n
+        return min(d, n - d)
+    second = min((f for f in cycle if apart(f) >= n // 4), key=lambda f: heights[f], default=first)
+    return first, second
+
+
+def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights):
+    """The Storm actions the Character entity looks for, from the PDM ones (ACTIONS); heights: the
+    height of the pelvis per frame, for the steps."""
     text = f"; converted by tools/pdm_character.py, {FPS:g} frames a second as in the original\n"
     text += f"animation = {an_name}.an\n"
     found = []
@@ -243,6 +258,9 @@ def write_ani(path: Path, an_name: str, actions, k: float, frames: int):
             text += "type = reverse\n"
         if speed:
             text += f'data = "Walk speed", "{speed:.3f}"\n'
+            # the Character entity plays a step sound (step_<material of the patch>) on these events
+            left, right = step_frames(heights, start, end)
+            text += f'event = "LStep", {left}, always\nevent = "RStep", {right}, always\n'
 
     for name, sources in ACTIONS.items():
         src = next((s for s in sources if s in actions), None)
@@ -306,7 +324,8 @@ def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: fl
     write_an(out / "animation" / f"{name}.an", FPS, bone_parents, joints, root_positions, rotations)
     # anim_types.idf names the files in either case (traktir_man.idf for Traktir_Man.idf)
     anims = index_files(res / "WORLDS" / "CHARACTERS")
-    found = write_ani(out / "animation" / f"{name}.ani", name, read_actions(anims[anim.lower()]), k, frames)
+    found = write_ani(out / "animation" / f"{name}.ani", name, read_actions(anims[anim.lower()]), k, frames,
+                      [p[1] for p in root_positions])
     missing = []
     for stem in sorted(used):
         src = textures.get(stem)

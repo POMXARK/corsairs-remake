@@ -14,7 +14,8 @@ class of his model in anim_types.idf.
 Writes, in the units of the engine (metres, pdm_character.DEFAULT_SCALE):
   models/locations/<model>.gm      the location model, a mesh per texture, with the BSP for traces
   models/locations/<patch>.ptc     the floor the characters walk on, from the patch .cff (with the
-                                   ground floor of an interior, which the patch leaves out)
+                                   ground floor of an interior, which the patch leaves out), its
+                                   material the floor of the steps (pdm_sound.step_material)
   textures/locations/*.tga.tx
   models/characters, animation     every character model of anim_types.idf (pdm_character.py)
   program/data/pdm_world.c         PdmLocations.<loc> and PdmCharModels.<model>, PdmWorld_Init()
@@ -29,6 +30,7 @@ TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS))
 import cff2gm  # noqa: E402
 import pdm_character  # noqa: E402
+import pdm_sound  # noqa: E402
 from cff2gm import Mesh, write_gm  # noqa: E402
 from pdm2storm import convert_texture, parse_idf  # noqa: E402
 from pdm_ship import index_files  # noqa: E402
@@ -580,7 +582,9 @@ class World:
         triangles = clean_patch(triangles)
         # named by the patch: locations with one model can have different patches
         stem = cff.stem.lower()
-        write_ptc(triangles, self.out / "models" / "locations" / f"{stem}.ptc")
+        # the material of the floor gives the sound of the steps on it
+        write_ptc(triangles, self.out / "models" / "locations" / f"{stem}.ptc",
+                  materials=(pdm_sound.step_material(self.res, loc["sound"]),))
         return stem
 
     def location(self, path: Path):
