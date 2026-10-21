@@ -49,7 +49,9 @@ build() {
 run() {
     local cfg="${1:-debug}" scene="${2:-menu}" engine
     engine="$(engine_of "$cfg")"
-    [ -x "$engine" ] || { echo "no $cfg engine at $engine: game.sh build $cfg"; exit 1; }
+    # the first run from an unpacked archive has no engine yet: it is built here (ours)
+    [ -x "$engine" ] || build "$cfg"
+    [ -x "$engine" ] || { echo "no $cfg engine at $engine after the build"; exit 1; }
     case "$scene" in
         quest) export SCENE=town TOWN=City_HighRock TOWN_AUTO=3 ;;
         town)  export SCENE=town TOWN="${TOWN:-City_HighRock}" ;;
@@ -105,11 +107,11 @@ keys() {
 Диалог         стрелки — выбор ответа, Пробел/Enter/ЛКМ — ответить, PageUp/PageDown — листать,
                Esc — выйти из разговора
 Море           W/S — поднять/убрать паруса, A/D — руль, мышь — камера, Q/E — камера ближе/дальше,
-               R — время ×1/×3/×6, M — карта мира, F2 — в порт (у гавани, значок справа сверху)
+               R — время ×1/×3/×6, M — карта мира, Пробел — в порт (у гавани, значок справа сверху)
                Tab — меню команд (в порт, карта, время), стрелки — выбор, Enter — выполнить, Esc — закрыть
 Карта мира     вверх/вниз — остров, Enter/ЛКМ — плыть к нему, ЛКМ по острову на карте — туда же,
                «Выход» — назад в море
-Везде          Esc — выход из игры (в диалоге — только из разговора)
+Везде          Esc — меню игры: продолжить, настройки, выход (в диалоге — только из разговора)
 EOF
 }
 

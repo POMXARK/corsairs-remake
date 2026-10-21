@@ -27,6 +27,9 @@ function Invoke-Run([string]$Cfg, [string]$Name)
         'town' { $env:SCENE = 'town'; $env:TOWN = 'City_HighRock' }
         default { $env:SCENE = $Name }
     }
+    # the first run from an unpacked archive has no engine yet: it is built here (ours)
+    if (-not (Test-Path (Get-Engine $Cfg))) { Invoke-Build $Cfg }
+    if (-not (Test-Path (Get-Engine $Cfg))) { throw "no engine after the build: $(Get-Engine $Cfg)" }
     & powershell -NoProfile -ExecutionPolicy Bypass -File "$Dir/run.ps1" (Get-Engine $Cfg)
 }
 
@@ -72,9 +75,9 @@ function Show-Keys
 Диалог         стрелки — выбор ответа, Пробел/Enter/ЛКМ — ответить, PageUp/PageDown — листать,
                Esc — выйти из разговора
 Море           W/S — поднять/убрать паруса, A/D — руль, мышь — камера, Q/E — камера ближе/дальше,
-               R — время ×1/×3/×6, M — карта мира, F2 — в порт (у гавани, значок справа сверху)
+               R — время ×1/×3/×6, M — карта мира, Пробел — в порт (у гавани, значок справа сверху)
                Tab — меню команд (в порт, карта, время), стрелки — выбор, Enter — выполнить, Esc — закрыть
-Везде          Esc — выход из игры (в диалоге — только из разговора)
+Везде          Esc — меню игры: продолжить, настройки, выход (в диалоге — только из разговора)
 '@ | Write-Host
 }
 
