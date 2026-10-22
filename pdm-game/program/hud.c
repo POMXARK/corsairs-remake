@@ -643,15 +643,16 @@ void Hud_Navigator()
 	nav.argbDamageCannonColor = argb(255, 90, 30, 20);
 	// the reload of the sides (Cannons.Borts of battle.c), an arc of each side that fills as its guns load, clear
 	// of the plate of the brooch (ours: NAVIGATOR.dll shows the guns on a panel of their own, guns_info); the bow
-	// and the stern have no arcs
+	// and the stern have arcs of their own (cannonf, cannonb), filled the same way; the gaps between the arcs
+	// are 25 degrees
 	nav.leftChargeBegAngle = 230;
 	nav.leftChargeEndAngle = 310;
 	nav.rightChargeBegAngle = 130;
 	nav.rightChargeEndAngle = 50;
-	nav.forwardChargeBegAngle = 0;
-	nav.forwardChargeEndAngle = 0;
-	nav.backwardChargeBegAngle = 0;
-	nav.backwardChargeEndAngle = 0;
+	nav.forwardChargeBegAngle = -25;
+	nav.forwardChargeEndAngle = 25;
+	nav.backwardChargeBegAngle = 205;
+	nav.backwardChargeEndAngle = 155;
 	nav.speedShowFont = "PDM_LOGBOOK_16";
 	nav.fontScale = 1.0;
 	nav.speedOutYOffset = Hud_Px(HUD_NAV_PLATE_Y - 8.0);

@@ -61,8 +61,8 @@ if (-not ((Test-Path $MainMap) -and ((Get-Content -Raw $MainMap) -match 'fogStam
 if (-not (Test-Path "$Demo/program/data/pdm_world.c")) { Invoke-Python "$Tools/pdm_world.py" $Pdm $Demo }
 # the cabin of the boarding and the fighters with the blade drawn, after the characters
 if (-not (Select-String -Quiet -Pattern 'PdmBoarding.hud' -Path "$Demo/program/data/pdm_boarding.c" -ErrorAction SilentlyContinue)) { Invoke-Python "$Tools/pdm_boarding.py" $Pdm $Demo }
-# the islands and where the ship appears at each
-if (-not (Select-String -Quiet -Pattern '"label"' -Path "$Demo/data/islands/Highrock.json" -ErrorAction SilentlyContinue)) { Invoke-Python "$Tools/pdm_island.py" $Pdm "$Demo/resource" all --data "$Demo/data" }
+# the islands, where the ship appears at each and their forts
+if (-not (Select-String -Quiet -Pattern '"fort"' -Path "$Demo/data/islands/Highrock.json" -ErrorAction SilentlyContinue)) { Invoke-Python "$Tools/pdm_island.py" $Pdm "$Demo/resource" all --data "$Demo/data" }
 # the toolbar of the sea (the pictures with the class, the panel of the charges) and its notes
 if (-not (Select-String -Quiet -Pattern 'info_rows' -Path "$Demo/program/data/pdm_hud.c" -ErrorAction SilentlyContinue)) { Invoke-Python "$Tools/pdm_hud.py" $Pdm $Demo }
 # the music, the sounds and their aliases

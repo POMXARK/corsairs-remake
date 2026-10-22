@@ -4,6 +4,7 @@
 A PDM island is a DESC/<Island>.def like a ship: the land (<Island>.cff), its forts (Model items linked
 to it) and the points of the fort guns and the flag (Cannon, Flag). The land and the forts go into one
 model, in metres by the scale of the ships, with their textures in textures/islands/<name>/*.tga.tx.
+The forts again, with a label cannon<N> per gun, go into <Name>_fort.gm: the model of the fort for AIFort.
 The island entity takes models/islands/<Name>/<Name>.gm and the depth map round it, foam/islands/<Name>.tga
 and .ini: made here from the same model (the engine would trace it at the first start, minutes in Debug).
 
@@ -46,6 +47,9 @@ PORT_CLEARANCE = 120.0
 LAND_DEPTH = -6.0
 # the ship leaves for the world map this far beyond the farthest corner of the island from the harbour (ours)
 MAP_EXIT_MARGIN = 600.0
+# the fort (sub 223) and the gun row of a battery (sub 224): also the model of the fort AIFort aims and
+# traces the balls against
+FORT_SUBS = (223, 224)
 
 
 def island_model(name):
@@ -138,7 +142,7 @@ def convert(res, out, island, name, k, data=None):
         return f"{tex_dir}\\{stem.lower()}.tga"
 
     items = parse_def(desc[island.lower() + ".def"])["items"]
-    meshes, harbour = [], []
+    meshes, harbour, fort = [], [], []
     for it, pos in placed(items, "Model"):
         cff = models.get(it["file"].lower()) or models.get(Path(it["file"]).stem.lower())
         if cff is None:
@@ -154,8 +158,16 @@ def convert(res, out, island, name, k, data=None):
                 harbour += [v[0] for v in m.vertices]
             else:
                 meshes.append(m)
+                if it["sub"] in FORT_SUBS:
+                    fort.append(m)
     used = {Path(m.texture.replace("\\", "/")).stem for m in meshes}
-    guns = [it for it in items if it["class"] == "Cannon"]
+    # the fort guns: a label cannon<N> per Cannon item, its z axis along the barrel (rot[1] from +z, as on
+    # the ships); AIFort finds them by the name (sea_ai/src/ai_fort.cpp, ScanFortForCannons)
+    guns = [(tuple(v * k for v in pos), it["rot"][1]) for it, pos in placed(items, "Cannon", points=True)]
+    if guns:
+        labels = [("cannons", f"cannon{n + 1}", at, (round(math.sin(r), 6), round(math.cos(r), 6)))
+                  for n, (at, r) in enumerate(guns)]
+        write_gm(fort, out / "models" / "islands" / name / f"{name}_fort.gm", bsp=bool(fort), labels=labels)
 
     gm = out / "models" / "islands" / name / f"{name}.gm"
     gm.parent.mkdir(parents=True, exist_ok=True)
@@ -180,11 +192,15 @@ def convert(res, out, island, name, k, data=None):
         label = nme.read_bytes().decode("cp1251").strip() if nme else name
         dst = Path(data) / "islands" / f"{name}.json"
         dst.parent.mkdir(parents=True, exist_ok=True)
-        dst.write_text(json.dumps({"model": name, "port_x": round(x, 1), "port_z": round(z, 1),
-                                   "port_ay": round(ay, 3), "harbour_x": round(float(port[0]), 1),
-                                   "harbour_z": round(float(port[2]), 1),
-                                   "exit_r": round(exit_r), "label": label}, indent=1, ensure_ascii=False) + "\n",
-                       encoding="utf-8")
+        place = {"model": name, "port_x": round(x, 1), "port_z": round(z, 1),
+                 "port_ay": round(ay, 3), "harbour_x": round(float(port[0]), 1),
+                 "harbour_z": round(float(port[2]), 1), "exit_r": round(exit_r), "label": label}
+        if guns:
+            # the middle of the guns: where SEA_AI takes the fort to be
+            place.update(fort=f"{name}_fort", fort_guns=len(guns),
+                         fort_x=round(float(np.mean([g[0][0] for g in guns])), 1),
+                         fort_z=round(float(np.mean([g[0][2] for g in guns])), 1))
+        dst.write_text(json.dumps(place, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
         line += f", the ship at {x:.0f}, {z:.0f} heading {math.degrees(ay):.0f}"
     print(line)
 

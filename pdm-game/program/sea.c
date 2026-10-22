@@ -137,7 +137,9 @@ void Sea_Start(string islandKey)
 	}
 	// the ship entity steers the main character by the keys; SEA_AI takes it at its creation
 	seaHero = seaShipCount;
-	int hero = Sea_AddShip(PlayerCard, PlayerShipCard.type_key, x, z, ay);
+	string heroType = PlayerShipCard.type_key;
+	if (seaBattle && TownAuto == 11) { heroType = FORT_AUTO_SHIP; }
+	int hero = Sea_AddShip(PlayerCard, heroType, x, z, ay);
 	Sea_CreateCamera(hero);
 	Hud_Start();
 	if (seaBattle) { Battle_AddEnemy(x, z, ay); }
@@ -452,7 +454,7 @@ int Sea_AddShip(aref card, string typeKey, float x, float z, float ay)
 	if (CheckAttribute(card, "ship_key")) { SeaShips[i].ship_key = card.ship_key; }
 	// the keys steer the main character; in the battle autotest SEA_AI steers the hero (battle.c)
 	// the script compiler does not parse "a && (b || c)"
-	bool autopilot = TownAuto == 7 || TownAuto == 8;
+	bool autopilot = TownAuto == 7 || TownAuto == 8 || TownAuto == 11;
 	if (!seaBattle) { autopilot = false; }
 	if (i == seaHero && !autopilot) { SeaShips[i].MainCharacter = 1; }
 	SeaShips[i].index = i;
@@ -536,7 +538,10 @@ bool Sea_AtHarbour(float d)
 // the ship, the player turns it with the mouse
 void Sea_Tick()
 {
-	if (TownAuto != 0)
+	// the autotests fly the camera round the ship; in a battle it follows the enemy or the fort (Battle_AddEnemy, Fort_Auto)
+	bool cameraFollows = seaBattle && battleEnemy >= 0;
+	if (fortAuto) { cameraFollows = true; }
+	if (TownAuto != 0 && !cameraFollows)
 	{
 		cameraAngle = cameraAngle + 0.006;
 		ShipCamera.AngleY = cameraAngle;

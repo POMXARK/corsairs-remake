@@ -34,6 +34,7 @@ aref PlayerShipType;
 #include "hud.c"
 #include "sea.c"
 #include "battle.c"
+#include "fort.c"
 #include "town.c"
 #include "boarding.c"
 #include "review.c"

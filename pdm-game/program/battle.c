@@ -5,7 +5,8 @@
 // cannons.idf): its reload time, range and damage. At zero the ship is reported dead to SEA_AI and sinks.
 // F fires the sides that bear on the enemy (ours: the original fires by the toolbar).
 // SCENE=battle starts at sea at the island of the hero with an enemy ahead; TOWN_AUTO=7 fires by itself
-// until the enemy sinks and quits. Within BOARD_DISTANCE the enemy can be boarded (boarding.c).
+// until the enemy sinks and quits; TOWN_AUTO=11 sends the hero on a ship of the first rank against the fort
+// of the island (fort.c). Within BOARD_DISTANCE the enemy can be boarded (boarding.c).
 
 // shared/sea_ai/script_defines.h
 #define AI_MESSAGE_ADD_SHIP 51001
@@ -55,6 +56,9 @@
 // TOWN_AUTO=7 and 8: SEA_AI sails and fires the hero too (Sea_AddShip leaves him no MainCharacter); the
 // autotest quits this long after a ship sinks
 #define BATTLE_AUTO_EXIT_MS 8000
+// the camera of the autotests: 0..1 from close to the hull to far out, and the angle above the sea
+#define BATTLE_AUTO_CAMERA_DISTANCE 0.4
+#define BATTLE_AUTO_CAMERA_HEIGHT -0.3
 // the enemy can be boarded this close (ours, boarding.c); SEA_AI brings the hero to BOARD_APPROACH of it
 #define BOARD_DISTANCE 40.0
 #define BOARD_APPROACH 25.0
@@ -156,6 +160,7 @@ void Battle_Release()
 	DelEventHandler("Board_Start", "Board_Start");
 	DelEventHandler("Battle_SailTo", "Battle_SailTo");
 	DelEventHandler("Battle_SailToCheck", "Battle_SailToCheck");
+	Fort_Release();
 	DeleteClass(&AIBalls);
 	DeleteClass(&AISea);
 	DeleteClass(&Particles);
@@ -179,9 +184,11 @@ void Battle_SetBort(ref type, string bort, float dir, float zone)
 	type.Cannons.Borts.(bort).FireAngMax = BATTLE_GUN_ELEVATION;
 }
 
-// the cannon of a ship: weapon_type of its card is the line of cannons.idf, the first where there is no such line
+// the cannon of a ship: weapon_type of its card is the line of cannons.idf, the first where there is no such line;
+// a fort has the heaviest, the last (ours)
 int Battle_CannonLine(int i)
 {
+	if (i == FORT_INDEX) { return GetAttributesNum(&PdmCannons) - 1; }
 	int line = 0;
 	string shipKey = "";
 	if (CheckAttribute(&SeaShips[i], "ship_key")) { shipKey = SeaShips[i].ship_key; }
@@ -220,6 +227,8 @@ void Battle_AddShip(int i, float x, float z, float ay)
 // ship settles the start positions
 void Battle_AddEnemy(float x, float z, float ay)
 {
+	// TOWN_AUTO=11: no enemy ship, the fort of the island is the enemy (fort.c)
+	if (TownAuto == 11 && Fort_Auto()) { return; }
 	// an attribute name in .(...) has to be a variable
 	string enemyKey = BATTLE_ENEMY;
 	aref card;
@@ -250,6 +259,15 @@ void Battle_AddEnemy(float x, float z, float ay)
 	}
 	// TOWN_AUTO=9: the hero gives "Плыть к" and is brought to the enemy
 	if (TownAuto == 9) { PostEvent("Battle_SailTo", 1000); }
+	Fort_Create(seaIsland);
+	// the autotests: the camera behind the hero, aside of the line to the enemy so that the hull does not
+	// cover it (SHIP_CAMERA Target), far and a little above, so that both ships and the fort beyond are seen
+	if (TownAuto != 0)
+	{
+		ShipCamera.Target = battleEnemy;
+		ShipCamera.Distance = BATTLE_AUTO_CAMERA_DISTANCE;
+		ShipCamera.AngleX = BATTLE_AUTO_CAMERA_HEIGHT;
+	}
 }
 
 // the battle music of mmusic.ini by the nation of the enemy (nations.idf: england, pirate, france, spain)
@@ -303,15 +321,19 @@ void Battle_SailToCheck()
 
 void Battle_AutoExit()
 {
+	Fort_Report();
 	Trace("PDM: autotest done, battle");
 	ExitProgram();
 }
 
-// the hero and the enemy are enemies, the rest friends
+// the hero and the enemy are enemies, the rest friends; a fort by the nations (fort.c)
 int Battle_Relation()
 {
 	int index1 = GetEventData();
 	int index2 = GetEventData();
+	if (index1 == FORT_INDEX && Fort_Enemy(index2)) { return RELATION_ENEMY; }
+	if (index2 == FORT_INDEX && Fort_Enemy(index1)) { return RELATION_ENEMY; }
+	if (index1 == FORT_INDEX || index2 == FORT_INDEX) { return RELATION_FRIEND; }
 	int heroes = 0;
 	if (index1 == seaHero) { heroes++; }
 	if (index2 == seaHero) { heroes++; }
@@ -363,8 +385,18 @@ float Battle_FireScatter()
 	float x = GetEventData();
 	float y = GetEventData();
 	float z = GetEventData();
-	float dx = x - stf(character.ship.pos.x);
-	float dz = z - stf(character.ship.pos.z);
+	float dx = 0.0;
+	float dz = 0.0;
+	if (sti(character.index) == FORT_INDEX)
+	{
+		dx = x - stf(FortLabel.x);
+		dz = z - stf(FortLabel.z);
+	}
+	else
+	{
+		dx = x - stf(character.ship.pos.x);
+		dz = z - stf(character.ship.pos.z);
+	}
 	return BATTLE_SCATTER * sqrt(dx * dx + dz * dz);
 }
 
@@ -435,6 +467,11 @@ void Battle_CannonFire()
 
 	Battle_Sound("sfire", x, y, z, true);
 	if (sti(character.index) == seaHero) { battleShots++; }
+	if (sti(character.index) == FORT_INDEX)
+	{
+		fortShots++;
+		Trace("PDM: fort fires, shot " + fortShots + ", reach " + reach);
+	}
 }
 
 // "illffflf": the ship hit, the owner of the ball, the index of the ship hit and the point
@@ -466,13 +503,13 @@ void Battle_HullHit()
 		Sound_Music("die");
 		Hud_Log("Наш корабль тонет!");
 		Trace("PDM: battle, the hero sinks");
-		if (TownAuto == 7 || TownAuto == 8) { PostEvent("Battle_AutoExit", BATTLE_AUTO_EXIT_MS); }
+		if (TownAuto == 7 || TownAuto == 8 || TownAuto == 11) { PostEvent("Battle_AutoExit", BATTLE_AUTO_EXIT_MS); }
 		return;
 	}
 	Sound_Music("win");
 	Hud_Log("Враг идёт ко дну! Попаданий " + battleHits + " из " + battleShots);
 	Trace("PDM: battle, the enemy sinks after " + battleHits + " hits of " + battleShots + " shots");
-	if (TownAuto == 7 || TownAuto == 8) { PostEvent("Battle_AutoExit", BATTLE_AUTO_EXIT_MS); }
+	if (TownAuto == 7 || TownAuto == 8 || TownAuto == 11) { PostEvent("Battle_AutoExit", BATTLE_AUTO_EXIT_MS); }
 }
 
 void Battle_WaterHit()

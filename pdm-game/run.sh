@@ -58,8 +58,8 @@ grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'PDM_
 # the cabin of the boarding, the fighters with the blade drawn and the plates of the bars, after the characters (it
 # writes their .ani again); again for the data written before the plates
 grep -qs "PdmBoarding.hud" "$DIR/program/data/pdm_boarding.c" || python3 -I "$TOOLS/pdm_boarding.py" "$PDM" "$DIR"
-# the islands (DESC/<Island>.def, WORLDS/islands_x.idf), where the ship appears at each and their names
-grep -qs '"label"' "$DIR/data/islands/Highrock.json" || python3 -I "$TOOLS/pdm_island.py" "$PDM" "$DIR/resource" all --data "$DIR/data"
+# the islands (DESC/<Island>.def, WORLDS/islands_x.idf), where the ship appears at each, their names and forts
+grep -qs '"fort"' "$DIR/data/islands/Highrock.json" || python3 -I "$TOOLS/pdm_island.py" "$PDM" "$DIR/resource" all --data "$DIR/data"
 # the toolbar of the sea (the commands, the pictures of the ships with flags, the bars) and its notes
 grep -qs "info_rows" "$DIR/program/data/pdm_hud.c" || python3 -I "$TOOLS/pdm_hud.py" "$PDM" "$DIR"
 # the music, the sounds and their aliases, the sounds of the kinds of location
