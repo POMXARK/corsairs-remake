@@ -74,7 +74,6 @@ bool Board_Can()
 // a tick of the battle: the autotest boards as soon as it can
 void Board_SeaTick()
 {
-	Battle_SailToTick();
 	if (TownAuto == 8 && Board_Can()) { PostEvent("Board_Start", 0); }
 }
 

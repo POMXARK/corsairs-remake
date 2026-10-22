@@ -592,7 +592,7 @@ void Hud_PossibleCommands()
 {
 	int chr = GetEventData();
 	BattleInterface.Commands.board.enable = Board_Can();
-	BattleInterface.Commands.sail_to.enable = Battle_CanSailTo() || battleSailTo;
+	BattleInterface.Commands.sail_to.enable = Battle_CanSailTo();
 	BattleInterface.Commands.land.enable = Hud_CanLand();
 	BattleInterface.Commands.sea_map.enable = hudMapFree;
 	BattleInterface.Commands.skip_time.enable = 1;

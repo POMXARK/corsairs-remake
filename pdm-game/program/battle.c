@@ -17,7 +17,6 @@
 #define AI_MESSAGE_CHARACTER_DEAD 51026
 #define AITASK_ATTACK 1
 #define AITASK_ABORDAGE 5
-#define AITASK_MOVE 7
 #define PRIMARY_TASK 0
 #define RELATION_FRIEND 1
 #define RELATION_ENEMY 3
@@ -59,6 +58,9 @@
 // the enemy can be boarded this close (ours, boarding.c); SEA_AI brings the hero to BOARD_APPROACH of it
 #define BOARD_DISTANCE 40.0
 #define BOARD_APPROACH 25.0
+// "Плыть к" puts the hero this far abeam of the enemy, within BOARD_DISTANCE (ours)
+#define BATTLE_SAIL_TO 30.0
+#define MSG_SHIP_TELEPORT 50317
 
 // steers the enemy, aims and loads the guns of every ship
 object AISea;
@@ -71,8 +73,6 @@ int battleEnemy = -1;
 int battleShots = 0;
 int battleHits = 0;
 int battleBroadsides = 0;
-// the command "Плыть к" of the toolbar (SQUAD_CONTROL.dll sail_to): SEA_AI steers the hero to the enemy
-bool battleSailTo = false;
 
 // SCENE=battle: at sea by the island of the hero, the enemy coming
 void Battle_Start()
@@ -89,7 +89,6 @@ void Battle_Create()
 	battleShots = 0;
 	battleHits = 0;
 	battleBroadsides = 0;
-	battleSailTo = false;
 	CreateEntity(&Particles, "particles");
 	CreateEntity(&AISea, "SEA_AI");
 	LayerAddObject(EXECUTE, &AISea, 0);
@@ -131,6 +130,7 @@ void Battle_Create()
 	SetEventHandler("Battle_AutoExit", "Battle_AutoExit", 0);
 	SetEventHandler("Board_Start", "Board_Start", 0);
 	SetEventHandler("Battle_SailTo", "Battle_SailTo", 0);
+	SetEventHandler("Battle_SailToCheck", "Battle_SailToCheck", 0);
 	MapKey("Battle_Fire", BATTLE_FIRE_KEY);
 }
 
@@ -154,6 +154,8 @@ void Battle_Release()
 	DelEventHandler("Shp_BortReloaded", "Battle_BroadsideReloaded");
 	DelEventHandler("Battle_AutoExit", "Battle_AutoExit");
 	DelEventHandler("Board_Start", "Board_Start");
+	DelEventHandler("Battle_SailTo", "Battle_SailTo");
+	DelEventHandler("Battle_SailToCheck", "Battle_SailToCheck");
 	DeleteClass(&AIBalls);
 	DeleteClass(&AISea);
 	DeleteClass(&Particles);
@@ -267,8 +269,9 @@ void Battle_Control(string control)
 	if (battleBroadsides == before) { Hud_Log("Ни один заряженный борт не смотрит на врага"); }
 }
 
-// "Плыть к": the keys of the hero give way to SEA_AI (it steers the ships without MainCharacter) until the
-// enemy is within boarding (Battle_SailToTick); the command again gives the helm back
+// "Плыть к" (SQUAD_CONTROL.dll sail_to) moves the ship of the hero at once (MSG_SHIP_TELEPORT): it is put
+// abeam of the enemy, on the side it came from, at BATTLE_SAIL_TO m, heading as the enemy (ours), so the enemy
+// is within boarding
 bool Battle_CanSailTo()
 {
 	return seaBattle && !battleOver && battleEnemy >= 0 && !Board_Can();
@@ -276,29 +279,26 @@ bool Battle_CanSailTo()
 
 void Battle_SailTo()
 {
-	if (battleSailTo) { Battle_SailToEnd("cancelled"); return; }
 	if (!Battle_CanSailTo()) { return; }
-	battleSailTo = true;
-	DeleteAttribute(&SeaShips[seaHero], "MainCharacter");
-	SendMessage(&AISea, "lllaa", AI_MESSAGE_SHIP_SET_TASK, AITASK_MOVE, PRIMARY_TASK, &SeaShips[seaHero], &SeaShips[battleEnemy]);
+	float ex = stf(SeaShips[battleEnemy].ship.pos.x);
+	float ez = stf(SeaShips[battleEnemy].ship.pos.z);
+	float ay = stf(SeaShips[battleEnemy].ship.ang.y);
+	// the starboard of the enemy is (cos ay, -sin ay); the hero stays on his side of it
+	float rx = cos(ay);
+	float rz = -sin(ay);
+	float side = BATTLE_SAIL_TO;
+	if ((stf(SeaShips[seaHero].ship.pos.x) - ex) * rx + (stf(SeaShips[seaHero].ship.pos.z) - ez) * rz < 0.0) { side = -side; }
+	SendMessage(&SeaShips[seaHero], "lfff", MSG_SHIP_TELEPORT, ex + rx * side, ez + rz * side, ay);
 	Hud_Log(PdmHud.note.sail_to + " " + SeaShips[battleEnemy].Ship.Name);
-	Trace("PDM: battle, sail to " + SeaShips[battleEnemy].id);
+	Trace("PDM: battle, sail to " + SeaShips[battleEnemy].id + ", " + side + " m abeam");
+	if (TownAuto == 9) { PostEvent("Battle_SailToCheck", 500); }
 }
 
-void Battle_SailToEnd(string why)
+// TOWN_AUTO=9: the frame after the teleport the ships write their places again
+void Battle_SailToCheck()
 {
-	battleSailTo = false;
-	if (TownAuto != 7 && TownAuto != 8) { SeaShips[seaHero].MainCharacter = 1; }
-	Trace("PDM: battle, sail to " + why);
-	if (TownAuto == 9) { PostEvent("Battle_AutoExit", BATTLE_AUTO_EXIT_MS); }
-}
-
-// a tick of the sea: the hero is brought to the enemy, or the battle is over
-void Battle_SailToTick()
-{
-	if (!battleSailTo) { return; }
-	if (battleOver) { Battle_SailToEnd("ended, the battle is over"); return; }
-	if (Board_Can()) { Battle_SailToEnd("done, the enemy is within boarding"); }
+	Trace("PDM: battle, sail to done, boarding " + Board_Can());
+	PostEvent("Battle_AutoExit", BATTLE_AUTO_EXIT_MS);
 }
 
 void Battle_AutoExit()

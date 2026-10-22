@@ -40,6 +40,7 @@ RECONVERT=1 corsairs-remake/pdm-game/run.sh build/Debug/engine   # всё ско
 | `TOWN_AUTO=6` | герой выходит в море, оттуда на карту мира, автотест кликает по Хайроку на карте (так же, как мышь: `mousepos` → `Map_Click`), корабль плывёт к нему (из Хайрока — к Granda Avilia), выходит в море в 400 м от гавани, заходит в порт и идёт в таверну; в море время ×6 (так же в `TOWN_AUTO=5`) |
 | `TOWN_AUTO=7` | с `SCENE=battle`: у города героя в 120 м по курсу появляется пират Umberto 'Lump' на шлюпе Lightning и атакует; героем в автотесте правит SEA_AI (задача ATTACK), оба под парусами; лог `PDM: battle, … hull N`, конец — `the enemy sinks after …` или `the hero sinks`, затем `PDM: autotest done, battle` |
 | `TOWN_AUTO=8` | с `SCENE=battle`: тот же пират, обоим кораблям SEA_AI ставит задачу ABORDAGE; ближе 40 м — абордаж: лог `PDM: boarding, crews …`, дуэль в каюте `PDM: boarding, X hits Y …`, конец — `PDM: autotest done, boarding, won N` |
+| `TOWN_AUTO=9` | с `SCENE=battle`: тот же пират, через 1 с команда «Плыть к» — корабль героя переносится борт к борту с врагом в 30 м (`MSG_SHIP_TELEPORT`); лог `PDM: battle, sail to … m abeam`, затем `sail to done, boarding 1` |
 | `TOWN_AUTO=3` | с `TOWN=City_HighRock`: первое поручение города — вино для стражника Билли (квест от начала до конца) |
 | `SCENE=screens` | все экраны интерфейса по очереди (2,5 с), новая игра, F1 в городе, страница «Корабль», трюм, сундук и торговля со списками, Esc, выход |
 | `SCENE=story` | самопроверка сюжетной машины (все действия оригинала), потом выход |
