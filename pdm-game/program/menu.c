@@ -13,6 +13,8 @@
 #define INVERSE_CONTROL 4
 
 object GameInterface;
+// the picture of the game for the header of a save (screens.c)
+object ScrShoter;
 // "click" and "activate" of one press, or Enter held, must start one game
 bool menuStarting = false;
 
@@ -60,6 +62,7 @@ void Menu_Command()
 	string node = GetEventData();
 	if (command != "click" && command != "activate") { return; }
 	Trace("PDM menu: " + node);
+	if (Screen_Page(node)) { return; }
 	if (screenName != "mainmenu" || node != "LB_EXIT") { if (Screen_Click(node)) { return; } }
 	if (screenName == "messagebox" && node == "LB_YES" && screenMessageYes == "exit") { ExitProgram(); }
 	if (screenName != "mainmenu") { return; }

@@ -15,6 +15,7 @@
 #define SAVEFILE_AUTOSAVE "save\auto"
 #define SAVEFILE_AUTO_MS 1000
 #define SAVEFILE_AUTO 12
+#define SAVEFILE_SCREENS_AUTO 13
 
 object Render;
 object Scene;
@@ -49,6 +50,7 @@ aref PlayerShipType;
 #include "map.c"
 #include "screens.c"
 #include "save.c"
+#include "options.c"
 
 void MapKey(string controlName, int keyCode)
 {
@@ -96,6 +98,7 @@ void Main()
 	else if (StartScene == "battle") { Battle_Start(); }
 	else { Sea_Start(PlayerCard.address.island); }
 	if (TownAuto == SAVEFILE_AUTO) { Save_AutoStart(); }
+	if (TownAuto == SAVEFILE_SCREENS_AUTO) { Save_ScreensStart(); }
 }
 
 // what every scene stands on: the keys and the handlers of the game, the scene and the sound; a loaded game
@@ -105,6 +108,7 @@ void Pdm_Base()
 	MapKey("Pdm_Quit", 27);
 	Save_Init();
 	Screen_Init();
+	Options_Init();
 	SetEventHandler("Control Activation", "Pdm_Control", 0);
 
 	Render.BackColor = argb(255, 0, 0, 0);

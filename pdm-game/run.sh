@@ -14,6 +14,8 @@
 # SCENE=battle starts at sea with a pirate attacking (F fires), TOWN_AUTO=7 fires by itself until he sinks and quits,
 # TOWN_AUTO=8 sails to him, boards him, fights his captain in the cabin by itself and quits;
 # SCENE=sea TOWN_AUTO=12 saves at sea, lands, loads, lands again, saves in the town, loads and quits;
+# SCENE=sea TOWN_AUTO=13 saves from the menu over the game, loads that file from the list, deletes it, sets the
+# window to 1600x900 in the options and back, and quits;
 # SCENE=story runs the self-test of the story machine (every action of the original) and quits.
 # The window (docs/build.md): FULLSCREEN=1 the full screen, FULLSCREEN=0 a window with a frame, SCREEN=1920x1080 its size;
 # by default engine.ini (a window of 1280x720). The engine options --fullscreen, --windowed, --size WxH do the same.
@@ -55,7 +57,7 @@ if [ ! -f "$DIR/resource/particles/explosion.xps" ]; then
 fi
 # the screens of the interface (INI/menu.ini, the world map of INI/map.ini), their pictures, texts and fonts, the dialog window and the voices;
 # again for a map made before its fog
-grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'BACKFILL' "$DIR/resource/ini/interfaces/mainmenu.ini" && grep -qs 'PDM_HUD_18' "$DIR/resource/ini/fonts.ini" && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
+grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'LB_WINDOWED_OFF' "$DIR/resource/ini/interfaces/options.ini" && grep -qs 'PDM_HUD_18' "$DIR/resource/ini/fonts.ini" && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
 # the towns and interiors (WORLDS/locations/*.loc), their patches and the characters with animation
 [ -f "$DIR/program/data/pdm_world.c" ] || python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"
 # the cabin of the boarding, the fighters with the blade drawn and the plates of the bars, after the characters (it

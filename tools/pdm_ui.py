@@ -278,6 +278,7 @@ class Converter:
         """<file>-nor.tga and -hi.tga in one atlas (None without them): TEXTBUTTON draws a left and a right piece of their
         own width and stretches the middle, so the halves are the pieces and the middle is 2 pixels."""
         stem = re.split(r"[\\/]", file)[-1].lower()
+        check = stem in CHECKS
         # bsmall of STATUS\ is narrower than the one of BUTTONS\
         if not file.startswith(".."):
             stem = self.base.split("/")[1].rstrip("\\").lower() + "_" + stem
@@ -289,13 +290,16 @@ class Converter:
             return None
         hi = hi or nor
         w, h = nor.size
+        # a check of [Options]: check-nor.tga is the tick, check-hi.tga the cross. The tick stays under the mouse,
+        # the cross is <NODE>_OFF over the button, shown by the scripts (ours)
+        select = 0 if check else h + 2
         atlas = Image.new("RGB", (w, h * 2 + 2))
         atlas.paste(nor, (0, 0))
         atlas.paste(hi, (0, h + 2))
         tex, tw, th = self.texture(self.keyed(atlas), stem)
         half = w // 2 - 1
         pictures = []
-        for prefix, top in (("", 0), ("select ", h + 2)):
+        for prefix, top in (("", 0), ("select ", select)):
             pictures += [(prefix + "left", 0, top, half, top + h),
                          (prefix + "middle", half, top, half + 2, top + h),
                          (prefix + "right", half + 2, top, w, top + h)]
@@ -329,6 +333,9 @@ class Converter:
         out = {}
         for k, v in common + own:
             out[k] = v
+        for k, (other, other_key) in FIELDS_OF.get(section, {}).items():
+            out = {o: v for o, v in out.items() if o.lower() != k.lower()}
+            out[k] = dict(self.ini[other])[other_key]
         macros = dict(own)
         # the nodes are drawn in their order: the background under the fields of [Common]
         keys = sorted(out, key=lambda k: k.lower() != "background")
@@ -489,6 +496,10 @@ class Converter:
                     notes.append(f"; {key} = {value}")
                     continue
                 nodes.append(("FORMATEDTEXT", key.upper()))
+                if (section, key) in SELECT_LISTS:
+                    # the files of the saves: a row the cursor goes over, as the islands of the map (ours)
+                    l += ["backColor = 96,255,196,0", "backOffset = 2,0,2,0", "wrapoff = 1", "command = activate",
+                          "command = click", "command = upstep", "command = downstep"]
                 lines += l + [""]
                 areas[key.upper()] = (x, y, w, h, a)
             elif low.startswith("s_") and "txt:" in value:
@@ -568,6 +579,12 @@ class Converter:
                 if i + 1 < len(names):
                     lines.append(f"command = downstep,select:{names[i + 1]}")
             lines += ["command = deactivate"] + (["bNotUse = 1"] if hidden else []) + [""]
+            stem = re.split(r"[\\/]", a["file"])[-1].lower()
+            if stem in CHECKS:
+                tex, tw, th = self.pictures[group][:3]
+                nodes.append(("PICTURE", node + "_OFF"))
+                lines += [f"[{node}_OFF]", f"position = {x},{y},{x + w},{y + h}", f"textureName = {tex}",
+                          f"textureRect = 0,{(h + 2) / th:g},{w / tw:g},{(2 * h + 2) / th:g}", "bNotUse = 1", ""]
 
         head = [f"; converted by tools/pdm_ui.py from [{section}] of INI/{self.ini_name} of the original"]
         head += notes and ["; the layout of the original for the scripts of the screen:"] + notes
@@ -776,6 +793,13 @@ MAP_BACK_TILES = 8
 MAP_FOG_STAMPS = ("mask_black", "mask_black_island")
 # the screens of MENU.dll, MAP.dll, TOWN.dll, STATUS.dll and RANSACK.dll
 SCREEN_FILES = ["menu.ini", "map.ini", "town.ini", "status.ini", "ransack.ini"]
+# the buttons that are checks: their picture of -hi.tga is the state off
+CHECKS = {"check"}
+# the fields that are lists with a cursor: the files of the saves
+# a field a screen takes from another one (ours): [LoadGame] has no description of its own, the one of [Common]
+# is small and under the frame of the background, the scripts show the header of a save in it
+FIELDS_OF = {"LoadGame": {"EditDesc": ("SaveGame", "EditDesc")}}
+SELECT_LISTS = {("LoadGame", "EditFiles"), ("SaveGame", "EditFiles")}
 # the screens without the help, the description and the face of the hero of [Common]
 NO_COMMON = {"MainMenu", "MainMap", "MessageBox", "Options", "KeyControls", "Credits"}
 # the width of the place of a value (s_Rank = txt:"%d",xr:490,...): the original prints it from a point (ours)

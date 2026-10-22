@@ -11,6 +11,8 @@
 #define MSG_INTERFACE_SET_FORMATEDTEXT 45038
 #define SCREEN_KEY 112
 #define SCREEN_AUTO_MS 2500
+// the scene is drawn by then, the log of the HUD (65535) is not
+#define SCREEN_SHOT_PRIORITY 65534
 
 // the open screen, "" if none; "mainmenu" is the menu of menu.c
 string screenName = "";
@@ -29,6 +31,8 @@ string screenTourGame = "sgoods,sship,logbook,schest,trade,shipyard,crew,tavern,
 // the text of the message box and what its "Да" does
 string screenMessage = "";
 string screenMessageYes = "";
+// the page the message box goes back to
+string screenMessageBack = "";
 int screenTourAt = 0;
 int screenTourStage = 0;
 
@@ -63,6 +67,7 @@ string Screen_Target(string node)
 string Screen_Parent(string name)
 {
 	if (name == "keycontrols") { return "options"; }
+	if (name == "messagebox" && screenMessageBack != "") { return screenMessageBack; }
 	if (screenGameMenu && name != "mainmenu") { return "mainmenu"; }
 	if (screenOverGame) { return ""; }
 	return "mainmenu";
@@ -88,6 +93,7 @@ void Screen_Close()
 	DelEventHandler("ievnt_command", "Screen_Command");
 	SendMessage(&GameInterface, "l", MSG_INTERFACE_RELEASE);
 	DeleteClass(&GameInterface);
+	DeleteClass(&ScrShoter);
 	LayerFreeze(EXECUTE, false);
 	screenName = "";
 	screenOverGame = false;
@@ -100,6 +106,9 @@ void Screen_GameMenu()
 	if (screenName != "") { return; }
 	Trace("PDM screen: the menu over the game");
 	screenGameMenu = true;
+	// the picture of the game under the menu for the header of a save (save.c Save_FromScreen), as the original
+	CreateEntity(&ScrShoter, "SCRSHOTER");
+	LayerAddObject(REALIZE, &ScrShoter, SCREEN_SHOT_PRIORITY);
 	Screen_Open("mainmenu");
 }
 
@@ -121,15 +130,21 @@ void Screen_Fill()
 {
 	if (screenName == "mainmenu")
 	{
-		// without a game "Сохранить" and "Продолжить" cannot be chosen, as in the original
-		SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_SAVEGAME", screenOverGame);
+		// without a game "Сохранить" and "Продолжить" cannot be chosen, as in the original; nor "Сохранить" where
+		// the game is not saved (a battle, a boarding)
+		bool save = screenOverGame;
+		if (Save_Where() == "") { save = false; }
+		SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_SAVEGAME", save);
 		SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_RESUMEGAME", screenOverGame);
 		// a new game over a running one needs the town taken down first: not yet
 		SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_NEWGAME", !screenOverGame);
 		return;
 	}
 	if (findSubStr(screenName, "messagebox", 0) == 0) { Screen_Text("EDITTEXT", screenMessage); return; }
+	if (screenName == "options") { Options_Fill(); return; }
 	Screen_TitlePlace();
+	// the name and the money under the face would read as the ones of the save under the cursor
+	if (screenName == "loadgame" || screenName == "savegame") { Save_ScreenFill(); return; }
 	if (!CheckAttribute(PlayerCard, "money")) { return; }
 	string name = PlayerCard.name;
 	string ship = PlayerShipCard.name;
@@ -256,6 +271,7 @@ void Screen_Message(string text, string yes)
 {
 	screenMessage = text;
 	screenMessageYes = yes;
+	screenMessageBack = screenName;
 	screenNext = "messagebox";
 	screenGoing = true;
 	PostEvent("Screen_Go", 0);
@@ -346,7 +362,21 @@ void Screen_Command()
 		if (node == "LB_NEWGAME") { return; }
 	}
 	if (screenName == "messagebox" && node == "LB_YES" && screenMessageYes == "exit") { ExitProgram(); return; }
+	if (Screen_Page(node)) { return; }
 	Screen_Click(node);
+}
+
+// the buttons that do something on their page (options.c, save.c); true if it was one. "Да" of their message
+// box does it and goes back to the page
+bool Screen_Page(string node)
+{
+	if (screenName == "options") { return Options_Click(node); }
+	if (screenName == "loadgame" || screenName == "savegame") { return Save_ScreenClick(node); }
+	if (screenName != "messagebox" || node != "LB_YES") { return false; }
+	if (screenMessageYes != "delete" && screenMessageYes != "overwrite") { return false; }
+	Save_ScreenYes();
+	Screen_Click("LB_NO");
+	return true;
 }
 
 // a button that goes to another page or back; true if it was one. The page changes after the event:
