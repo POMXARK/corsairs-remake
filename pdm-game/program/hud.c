@@ -49,6 +49,15 @@
 #define HUD_AUTO_EXIT_MS 1500
 // TOWN_AUTO=7: the corner shows the enemies from then on
 #define HUD_AUTO_CORNER_MS 20000
+#define MSG_BATTLE_LAND_MAKE_COMMAND 46105
+// TOWN_AUTO=10: the menu of the land stands open so long before its command
+#define HUD_AUTO_LAND_MS 1500
+// the places of a town in the menu of the land, in the order of the street
+#define HUD_LAND_PLACES 6
+string hudLandPlaces[HUD_LAND_PLACES] = {"street", "tavern", "store", "shipyard", "townhall", "sea"};
+object LandInterface;
+bool hudLand = false;
+string hudLandAuto = "";
 
 object BattleInterface;
 object ScreenLog;
@@ -181,6 +190,120 @@ void Hud_FastCommand()
 		return;
 	}
 	Town_Action();
+}
+
+// ---------- on the land ----------
+
+// Tab on the land: the places of the town (street, tavern, store, shipyard, townhall) and the sea, the hero goes
+// there from wherever he stands (ours: Sea Dogs has no such menu, the hero walks to the doors). The menu of
+// BATTLE_LAND_INTERFACE, with no faces of the party (no data.icons), in the place of the toolbar at sea
+void Hud_LandStart()
+{
+	hudLand = true;
+	DeleteAttribute(&LandInterface, "");
+	LandInterface.Parameters.DoShowCommandos = 1;
+	// the row bottom left, the top of its icons the top line of the list
+	LandInterface.ManSign.iconoffset1 = "0," + (hudH - Hud_Px(HUD_PIC_MARGIN + HUD_PIC_W));
+	LandInterface.ManSign.commandlistverticaloffset = 0;
+	aref list;
+	makearef(list, LandInterface.CommandList);
+	list.CommandIconLeft = Hud_Px(HUD_PIC_MARGIN);
+	list.CommandIconWidth = Hud_Px(64.0);
+	list.CommandIconHeight = Hud_Px(64.0);
+	list.CommandIconSpace = Hud_Px(HUD_PIC_STEP - HUD_PIC_W);
+	list.CommandMaxIconQuantity = 8;
+	list.CommandNoteFont = "PDM_LOGBOOK_18";
+	list.CommandNoteColor = argb(255, 255, 230, 160);
+	list.CommandNoteScale = 1.0;
+	list.CommandNoteOffset = Hud_Pos(0.0, -56.0);
+	list.ActiveIcon_Size = "0,0";
+	LandInterface.CommandTextures.list.t0.name = "battle_interface\pdm\commands.tga";
+	LandInterface.CommandTextures.list.t0.xsize = sti(PdmHud.command_cols);
+	LandInterface.CommandTextures.list.t0.ysize = sti(PdmHud.command_rows);
+	LandInterface.CommandTextures.CommandTexNum = 0;
+	// the toolbar has no pictures of the buildings: the town of "На землю" for each, its note names the place
+	string place;
+	for (int i = 0; i < HUD_LAND_PLACES; i++)
+	{
+		place = hudLandPlaces[i];
+		if (place == "sea") { Hud_LandCommand(place, "ocean"); }
+		else { Hud_LandCommand(place, "town"); }
+	}
+	Hud_LandCommand("Cancel", "cancel");
+
+	SetEventHandler("BI_SetPossibleCommands", "Hud_LandPossible", 0);
+	SetEventHandler("BI_CommandEndChecking", "Hud_CommandEndChecking", 0);
+	SetEventHandler("BI_LaunchCommand", "Hud_LandLaunch", 0);
+	SetEventHandler("Hud_LandAuto", "Hud_LandAuto", 0);
+	MapKey("LICommandsActivate", HUD_KEY_MENU);
+	MapKey("BICommandsLeft", 37);
+	MapKey("BICommandsRight", 39);
+	MapKey("BICommandsConfirm", 13);
+	MapKey("BICommandsCancel", 27);
+	CreateEntity(&LandInterface, "battle_land_interface");
+	LayerAddObject(EXECUTE, &LandInterface, 65534);
+	LayerAddObject(REALIZE, &LandInterface, 65534);
+}
+
+void Hud_LandCommand(string name, string picture)
+{
+	int cell = sti(PdmHud.command.(picture));
+	LandInterface.Commands.(name).enable = 0;
+	LandInterface.Commands.(name).picNum = cell;
+	LandInterface.Commands.(name).selPicNum = cell + 1;
+	LandInterface.Commands.(name).texNum = 0;
+	LandInterface.Commands.(name).event = name;
+	LandInterface.Commands.(name).note = "";
+	if (CheckAttribute(&PdmHud, "note." + name)) { LandInterface.Commands.(name).note = PdmHud.note.(name); }
+}
+
+void Hud_LandRelease()
+{
+	if (!hudLand) { return; }
+	hudLand = false;
+	DelEventHandler("BI_SetPossibleCommands", "Hud_LandPossible");
+	DelEventHandler("BI_CommandEndChecking", "Hud_CommandEndChecking");
+	DelEventHandler("BI_LaunchCommand", "Hud_LandLaunch");
+	DelEventHandler("Hud_LandAuto", "Hud_LandAuto");
+	DeleteClass(&LandInterface);
+}
+
+// every place of the town but the one the hero is in; the sea from a town of an island
+void Hud_LandPossible()
+{
+	int chr = GetEventData();
+	string place;
+	for (int i = 0; i < HUD_LAND_PLACES; i++)
+	{
+		place = hudLandPlaces[i];
+		LandInterface.Commands.(place).enable = Town_CanGo(place);
+	}
+	LandInterface.Commands.Cancel.enable = 1;
+}
+
+// "lsls": the location changes outside the frame of the interface, which it deletes
+void Hud_LandLaunch()
+{
+	int chr = GetEventData();
+	string name = GetEventData();
+	Trace("PDM hud: land command " + name);
+	if (name != "Cancel") { PostEvent("Town_HudGo", 0, "sl", name, townGen); }
+}
+
+// TOWN_AUTO=10: opens the menu, a moment later goes to the place as its command would
+void Hud_LandAutoOpen(string place)
+{
+	hudLandAuto = place;
+	SendMessage(&LandInterface, "ls", MSG_BATTLE_LAND_MAKE_COMMAND, "activate");
+	PostEvent("Hud_LandAuto", HUD_AUTO_LAND_MS);
+}
+
+void Hud_LandAuto()
+{
+	if (!hudLand) { return; }
+	SendMessage(&LandInterface, "ls", MSG_BATTLE_LAND_MAKE_COMMAND, "cancel");
+	Trace("PDM hud: land command " + hudLandAuto + " (autotest)");
+	PostEvent("Town_HudGo", 0, "sl", hudLandAuto, townGen);
 }
 
 // ---------- at sea ----------
@@ -557,6 +680,7 @@ void Hud_Release()
 // the menu of the commands is open: Escape closes it and does not quit
 bool Hud_MenuOpen()
 {
+	if (hudLand) { return CheckAttribute(&LandInterface, "ComState") && sti(LandInterface.ComState) != 0; }
 	return hudSea && CheckAttribute(&BattleInterface, "ComState") && sti(BattleInterface.ComState) != 0;
 }
 

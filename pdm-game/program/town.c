@@ -175,6 +175,7 @@ void Town_Start(string loc, string from)
 	SetEventHandler("EmergencyDialogExit", "Town_DialogLeave", 0);
 	SetEventHandler("Town_DialogClose", "Town_DialogClose", 0);
 	SetEventHandler("Town_ExitGo", "Town_ExitGo", 0);
+	SetEventHandler("Town_HudGo", "Town_HudGo", 0);
 	if (TownAuto) { Town_AutoPlan(); }
 	Town_Load(loc, from);
 	PostEvent("Town_Tick", TOWN_TICK_MS);
@@ -274,6 +275,7 @@ void Town_Load(string loc, string from)
 
 	Town_PlaceCharacters(data);
 	Hud_CreateLog();
+	Hud_LandStart();
 	// the voices of many when the location is full of people
 	Sound_Location(data.sound, townNpcCount > 2);
 	townLoaded = true;
@@ -286,6 +288,7 @@ void Town_Load(string loc, string from)
 void Town_Release()
 {
 	Town_DialogClose();
+	Hud_LandRelease();
 	Hud_ReleaseLog();
 	for (int i = 0; i < townNpcCount; i++) { DeleteClass(&TownNpc[i]); }
 	townNpcCount = 0;
@@ -578,6 +581,25 @@ void Town_ExitGo()
 	Town_Go(data.(at).link);
 }
 
+// the menu of the land (hud.c): a place of the town the hero is not in, the sea from a town of an island
+bool Town_CanGo(string link)
+{
+	if (link == "sea") { return townIsland != ""; }
+	if (link == "street") { return townHere != townStreet; }
+	if (!CheckAttribute(&PdmLocations, townStreet + ".interiors." + link)) { return false; }
+	string to = PdmLocations.(townStreet).interiors.(link);
+	return to != townHere && CheckAttribute(&PdmLocations, to);
+}
+
+// "sl" the place, the generation of the location: the command of the menu of the land, from anywhere
+void Town_HudGo()
+{
+	string link = GetEventData();
+	int gen = GetEventData();
+	if (!townLoaded || gen != townGen || townTalkNpc >= 0 || !Town_CanGo(link)) { return; }
+	Town_Go(link);
+}
+
 // leaves the location through an exit whose link is sea, street or an interior slot
 void Town_Go(string link)
 {
@@ -852,6 +874,14 @@ void Town_AutoPlan()
 	// 4: out to sea and back to the pier (Sea_ToPort), then into the tavern; 5: the same, the ship
 	// sails into the port by the harbour (sea.c Sea_AtHarbour)
 	// 6: out to sea, over the world map to the next island and into its port (map.c)
+	// 10: through the menu of the land (Tab, hud.c) from the pier to the tavern, the shipyard and back to the street
+	if (TownAuto == 10)
+	{
+		Town_PlanAdd("hud", "tavern", "");
+		Town_PlanAdd("hud", "shipyard", "");
+		Town_PlanAdd("hud", "street", "");
+		return;
+	}
 	if (TownAuto == 4 || TownAuto == 5 || TownAuto == 6) { Town_PlanAdd("go", "sea", ""); }
 	Town_PlanAdd("go", "tavern", "");
 	if (TownAuto == 2) { Town_PlanAdd("talk", "", ""); }
@@ -873,6 +903,11 @@ void Town_AutoGo()
 	if (TownPlan.(at) == "talk")
 	{
 		Town_AutoTalkGo(TownPlan.(at).arg, TownPlan.(at).want);
+		return;
+	}
+	if (TownPlan.(at) == "hud")
+	{
+		Hud_LandAutoOpen(TownPlan.(at).arg);
 		return;
 	}
 	Town_AutoDoor(TownPlan.(at).arg);
