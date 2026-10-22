@@ -56,6 +56,16 @@ float mapTop = 0.0;
 int mapIslandCount = 0;
 // the keys of PdmIslands in the order of the list
 object MapIslands;
+// The fog of MAP.dll: the closed chart (map_close.tga, fogTexture of MAP) covers the map, and the stamps of
+// ShowCell burn it away: mask_black (65 px, alpha up to 124, adding up) at every point of a 16 px grid the
+// ship passes, once each, and mask_black_island (140 px) on an island found in the 3 x 3 cells of 60 px round
+// the ship (CheckCell, OpenIsland). A new game starts all closed (IMAGES\MAP\map.dat is zero).
+// MapFog keeps what is open for the game: route.<point>.x, y and island.<key>.
+#define MAP_FOG_GRID 16
+#define MAP_FOG_CELL 60
+#define MAP_FOG_ROUTE 0
+#define MAP_FOG_ISLAND 1
+object MapFog;
 
 // x, y of the island on the map picture
 float Map_IslandX(string islandKey)
@@ -96,6 +106,8 @@ void Map_Start(string fromIsland)
 	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\mainmap.ini");
 	Map_Layout();
 	Map_FillIslands();
+	Map_FogReplay();
+	Map_Fog();
 	Map_View();
 	Sound_StopLocation();
 	Sound_Music("map");
@@ -239,6 +251,70 @@ void Map_View()
 	}
 }
 
+// the stamps already open, burnt again into the fog of the new interface
+void Map_FogReplay()
+{
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_MSG_TO_NODE, "MAP", 10);
+	aref root, point;
+	int i, n;
+	makearef(root, MapFog.route);
+	n = GetAttributesNum(root);
+	for (i = 0; i < n; i++)
+	{
+		point = GetAttributeN(root, i);
+		SendMessage(&GameInterface, "lsllll", MSG_INTERFACE_MSG_TO_NODE, "MAP", 9, MAP_FOG_ROUTE, sti(point.x), sti(point.y));
+	}
+	int points = n;
+	makearef(root, MapFog.island);
+	n = GetAttributesNum(root);
+	string key;
+	for (i = 0; i < n; i++)
+	{
+		key = GetAttributeName(GetAttributeN(root, i));
+		Map_FogIsland(key);
+	}
+	Trace("PDM map: fog, " + points + " points of the route and " + n + " islands open");
+}
+
+// the ship opens the point of the grid it is at and the islands in the cells round it
+void Map_Fog()
+{
+	// an int takes a float rounded down
+	int gx = mapX / MAP_FOG_GRID;
+	int gy = mapY / MAP_FOG_GRID;
+	string at = "g" + gx + "_" + gy;
+	if (!CheckAttribute(&MapFog, "route." + at))
+	{
+		MapFog.route.(at).x = gx * MAP_FOG_GRID + MAP_FOG_GRID / 2;
+		MapFog.route.(at).y = gy * MAP_FOG_GRID + MAP_FOG_GRID / 2;
+		SendMessage(&GameInterface, "lsllll", MSG_INTERFACE_MSG_TO_NODE, "MAP", 9, MAP_FOG_ROUTE, sti(MapFog.route.(at).x), sti(MapFog.route.(at).y));
+	}
+	int cx = mapX / MAP_FOG_CELL;
+	int cy = mapY / MAP_FOG_CELL;
+	int ix, iy;
+	string key;
+	for (int i = 0; i < mapIslandCount; i++)
+	{
+		at = "i" + i;
+		key = MapIslands.(at);
+		if (CheckAttribute(&MapFog, "island." + key)) { continue; }
+		ix = Map_IslandX(key) / MAP_FOG_CELL;
+		iy = Map_IslandY(key) / MAP_FOG_CELL;
+		if (abs(ix - cx) > 1 || abs(iy - cy) > 1) { continue; }
+		MapFog.island.(key) = 1;
+		Map_FogIsland(key);
+		Trace("PDM map: fog, " + key + " found");
+	}
+}
+
+// the island stamp on the island (ours: at its middle, MAP.dll puts it at the middle of its cell)
+void Map_FogIsland(string key)
+{
+	int x = Map_IslandX(key);
+	int y = Map_IslandY(key);
+	SendMessage(&GameInterface, "lsllll", MSG_INTERFACE_MSG_TO_NODE, "MAP", 9, MAP_FOG_ISLAND, x, y);
+}
+
 void Map_SailTo(int index)
 {
 	if (index < 0 || index >= mapIslandCount || !mapActive) { return; }
@@ -262,12 +338,14 @@ void Map_Tick()
 		{
 			mapX = mapToX;
 			mapY = mapToY;
+			Map_Fog();
 			Map_View();
 			PostEvent("Map_Arrive", 0);
 			return;
 		}
 		mapX = mapX + dx * step / d;
 		mapY = mapY + dy * step / d;
+		Map_Fog();
 		Map_View();
 	}
 	PostEvent("Map_Tick", MAP_TICK_MS);

@@ -257,6 +257,19 @@ class Converter:
         write_tx(canvas, self.resource / f"textures/interfaces/pdm/{name}.tga.tx", mip_chain=False)
         return f"interfaces\\pdm\\{name}.tga", w, h
 
+    def stamp(self, file, name):
+        """A brush of alpha (MAP.dll mask_black*.tga) centred in a power of two texture; returns the texture name."""
+        image = Image.open(self.pdm.find(self.base + file)).convert("RGBA")
+        w, h = 1, 1
+        while w < image.width:
+            w *= 2
+        while h < image.height:
+            h *= 2
+        canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        canvas.paste(image, ((w - image.width) // 2, (h - image.height) // 2))
+        write_tx(canvas, self.resource / f"textures/interfaces/pdm/{name}.tga.tx", mip_chain=False)
+        return f"interfaces\\pdm\\{name}.tga"
+
     def button_group(self, file):
         """<file>-nor.tga and -hi.tga in one atlas (None without them): TEXTBUTTON draws a left and a right piece of their
         own width and stretches the middle, so the halves are the pieces and the middle is 2 pixels."""
@@ -573,6 +586,10 @@ class Converter:
         _, _, w, h = (int(v) for v in chart["map_rect"].split(","))
         full = self.image(f"{LANGUAGE}\\map_open.tga")
         tex, tw, th = self.texture(full, "map_open")
+        # the fog of MAP.dll: map_close.tga over it, packed the same, opened by the stamps mask_black (the route)
+        # and mask_black_island (an island found); map.c burns them (fogTexture of the PICTURE)
+        fog, _, _ = self.texture(self.image("map_close.tga"), "map_close")
+        stamps = [self.stamp(f"{name}.tga", f"map_{name}") for name in MAP_FOG_STAMPS]
         ship = self.keyed(self.image("ship.tga"))
         stex, sw, sh = self.texture(ship, "map_ship")
         a = attrs(chart["editisland"])
@@ -588,7 +605,9 @@ class Converter:
             lines += [f"[{name}]", "position = 0,0,0,0", f"textureName = {back}", f"textureRect = 0,0,1,{bv:g}", ""]
         nodes += [("PICTURE", "MAP"), ("PICTURE", "SHIP"), ("FORMATEDTEXT", "ISLANDS")]
         lines += ["[MAP]", f"position = {x},{y},{x + w},{y + h}", f"textureName = {tex}",
-                 f"textureRect = 0,0,{w / tw:g},{h / th:g}", "command = click", "",
+                 f"textureRect = 0,0,{w / tw:g},{h / th:g}", f"fogTexture = {fog}"]
+        lines += [f"fogStamp = {stamp}" for stamp in stamps]
+        lines += ["command = click", "",
                  "[SHIP]", f"position = {x},{y},{x + ship.width},{y + ship.height}", f"textureName = {stex}",
                  f"textureRect = 0,0,{ship.width / sw:g},{ship.height / sh:g}", "",
                  "[ISLANDS]", f"position = {ix},{iy},{ix + int(a['dx'])},{iy + int(a['dy'])}",
@@ -735,6 +754,8 @@ class Converter:
 # so every run converts all of them and the screens of the command line come on top
 # pictures of the strip that lengthens the map frame on a wide window: 8 x 200 px covers 32:9
 MAP_BACK_TILES = 8
+# the stamps of the fog of the map in the order of fogStamp (0 the route, 1 an island), MAP.dll
+MAP_FOG_STAMPS = ("mask_black", "mask_black_island")
 # the screens of MENU.dll, MAP.dll, TOWN.dll, STATUS.dll and RANSACK.dll
 SCREEN_FILES = ["menu.ini", "map.ini", "town.ini", "status.ini", "ransack.ini"]
 # the screens without the help, the description and the face of the hero of [Common]

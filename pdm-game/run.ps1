@@ -50,10 +50,10 @@ if (-not (Test-Path "$Demo/resource/particles/explosion.xps"))
     Invoke-Python "$Demos/battle/make_battle.py" "$Demo/resource"
     Convert-Hulls
 }
-# the screens of the interface, the dialog window and the voices; again for screens made before the map took
-# clicks or before the status
+# the screens of the interface, the dialog window and the voices; again for screens made before the fog of
+# the map
 $MainMap = "$Demo/resource/ini/interfaces/mainmap.ini"
-if (-not ((Test-Path $MainMap) -and ((Get-Content -Raw $MainMap) -match '\[MAP\][^\[]*command = click') -and (Test-Path "$Demo/program/data/pdm_screens.c") -and (Test-Path "$Demo/program/data/pdm_voices.c")))
+if (-not ((Test-Path $MainMap) -and ((Get-Content -Raw $MainMap) -match 'fogStamp') -and (Test-Path "$Demo/program/data/pdm_screens.c") -and (Test-Path "$Demo/program/data/pdm_voices.c")))
 {
     Invoke-Python "$Tools/pdm_ui.py" $Pdm $Demo
 }

@@ -51,8 +51,8 @@ if [ ! -f "$DIR/resource/particles/explosion.xps" ]; then
     hulls
 fi
 # the screens of the interface (INI/menu.ini, the world map of INI/map.ini), their pictures, texts and fonts, the dialog window and the voices;
-# again for a map made before it took clicks
-grep -A4 '^\[MAP\]' "$DIR/resource/ini/interfaces/mainmap.ini" 2>/dev/null | grep -qs 'command = click' && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
+# again for a map made before its fog
+grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
 # the towns and interiors (WORLDS/locations/*.loc), their patches and the characters with animation
 [ -f "$DIR/program/data/pdm_world.c" ] || python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"
 # the cabin of the boarding, the fighters with the blade drawn and the plates of the bars, after the characters (it
