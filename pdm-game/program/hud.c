@@ -1,10 +1,12 @@
 // The toolbar of the original (SQUAD_CONTROL.dll on TEXTURES/toolbar), tools/pdm_hud.py converts its pictures
 // into battle_interface\pdm and its notes into data\pdm_hud.c (PdmHud).
 //
-// At sea BATTLE_INTERFACE draws the picture of the ship of the hero top left, with the flag of his nation and the
-// bars of the hull and the sails. Tab opens the commands to the right of it: arrows pick, Enter gives, Escape
-// closes, as in the original. The commands are the transitions: "На землю" at the harbour of a town, "Карта" (the
-// world map), "Ускорение" (the time). On the land ILogAndActions shows the icon of the exit the hero stands
+// At sea BATTLE_INTERFACE draws the picture of the ship of the hero bottom left, with the flag of his nation, the
+// class of the ship and the bars of the hull and the sails above it. Tab opens the commands to the right of it:
+// arrows pick, Enter gives, Escape closes, as in the original. Bottom right the panel of the charges (ship_info:
+// the sails, the crew and the hull, the balls, the grapes, the knippels and the bombs in the hold, the loaded one
+// lit) or the pictures of the enemy ships pressed to the right edge, or nothing: "=" changes them in turn. The commands are the transitions: "На землю" at the harbour of a town, "Карта" (the
+// world map), "Ускорение" (the time), "Абордаж" in the battle near the enemy (boarding.c). On the land ILogAndActions shows the icon of the exit the hero stands
 // in with the name of the place it leads to; Space goes through it (the original "Действие").
 // Top right at sea the navigator (NAVIGATOR.dll): the map of the island round the ship in the brooch, the letters
 // of the compass and the wind arrow turned with the heading, the speeds of the ship and the wind on its plate.
@@ -20,6 +22,11 @@
 // Space the action on the land
 #define HUD_KEY_MENU 9
 #define HUD_KEY_ACTION 32
+// "=" (VK_OEM_PLUS, control19 of controls.ini): the corner bottom right, the charges, the enemies or nothing
+#define HUD_KEY_CORNER 187
+#define HUD_CORNER_INFO 0
+#define HUD_CORNER_ENEMIES 1
+#define HUD_CORNER_NONE 2
 // the layout of the original is for 800x600 (ours: everything scales with the height of the window)
 #define HUD_BASE_H 600.0
 // the navigator: the size of its brooch (the frame of 128 of the original), its map inside the ring of the frame
@@ -28,8 +35,20 @@
 #define HUD_NAV_MAP 58.0
 #define HUD_NAV_PLATE_Y 56.0
 #define HUD_NAV_PLATE_X 42.0
+// the toolbar of SQUAD_CONTROL.dll: a picture of 64x50 at 5 from the left and the bottom, the next one 66 to the
+// right; its plate of the bars (64x20) 22 above it; the panel of the charges 256x50 at 5 from the right
+#define HUD_PIC_W 64.0
+#define HUD_PIC_STEP 66.0
+#define HUD_PIC_MARGIN 5.0
+#define HUD_PIC_H 50.0
+#define HUD_PLATE_UP 22.0
+#define HUD_INFO_W 256.0
+// the charges in the order of the rows of ship_info: the balls, the grapes, the knippels, the bombs
+#define HUD_CHARGES 4
 // TOWN_AUTO: the autotest stands in an exit this long before it goes through, so its icon is on the video
 #define HUD_AUTO_EXIT_MS 1500
+// TOWN_AUTO=7: the corner shows the enemies from then on
+#define HUD_AUTO_CORNER_MS 20000
 
 object BattleInterface;
 object ScreenLog;
@@ -37,6 +56,14 @@ int hudW = 800;
 int hudH = 600;
 // what BI_GetData returns: the cell of the picture, its lit cell, the texture of the list, dead
 int hudShipPicture[4];
+// what GetCurrentCharge returns: the row of the panel of the charges (the lit charge, or the empty one), the sails,
+// the wind, the powder, the powder run out
+int hudCharge[5];
+// what the corner bottom right shows (HUD_CORNER_*), kept for the next sea as the original keeps it on the hero
+int hudCorner = HUD_CORNER_INFO;
+string hudChargeGoods[HUD_CHARGES] = {"Cannonballs", "Grapes", "Knippels", "Bombs"};
+// the loaded charge (ours: the guns fire balls only, the other charges are not done yet)
+int hudChargeLoaded = 0;
 bool hudSea = false;
 // the engine finds no enemy near: the map may be opened (BI_SetSeaState)
 bool hudMapFree = true;
@@ -105,6 +132,7 @@ void Hud_CreateLog()
 	Hud_DefineAction("Land", sti(PdmHud.command.town));
 	Hud_DefineAction("ToSea", sti(PdmHud.command.ocean));
 	Hud_DefineAction("ToDoor", sti(PdmHud.command.town));
+	Hud_DefineAction("Board", sti(PdmHud.command.board));
 
 	LayerAddObject(EXECUTE, &ScreenLog, 100);
 	LayerAddObject(REALIZE, &ScreenLog, 65535);
@@ -149,6 +177,7 @@ void Hud_FastCommand()
 	if (hudSea)
 	{
 		if (action == "Land") { PostEvent("Sea_ToPort", 0); }
+		if (action == "Board") { PostEvent("Board_Start", 0); }
 		return;
 	}
 	Town_Action();
@@ -169,54 +198,42 @@ void Hud_Start()
 	// one fixed to 1024x768 while an enemy is near
 	BattleInterface.battleborder.used = 0;
 
-	// the picture of the ship top left (its top 50 rows of 64, the rest keyed out); the bars right under it,
-	// on the plate of back.tga (64x20): the sails at 5 from its top, the hull at 15, as on ship_status.tga
+	// the pictures of the ships of the hero in a row from the bottom left, the enemy ships pressed to the bottom
+	// right, as SQUAD_CONTROL.dll; the engine takes the centre of the picture of 64x64 (the top 50 rows drawn)
+	int pictureY = hudH - Hud_Px(HUD_PIC_MARGIN + HUD_PIC_H - HUD_PIC_W / 2.0);
 	aref icon;
 	makearef(icon, BattleInterface.ShipIcon);
-	icon.iconoffset1 = Hud_Pos(48.0, 48.0);
-	icon.shiptexturename = "battle_interface\pdm\ships.tga";
-	icon.xsize = sti(PdmHud.ship_cols);
-	icon.ysize = sti(PdmHud.ship_cols);
-	icon.shipoffset = "0,0";
-	icon.shipiconsize = Hud_Pos(64.0, 64.0);
-	icon.backtexturename = "battle_interface\pdm\back.tga";
-	icon.backuv = "0,0,1,1";
-	icon.backoffset = Hud_Pos(0.0, 28.0);
-	icon.backiconsize = Hud_Pos(64.0, 20.0);
-	icon.shipstatetexturename = "battle_interface\pdm\status.tga";
-	// the bars empty from the right, as the original
-	icon.shipstatehorizontal = 1;
-	icon.shipspuv = "0.046875,0.359375,0.953125,0.421875";
-	icon.shipspoffset = Hud_Pos(0.0, 23.0);
-	icon.shipspiconsize = Hud_Pos(58.0, 4.0);
-	icon.shiphpuv = "0.046875,0.515625,0.953125,0.578125";
-	icon.shiphpoffset = Hud_Pos(0.0, 33.0);
-	icon.shiphpiconsize = Hud_Pos(58.0, 4.0);
-	// no class picture: the original has none; no Ship.Crew.quantity, so no number of the crew either
-	icon.shipclasstexturename = "battle_interface\pdm\status.tga";
-	icon.shipclassuv = "0,0,0,0";
-	icon.shipclassoffset = "0,0";
-	icon.shipclassiconsize = "0,0";
-	icon.shipnamefontid = "PDM_LOGBOOK_16";
-	icon.shipnamefontcolor = argb(255, 255, 230, 160);
-	icon.shipnamefontscale = 1.0;
-	icon.shipnamefontoffset = Hud_Pos(0.0, 40.0);
+	Hud_ShipIcon(icon);
+	string key;
+	for (int i = 1; i <= 8; i++)
+	{
+		key = "iconoffset" + i;
+		icon.(key) = Hud_Px(HUD_PIC_MARGIN + HUD_PIC_W / 2.0 + HUD_PIC_STEP * (i - 1)) + "," + pictureY;
+	}
+	aref enemy;
+	makearef(enemy, BattleInterface.EnemyIcon);
+	Hud_ShipIcon(enemy);
+	enemy.rowright = (hudW - Hud_Px(HUD_PIC_MARGIN + HUD_PIC_W / 2.0)) + "," + pictureY;
+	enemy.rowstep = Hud_Px(HUD_PIC_STEP);
 	// the commands in a row from the right of the picture, level with it
-	icon.commandlistverticaloffset = Hud_Px(-32.0);
+	icon.commandlistverticaloffset = -Hud_Px(HUD_PIC_W / 2.0);
 
 	Hud_Navigator();
+	Hud_InfoPanel();
+	Hud_ShowCorner();
 
 	aref list;
 	makearef(list, BattleInterface.CommandList);
-	list.CommandIconLeft = Hud_Px(96.0);
+	list.CommandIconLeft = Hud_Px(HUD_PIC_MARGIN + HUD_PIC_STEP);
 	list.CommandIconWidth = Hud_Px(64.0);
 	list.CommandIconHeight = Hud_Px(64.0);
-	list.CommandIconSpace = Hud_Px(4.0);
+	list.CommandIconSpace = Hud_Px(HUD_PIC_STEP - HUD_PIC_W);
 	list.CommandMaxIconQuantity = 8;
 	list.CommandNoteFont = "PDM_LOGBOOK_18";
 	list.CommandNoteColor = argb(255, 255, 230, 160);
 	list.CommandNoteScale = 1.0;
-	list.CommandNoteOffset = Hud_Pos(0.0, 30.0);
+	// the note above the icon, where the original prints it over the row (ours: it follows the chosen icon)
+	list.CommandNoteOffset = Hud_Pos(0.0, -56.0);
 	// no frame round the chosen icon: the toolbar lights the icon itself (its _a picture)
 	list.ActiveIcon_Size = "0,0";
 	BattleInterface.CommandTextures.list.t0.name = "battle_interface\pdm\commands.tga";
@@ -227,6 +244,8 @@ void Hud_Start()
 	BattleInterface.CommandTextures.list.t1.ysize = sti(PdmHud.ship_cols);
 	BattleInterface.CommandTextures.CommandTexNum = 0;
 	// in the order of the toolbar; enable is set by Hud_PossibleCommands when the menu opens
+	Hud_DefineCommand("board", "board", PdmHud.note.boarding);
+	Hud_DefineCommand("sail_to", "chase", PdmHud.note.sail_to);
 	Hud_DefineCommand("land", "town", PdmHud.note.land);
 	Hud_DefineCommand("sea_map", "map2", PdmHud.note.sea_map);
 	Hud_DefineCommand("skip_time", "time", PdmHud.note.ControlTurboMode);
@@ -237,6 +256,11 @@ void Hud_Start()
 	SetEventHandler("BI_CommandEndChecking", "Hud_CommandEndChecking", 0);
 	SetEventHandler("BI_LaunchCommand", "Hud_LaunchCommand", 0);
 	SetEventHandler("BI_SetSeaState", "Hud_SeaState", 0);
+	SetEventHandler("GetCurrentCharge", "Hud_GetCharge", 0);
+	MapKey("Hud_Corner", HUD_KEY_CORNER);
+	// TOWN_AUTO=7: "=" by itself, the enemies in the corner for the video
+	SetEventHandler("Hud_AutoCorner", "Hud_AutoCorner", 0);
+	if (TownAuto == 7) { PostEvent("Hud_AutoCorner", HUD_AUTO_CORNER_MS); }
 	MapKey("BICommandsActivate", HUD_KEY_MENU);
 	MapKey("BICommandsLeft", 37);
 	MapKey("BICommandsRight", 39);
@@ -254,6 +278,195 @@ void Hud_Start()
 	SeaShips[seaHero].Ship.SP = 100;
 	SeaShipTypes[seaHero].SP = 100;
 	SendMessage(&BattleInterface, "llaall", BI_IN_CREATE_SHIP, seaHero, &SeaShips[seaHero], &SeaShipTypes[seaHero], 1, BI_RELATION_FRIEND);
+}
+
+// the picture of a ship (its top 50 rows of 64, the rest keyed out); the bars above it, on the plate of
+// back.tga (64x20): the sails at 5 from its top, the hull at 15, as on ship_status.tga
+void Hud_ShipIcon(aref icon)
+{
+	icon.shiptexturename = "battle_interface\pdm\ships.tga";
+	icon.xsize = sti(PdmHud.ship_cols);
+	icon.ysize = sti(PdmHud.ship_cols);
+	icon.shipoffset = "0,0";
+	icon.shipiconsize = Hud_Pos(64.0, 64.0);
+	icon.backtexturename = "battle_interface\pdm\back.tga";
+	icon.backuv = "0,0,1,1";
+	// the centre of the plate from the centre of the picture
+	float plate = HUD_PIC_W / 2.0 + HUD_PLATE_UP - 10.0;
+	icon.backoffset = Hud_Pos(0.0, -plate);
+	icon.backiconsize = Hud_Pos(64.0, 20.0);
+	icon.shipstatetexturename = "battle_interface\pdm\status.tga";
+	// the bars empty from the right, as the original
+	icon.shipstatehorizontal = 1;
+	icon.shipspuv = "0.046875,0.359375,0.953125,0.421875";
+	icon.shipspoffset = Hud_Pos(0.0, -plate - 5.0);
+	icon.shipspiconsize = Hud_Pos(58.0, 4.0);
+	icon.shiphpuv = "0.046875,0.515625,0.953125,0.578125";
+	icon.shiphpoffset = Hud_Pos(0.0, -plate + 5.0);
+	icon.shiphpiconsize = Hud_Pos(58.0, 4.0);
+	// no class picture: the class is in the picture (tools/pdm_hud.py); no Ship.Crew.quantity, so no number of
+	// the crew either
+	icon.shipclasstexturename = "battle_interface\pdm\status.tga";
+	icon.shipclassuv = "0,0,0,0";
+	icon.shipclassoffset = "0,0";
+	icon.shipclassiconsize = "0,0";
+	icon.shipnamefontid = "PDM_LOGBOOK_16";
+	icon.shipnamefontcolor = argb(255, 255, 230, 160);
+	icon.shipnamefontscale = 1.0;
+	// no name: the toolbar of the original has none, the engine always prints it, so out of the window
+	icon.shipnamefontoffset = "0,-10000";
+}
+
+// the panel of the charges bottom right: the navigator draws ship_info as its picture of the charge (the row of
+// the lit charge), the texts of TextInfo over it; Hud_SeaTick refreshes them
+void Hud_InfoPanel()
+{
+	aref nav;
+	makearef(nav, BattleInterface.navigation);
+	int left = hudW - Hud_Px(HUD_PIC_MARGIN + HUD_INFO_W);
+	int top = hudH - Hud_Px(HUD_PIC_MARGIN + HUD_PIC_H);
+	// chargePos is the centre of the picture from the centre of the navigator
+	int x = left + Hud_Px(HUD_INFO_W / 2.0) - (sti(nav.rightPos) - sti(nav.navigatorWidth) / 2);
+	int y = top + Hud_Px(HUD_PIC_W / 2.0) - (sti(nav.topPos) + sti(nav.navigatorHeight) / 2);
+	nav.chargeTexture = "battle_interface\pdm\info.tga";
+	nav.chargeTextureGreed = "1," + sti(PdmHud.info_rows);
+	nav.chargePos = x + "," + y;
+	nav.chargePictureSize = Hud_Pos(HUD_INFO_W, HUD_PIC_W);
+	hudCharge[0] = sti(PdmHud.info_empty);
+	hudCharge[1] = 0;
+	hudCharge[2] = 0;
+	hudCharge[3] = 0;
+	hudCharge[4] = 0;
+
+	// FUN_10002320 of SQUAD_CONTROL.dll: info_bar at 15,6 of the panel, the numbers of the charges at 30, 92, 154
+	// and 216 by 28, the loaded one black (ours: PDM_LOGBOOK_13 for arial 10)
+	Hud_InfoText("bar", left + Hud_Px(15.0), top + Hud_Px(5.0), argb(255, 255, 255, 255));
+	string key;
+	for (int i = 0; i < HUD_CHARGES; i++)
+	{
+		x = left + Hud_Px(30.0 + 62.0 * i);
+		key = "charge" + i;
+		Hud_InfoText(key, x, top + Hud_Px(27.0), argb(255, 255, 255, 255));
+		key = "loaded" + i;
+		Hud_InfoText(key, x, top + Hud_Px(27.0), argb(255, 0, 0, 0));
+	}
+}
+
+void Hud_InfoText(string name, int x, int y, int color)
+{
+	BattleInterface.TextInfo.(name).font = "PDM_LOGBOOK_13";
+	BattleInterface.TextInfo.(name).scale = 1.0;
+	BattleInterface.TextInfo.(name).color = color;
+	BattleInterface.TextInfo.(name).shadow = 0;
+	BattleInterface.TextInfo.(name).align = "left";
+	BattleInterface.TextInfo.(name).pos.x = x;
+	BattleInterface.TextInfo.(name).pos.y = y;
+	BattleInterface.TextInfo.(name).text = "";
+	BattleInterface.TextInfo.(name).refreshable = 1;
+}
+
+// "=": the charges, the enemies, nothing, as action 0x13 of SQUAD_CONTROL.dll
+void Hud_Control(string control)
+{
+	if (control != "Hud_Corner" || !hudSea) { return; }
+	hudCorner = (hudCorner + 1) % 3;
+	Trace("PDM hud: corner " + hudCorner);
+	Hud_ShowCorner();
+	Hud_SeaTick();
+}
+
+void Hud_AutoCorner()
+{
+	Hud_Control("Hud_Corner");
+}
+
+void Hud_ShowCorner()
+{
+	BattleInterface.EnemyIcon.hide = hudCorner != HUD_CORNER_ENEMIES;
+}
+
+// the goods of the hold by the name: the cargo keeps them as n<the index in PdmGoods>
+string Hud_GoodsKey(string goods)
+{
+	int n = GetAttributesNum(&PdmGoods);
+	for (int i = 0; i < n; i++)
+	{
+		aref row = GetAttributeN(&PdmGoods, i);
+		if (GetAttributeName(row) == goods) { return "n" + i; }
+	}
+	return "";
+}
+
+int Hud_Goods(string goods)
+{
+	aref cargo;
+	makearef(cargo, PlayerShipCard.cargo);
+	return Pdm_Count(cargo, Hud_GoodsKey(goods));
+}
+
+// the hold of the hero loses a shot of the loaded charge (ours: one a gun)
+void Hud_SpendCharge()
+{
+	aref cargo;
+	makearef(cargo, PlayerShipCard.cargo);
+	string key = Hud_GoodsKey(hudChargeGoods[hudChargeLoaded]);
+	int left = Pdm_Count(cargo, key) - 1;
+	if (left < 0) { left = 0; }
+	cargo.(key) = left;
+}
+
+int Hud_ChargeLeft()
+{
+	return Hud_Goods(hudChargeGoods[hudChargeLoaded]);
+}
+
+// "": [the row of the panel, the sails, the wind, the powder, the powder run out]; the empty row hides it
+ref Hud_GetCharge()
+{
+	return &hudCharge;
+}
+
+// the texts of the panel of the charges, every tick of the sea
+void Hud_InfoTick()
+{
+	bool shown = hudCorner == HUD_CORNER_INFO;
+	if (shown) { hudCharge[0] = hudChargeLoaded; }
+	else { hudCharge[0] = sti(PdmHud.info_empty); }
+	string text = "";
+	if (shown)
+	{
+		int hp = makeint(100.0 * stf(SeaShips[seaHero].Ship.HP) / stf(SeaShipTypes[seaHero].HP));
+		text = PdmHud.note.info_bar;
+		text = Hud_Format(text, makeint(stf(SeaShips[seaHero].Ship.SP)));
+		text = Hud_Format(text, Pdm_Count(&PlayerShipCard, "crew"));
+		text = Hud_Format(text, hp);
+	}
+	BattleInterface.TextInfo.bar.text = text;
+	string key;
+	string number;
+	for (int i = 0; i < HUD_CHARGES; i++)
+	{
+		number = "";
+		if (shown) { number = "" + Hud_Goods(hudChargeGoods[i]); }
+		key = "charge" + i;
+		BattleInterface.TextInfo.(key).text = "";
+		if (i != hudChargeLoaded) { BattleInterface.TextInfo.(key).text = number; }
+		key = "loaded" + i;
+		BattleInterface.TextInfo.(key).text = "";
+		if (i == hudChargeLoaded) { BattleInterface.TextInfo.(key).text = number; }
+	}
+}
+
+// the first %d of the text by the number
+string Hud_Format(string text, int n)
+{
+	int at = findSubStr(text, "%d", 0);
+	if (at < 0) { return text; }
+	string head = "";
+	if (at > 0) { head = strcut(text, 0, at - 1); }
+	string tail = "";
+	if (at + 2 < strlen(text)) { tail = strcut(text, at + 2, strlen(text) - 1); }
+	return head + n + tail;
 }
 
 // The navigator reads its attributes in Init. Its square textures are nav_scale times the brooch (tools/pdm_hud.py),
@@ -289,12 +502,13 @@ void Hud_Navigator()
 	nav.argbReadyCannonColor = argb(255, 230, 200, 110);
 	nav.argbChargeCannonColor = argb(255, 200, 90, 40);
 	nav.argbDamageCannonColor = argb(255, 90, 30, 20);
-	// no arcs of the sides yet: the ship has no Cannons.Borts (П4), and without them the engine draws the arcs from
-	// the angle 0, a closed ring. With the guns: left 230..310, right 130..50, clear of the plate of the brooch
-	nav.leftChargeBegAngle = 0;
-	nav.leftChargeEndAngle = 0;
-	nav.rightChargeBegAngle = 0;
-	nav.rightChargeEndAngle = 0;
+	// the reload of the sides (Cannons.Borts of battle.c), an arc of each side that fills as its guns load, clear
+	// of the plate of the brooch (ours: NAVIGATOR.dll shows the guns on a panel of their own, guns_info); the bow
+	// and the stern have no arcs
+	nav.leftChargeBegAngle = 230;
+	nav.leftChargeEndAngle = 310;
+	nav.rightChargeBegAngle = 130;
+	nav.rightChargeEndAngle = 50;
 	nav.forwardChargeBegAngle = 0;
 	nav.forwardChargeEndAngle = 0;
 	nav.backwardChargeBegAngle = 0;
@@ -308,8 +522,8 @@ void Hud_Navigator()
 	nav.cannonsTexture = "battle_interface\pdm\nav_cannons.tga";
 	nav.emptyTexture = "battle_interface\pdm\nav_frame.tga";
 	nav.windTexture = "battle_interface\pdm\nav_wind.tga";
-	// no icons of the charge, the sails and the wind: the original has none on the navigator
-	nav.chargePictureSize = "0,0";
+	// no icons of the sails and the wind: the original has none on the navigator; the picture of the charge is the
+	// panel of the charges (Hud_InfoPanel)
 	nav.sailstatePictureSize = "0,0";
 	nav.windPictureSize = "0,0";
 }
@@ -334,6 +548,8 @@ void Hud_Release()
 	DelEventHandler("BI_CommandEndChecking", "Hud_CommandEndChecking");
 	DelEventHandler("BI_LaunchCommand", "Hud_LaunchCommand");
 	DelEventHandler("BI_SetSeaState", "Hud_SeaState");
+	DelEventHandler("GetCurrentCharge", "Hud_GetCharge");
+	DelEventHandler("Hud_AutoCorner", "Hud_AutoCorner");
 	DeleteClass(&BattleInterface);
 	Hud_ReleaseLog();
 }
@@ -375,6 +591,8 @@ string Hud_NationOf(int n)
 void Hud_PossibleCommands()
 {
 	int chr = GetEventData();
+	BattleInterface.Commands.board.enable = Board_Can();
+	BattleInterface.Commands.sail_to.enable = Battle_CanSailTo() || battleSailTo;
 	BattleInterface.Commands.land.enable = Hud_CanLand();
 	BattleInterface.Commands.sea_map.enable = hudMapFree;
 	BattleInterface.Commands.skip_time.enable = 1;
@@ -403,6 +621,8 @@ void Hud_LaunchCommand()
 	Trace("PDM hud: command " + name);
 	if (name == "land") { PostEvent("Sea_ToPort", 0); }
 	if (name == "sea_map") { PostEvent("Sea_ToMap", 0); }
+	if (name == "board") { PostEvent("Board_Start", 0); }
+	if (name == "sail_to") { PostEvent("Battle_SailTo", 0); }
 	if (name == "skip_time") { Sea_NextTimeScale(); }
 }
 
@@ -419,6 +639,8 @@ void Hud_SeaState()
 void Hud_SeaTick()
 {
 	if (!hudSea) { return; }
-	if (Hud_CanLand()) { Hud_SetAction("Land", PdmHud.note.land); }
+	Hud_InfoTick();
+	if (Board_Can()) { Hud_SetAction("Board", PdmHud.note.boarding); }
+	else if (Hud_CanLand()) { Hud_SetAction("Land", PdmHud.note.land); }
 	else { Hud_SetAction("Nothing", ""); }
 }

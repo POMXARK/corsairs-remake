@@ -7,9 +7,12 @@ Writes into <game dir>/resource/textures/battle_interface/pdm:
                    8x4: the normal one of the command i in the cell 2i, the active one in 2i+1
   ships.tga.tx     the pictures of the ships, <icon>1.tga (a dark plate in the corner) and <icon>2.tga (the
                    plate lit, the ship chosen), with the flag of the nation (tflag0..3.tga, its blue keyed out)
-                   on the plate, in a grid of 16x16: the cell ((icon * 4 + flag) * 2 + lit)
+                   in the top left corner and the class of the ship on the plate, in a grid of 16x16: the cell
+                   ((icon * 4 + flag) * 2 + lit)
   status.tga.tx    ship_status.tga: the bars of the sails, the crew and the hull, empty on the top, full below
   back.tga.tx      the empty bars with the crew full (ours: the engine draws two gauges, the crew stays full)
+  info.tga.tx      ship_info.tga, the panel of the charges bottom right: its 4 rows of 50 (the balls, the grapes,
+                   the knippels, the bombs lit) in rows of 64 and an empty fifth row, 8 rows in all
   nav_frame.tga.tx    the frame of the navigator (obrooch4: a ring with a plate below for the speeds)
   nav_compass.tga.tx  the letters of the compass (compas-new), turned with the heading
   nav_cannons.tga.tx  a white band round the frame: the navigator cuts the arcs of the broadsides out of it and
@@ -22,10 +25,11 @@ takes the rows for the columns), so the grids of the ships are square.
 The navigator draws its square textures on one square round the map: the frame and the compass take the middle
 NAV_FRAME of NAV texels (scaled 1.5 from 128), the band of the guns the ring outside the frame.
 """
+import json
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS.parent / "engine/demos/common"))
@@ -50,9 +54,19 @@ FLAG_KEY = (104, 176, 216)
 # the toolbar draws pure black as transparent (a colour key): the pictures take the top 50 rows of their 64,
 # the rest is black, so is the gap between the empty and the full bars of ship_status
 BLACK_KEY = (0, 0, 0)
-# the flag (its 20x18 at the top left of tflag) on the plate of the picture
-FLAG_BOX = (0, 0, 20, 18)
-FLAG_AT = (1, 28)
+# the flag (its 19x17 at the top left of tflag) in the top left corner of the picture, the class of the ship on
+# its dark plate, white on the lit picture and grey on the other (FUN_100030a0 of SQUAD_CONTROL.dll; ours: the
+# original prints it with arial 10, the converter bakes it in with the font of Pillow)
+FLAG_BOX = (0, 0, 19, 17)
+FLAG_AT = (2, 2)
+CLASS_AT = (6, 27)
+CLASS_COLOURS = ((143, 143, 143, 255), (255, 255, 255, 255))
+# ship_info.tga: the panel of 256x50, the rows of the charges one under another; the rows of the grid of the
+# navigator are of 64, the fifth empty one hides the panel
+INFO_W = 256
+INFO_ROW = 50
+INFO_CHARGES = 4
+INFO_ROWS = 8
 # ship_status.tga: the empty bars at the top, the full ones below; the stripes of the full ones
 STATUS_EMPTY = (0, 0, 64, 20)
 STATUS_FULL = (0, 20, 64, 40)
@@ -99,17 +113,26 @@ def ship_icons(pdm):
     return sorted(s for s in stems if pdm.find(f"TEXTURES/toolbar/{s}2.tga") and not s.startswith(("it_", "tflag")))
 
 
-def ships(pdm, icons):
+def ship_classes(game):
+    """The class of the ship of each icon (WORLDS/Ships.idf, one class an icon)."""
+    table = json.loads((game / "data/tables/WORLDS/Ships.json").read_text(encoding="utf-8"))
+    return {o["icon"].lower(): o["class"] for o in map(dict, table["objects"]) if o.get("icon")}
+
+
+def ships(pdm, icons, classes):
     cells = len(icons) * FLAG_COUNT * 2
     if cells > SHIP_COLS * SHIP_COLS:
         raise SystemExit(f"pdm_hud: {cells} ship pictures do not fit the grid of {SHIP_COLS}")
     atlas = Image.new("RGBA", (SHIP_COLS * CELL, SHIP_COLS * CELL))
     flags = [picture(pdm, f"tflag{f}.tga", FLAG_KEY).crop(FLAG_BOX) for f in range(FLAG_COUNT)]
+    font = ImageFont.load_default()
     for i, icon in enumerate(icons):
         for f, flag in enumerate(flags):
             for lit in range(2):
                 image = picture(pdm, f"{icon}{lit + 1}.tga")
                 image.alpha_composite(flag, FLAG_AT)
+                if icon in classes:
+                    ImageDraw.Draw(image).text(CLASS_AT, classes[icon], font=font, fill=CLASS_COLOURS[lit])
                 cell = (i * FLAG_COUNT + f) * 2 + lit
                 atlas.paste(image, (cell % SHIP_COLS * CELL, cell // SHIP_COLS * CELL))
     return atlas
@@ -122,6 +145,14 @@ def back(status):
     top = STATUS_FULL[1]
     empty.paste(full.crop((0, y0 - top, 64, y1 - top)), (0, y0 - top))
     return empty
+
+
+def info(pdm):
+    panel = picture(pdm, "ship_info.tga")
+    image = Image.new("RGBA", (INFO_W, CELL * INFO_ROWS))
+    for row in range(INFO_CHARGES):
+        image.paste(panel.crop((0, row * INFO_ROW, INFO_W, (row + 1) * INFO_ROW)), (0, row * CELL))
+    return image
 
 
 def toolbar(pdm, name):
@@ -173,10 +204,11 @@ def main():
     out = game / "resource/textures/battle_interface/pdm"
     write_tx(commands(pdm), out / "commands.tga.tx", mip_chain=False)
     icons = ship_icons(pdm)
-    write_tx(ships(pdm, icons), out / "ships.tga.tx", mip_chain=False)
+    write_tx(ships(pdm, icons, ship_classes(game)), out / "ships.tga.tx", mip_chain=False)
     status = picture(pdm, "ship_status.tga")
     write_tx(status, out / "status.tga.tx", mip_chain=False)
     write_tx(back(status), out / "back.tga.tx", mip_chain=False)
+    write_tx(info(pdm), out / "info.tga.tx", mip_chain=False)
     write_tx(nav_square(toolbar(pdm, "obrooch4.tga")), out / "nav_frame.tga.tx", mip_chain=False)
     write_tx(nav_square(toolbar(pdm, "compas-new.tf")), out / "nav_compass.tga.tx", mip_chain=False)
     write_tx(nav_cannons(), out / "nav_cannons.tga.tx", mip_chain=False)
@@ -187,6 +219,8 @@ def main():
              f"\tPdmHud.command_rows = {-(-len(COMMANDS) * 2 // COMMAND_COLS)};",
              f"\tPdmHud.ship_cols = {SHIP_COLS};",
              f"\tPdmHud.flag_count = {FLAG_COUNT};",
+             f"\tPdmHud.info_rows = {INFO_ROWS};",
+             f"\tPdmHud.info_empty = {INFO_CHARGES};",
              f"\tPdmHud.nav_scale = {NAV / NAV_FRAME:.6f};"]
     lines += [f"\tPdmHud.command.{name} = {i * 2};" for i, name in enumerate(COMMANDS)]
     lines += [f"\tPdmHud.icon.{icon} = {i};" for i, icon in enumerate(icons)]

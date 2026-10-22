@@ -388,6 +388,12 @@ count × {
 
 **Две сабли.** Клинок бойца (`soldier_spa_palash`, `pirat_sabel`) лежит в модели дважды: в ножнах на поясе и обнажённый в руке. Игра оригинала показывает одну копию по состоянию боя. Обнажённая копия глубже в дереве частей (висит на кисти), поясная — на тазе. Вне боя конвертер оставляет только поясную (`drawn_blades`).
 
+### Абордаж (`tools/pdm_boarding.py`)
+
+Абордаж оригинала идёт в два шага (`ACTIONS/brd_*.a`). Сначала ролик драки команд на палубе (`DESC/Fight_*.ani`, `PLAY Engine_movie "Fight_Eng"`), потом дуэль капитанов в каюте `MODELS/kayuta.cff` на патче `Patch_kayuta.cff`. `WORLDS/CHARACTERS/brd_mans.idf` задаёт моряка каждой нации: `engl` → soldier_eng, `frnc` → soldier_fra, `span` → soldier_spa, `pira` → pirat.
+
+Бойцы — модели `anim_types.idf`, у которых в наборе действий есть `hit_1` (`stand_atack`, `hit_1..4`, `block_1..4`, `death_1/2`). Конвертер пишет их с обнажённой саблей (`convert(blade="hand")` → `<model>_brd.gm`), модель без сабли пропускает. Места бойцов: середина патча ± 1,5 м по z, высота — по треугольнику пола (ours). Всё это сводится в `program/data/pdm_boarding.c`.
+
 ## Тулбар моря и значок действия (`tools/pdm_hud.py`)
 
 Оригинал рисует HUD моря из `SQUAD_CONTROL.dll` по картинкам `TEXTURES/toolbar/*.tga`:

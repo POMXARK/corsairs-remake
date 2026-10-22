@@ -161,6 +161,7 @@ void Sea_Control(string control)
 	if (control == "Sea_Time" && seaActive) { Sea_NextTimeScale(); }
 	if (control == "Sea_ToMap" && seaActive) { PostEvent("Sea_ToMap", 0); }
 	Battle_Control(control);
+	Hud_Control(control);
 }
 
 void Sea_NextTimeScale()
@@ -450,7 +451,9 @@ int Sea_AddShip(aref card, string typeKey, float x, float z, float ay)
 	SeaShips[i].id = card.id;
 	if (CheckAttribute(card, "ship_key")) { SeaShips[i].ship_key = card.ship_key; }
 	// the keys steer the main character; in the battle autotest SEA_AI steers the hero (battle.c)
-	bool autopilot = seaBattle && TownAuto == 7;
+	// the script compiler does not parse "a && (b || c)"
+	bool autopilot = TownAuto == 7 || TownAuto == 8;
+	if (!seaBattle) { autopilot = false; }
 	if (i == seaHero && !autopilot) { SeaShips[i].MainCharacter = 1; }
 	SeaShips[i].index = i;
 	SeaShips[i].nation = sti(card.nation);
@@ -546,6 +549,7 @@ void Sea_Tick()
 	// the player lands by the command of the toolbar; the autotest sailing in lands by itself
 	if (TownAuto != 0 && Sea_AtHarbour(d)) { PostEvent("Sea_ToPort", 0); return; }
 	Hud_SeaTick();
+	if (seaBattle) { Board_SeaTick(); }
 	if (d > 0.0 && CheckAttribute(&PdmIslands, seaIsland + ".exit_r") && d > stf(PdmIslands.(seaIsland).exit_r))
 	{
 		PostEvent("Sea_ToMap", 0);

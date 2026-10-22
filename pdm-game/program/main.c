@@ -2,7 +2,8 @@
 // in the DLLs of MODULES. These scripts play the role of those DLLs on the data of the original,
 // which run.sh converts: data\pdm_data.c (written by tools/pdm_data2c.py) holds its tables and cards,
 // data\pdm_logic.c (tools/pdm_logic2c.py) its actions, story lines and dialogs, run by story.c,
-// data\pdm_sound.c (tools/pdm_sound.py) its music and the sounds of the locations, played by sound.c.
+// data\pdm_sound.c (tools/pdm_sound.py) its music and the sounds of the locations, played by sound.c,
+// data\pdm_boarding.c (tools/pdm_boarding.py) the cabin of the boarding, fought in boarding.c.
 // Stages of the port: docs/port-plan.md.
 
 #define EXECUTE 0
@@ -26,6 +27,7 @@ aref PlayerShipType;
 #include "data\pdm_screens.c"
 #include "data\pdm_sound.c"
 #include "data\pdm_hud.c"
+#include "data\pdm_boarding.c"
 #include "sound.c"
 #include "story.c"
 // before sea.c and town.c: they use its defines
@@ -33,6 +35,7 @@ aref PlayerShipType;
 #include "sea.c"
 #include "battle.c"
 #include "town.c"
+#include "boarding.c"
 #include "review.c"
 #include "menu.c"
 #include "map.c"
@@ -54,6 +57,7 @@ void Main()
 	PdmScreens_Init();
 	PdmSound_Init();
 	PdmHud_Init();
+	PdmBoarding_Init();
 	makearef(PlayerCard, PdmCharacters.Nicolas_Sharp);
 	// an attribute name in .(...) has to be a variable
 	string shipKey = PlayerCard.ship_key;

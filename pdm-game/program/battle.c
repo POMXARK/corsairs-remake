@@ -5,7 +5,7 @@
 // cannons.idf): its reload time, range and damage. At zero the ship is reported dead to SEA_AI and sinks.
 // F fires the sides that bear on the enemy (ours: the original fires by the toolbar).
 // SCENE=battle starts at sea at the island of the hero with an enemy ahead; TOWN_AUTO=7 fires by itself
-// until the enemy sinks and quits.
+// until the enemy sinks and quits. Within BOARD_DISTANCE the enemy can be boarded (boarding.c).
 
 // shared/sea_ai/script_defines.h
 #define AI_MESSAGE_ADD_SHIP 51001
@@ -16,6 +16,8 @@
 #define AI_MESSAGE_GROUP_SET_COMMANDER 51022
 #define AI_MESSAGE_CHARACTER_DEAD 51026
 #define AITASK_ATTACK 1
+#define AITASK_ABORDAGE 5
+#define AITASK_MOVE 7
 #define PRIMARY_TASK 0
 #define RELATION_FRIEND 1
 #define RELATION_ENEMY 3
@@ -51,9 +53,12 @@
 #define BATTLE_FIRE_SPREAD 0.6
 #define BATTLE_SCATTER 0.04
 #define BATTLE_MAST_HIT_DAMAGE 0.34
-// TOWN_AUTO=7: SEA_AI sails and fires the hero too (Sea_AddShip leaves him no MainCharacter); the
+// TOWN_AUTO=7 and 8: SEA_AI sails and fires the hero too (Sea_AddShip leaves him no MainCharacter); the
 // autotest quits this long after a ship sinks
 #define BATTLE_AUTO_EXIT_MS 8000
+// the enemy can be boarded this close (ours, boarding.c); SEA_AI brings the hero to BOARD_APPROACH of it
+#define BOARD_DISTANCE 40.0
+#define BOARD_APPROACH 25.0
 
 // steers the enemy, aims and loads the guns of every ship
 object AISea;
@@ -66,6 +71,8 @@ int battleEnemy = -1;
 int battleShots = 0;
 int battleHits = 0;
 int battleBroadsides = 0;
+// the command "Плыть к" of the toolbar (SQUAD_CONTROL.dll sail_to): SEA_AI steers the hero to the enemy
+bool battleSailTo = false;
 
 // SCENE=battle: at sea by the island of the hero, the enemy coming
 void Battle_Start()
@@ -82,6 +89,7 @@ void Battle_Create()
 	battleShots = 0;
 	battleHits = 0;
 	battleBroadsides = 0;
+	battleSailTo = false;
 	CreateEntity(&Particles, "particles");
 	CreateEntity(&AISea, "SEA_AI");
 	LayerAddObject(EXECUTE, &AISea, 0);
@@ -121,6 +129,8 @@ void Battle_Create()
 	SetEventHandler("Ship_Bort_Fire", "Battle_BroadsideFired", 0);
 	SetEventHandler("Shp_BortReloaded", "Battle_BroadsideReloaded", 0);
 	SetEventHandler("Battle_AutoExit", "Battle_AutoExit", 0);
+	SetEventHandler("Board_Start", "Board_Start", 0);
+	SetEventHandler("Battle_SailTo", "Battle_SailTo", 0);
 	MapKey("Battle_Fire", BATTLE_FIRE_KEY);
 }
 
@@ -143,6 +153,7 @@ void Battle_Release()
 	DelEventHandler("Ship_Bort_Fire", "Battle_BroadsideFired");
 	DelEventHandler("Shp_BortReloaded", "Battle_BroadsideReloaded");
 	DelEventHandler("Battle_AutoExit", "Battle_AutoExit");
+	DelEventHandler("Board_Start", "Board_Start");
 	DeleteClass(&AIBalls);
 	DeleteClass(&AISea);
 	DeleteClass(&Particles);
@@ -194,6 +205,7 @@ void Battle_AddShip(int i, float x, float z, float ay)
 	SeaShips[i].Ship.Speed.z = 1.0;
 	// SEA_AI reads it once, when the ship is added
 	SeaShips[i].SeaAI.Init.AttackDistance = BATTLE_ATTACK_DISTANCE;
+	SeaShips[i].SeaAI.Init.AbordageDistance = BOARD_APPROACH;
 	SeaShips[i].Ship.Mode = "war";
 	Battle_SetBorts(&SeaShipTypes[i]);
 	SendMessage(&AISea, "lsa", AI_MESSAGE_GROUP_SET_COMMANDER, group, &SeaShips[i]);
@@ -228,6 +240,14 @@ void Battle_AddEnemy(float x, float z, float ay)
 	Trace(report);
 	Hud_Log(card.name + " атакует!");
 	if (TownAuto == 7) { SendMessage(&AISea, "lllaa", AI_MESSAGE_SHIP_SET_TASK, AITASK_ATTACK, PRIMARY_TASK, &SeaShips[seaHero], &SeaShips[battleEnemy]); }
+	// TOWN_AUTO=8: the ships sail to each other to board (boarding.c)
+	if (TownAuto == 8)
+	{
+		SendMessage(&AISea, "lllaa", AI_MESSAGE_SHIP_SET_TASK, AITASK_ABORDAGE, PRIMARY_TASK, &SeaShips[seaHero], &SeaShips[battleEnemy]);
+		SendMessage(&AISea, "lllaa", AI_MESSAGE_SHIP_SET_TASK, AITASK_ABORDAGE, PRIMARY_TASK, &SeaShips[battleEnemy], &SeaShips[seaHero]);
+	}
+	// TOWN_AUTO=9: the hero gives "Плыть к" and is brought to the enemy
+	if (TownAuto == 9) { PostEvent("Battle_SailTo", 1000); }
 }
 
 // the battle music of mmusic.ini by the nation of the enemy (nations.idf: england, pirate, france, spain)
@@ -245,6 +265,40 @@ void Battle_Control(string control)
 	int before = battleBroadsides;
 	SendMessage(&AISea, "lal", AI_MESSAGE_CANNON_FIRE, &SeaShips[seaHero], 1);
 	if (battleBroadsides == before) { Hud_Log("Ни один заряженный борт не смотрит на врага"); }
+}
+
+// "Плыть к": the keys of the hero give way to SEA_AI (it steers the ships without MainCharacter) until the
+// enemy is within boarding (Battle_SailToTick); the command again gives the helm back
+bool Battle_CanSailTo()
+{
+	return seaBattle && !battleOver && battleEnemy >= 0 && !Board_Can();
+}
+
+void Battle_SailTo()
+{
+	if (battleSailTo) { Battle_SailToEnd("cancelled"); return; }
+	if (!Battle_CanSailTo()) { return; }
+	battleSailTo = true;
+	DeleteAttribute(&SeaShips[seaHero], "MainCharacter");
+	SendMessage(&AISea, "lllaa", AI_MESSAGE_SHIP_SET_TASK, AITASK_MOVE, PRIMARY_TASK, &SeaShips[seaHero], &SeaShips[battleEnemy]);
+	Hud_Log(PdmHud.note.sail_to + " " + SeaShips[battleEnemy].Ship.Name);
+	Trace("PDM: battle, sail to " + SeaShips[battleEnemy].id);
+}
+
+void Battle_SailToEnd(string why)
+{
+	battleSailTo = false;
+	if (TownAuto != 7 && TownAuto != 8) { SeaShips[seaHero].MainCharacter = 1; }
+	Trace("PDM: battle, sail to " + why);
+	if (TownAuto == 9) { PostEvent("Battle_AutoExit", BATTLE_AUTO_EXIT_MS); }
+}
+
+// a tick of the sea: the hero is brought to the enemy, or the battle is over
+void Battle_SailToTick()
+{
+	if (!battleSailTo) { return; }
+	if (battleOver) { Battle_SailToEnd("ended, the battle is over"); return; }
+	if (Board_Can()) { Battle_SailToEnd("done, the enemy is within boarding"); }
 }
 
 void Battle_AutoExit()
@@ -266,9 +320,11 @@ int Battle_Relation()
 }
 
 // the balls in the hold; a side fires only when there is a ball for each of its guns
+// the hero fires what is in his hold (the panel of the charges counts it down), the enemy never runs out (ours)
 int Battle_BallsNum()
 {
 	aref character = GetEventData();
+	if (sti(character.index) == seaHero) { return Hud_ChargeLeft(); }
 	return 100;
 }
 
@@ -359,6 +415,7 @@ void Battle_CannonFire()
 	float reach = GetEventData();
 	float rawAngle = GetEventData();
 
+	if (sti(character.index) == seaHero) { Hud_SpendCharge(); }
 	AIBalls.Type = "Balls";
 	AIBalls.CharacterIndex = character.index;
 	AIBalls.x = x;
@@ -409,13 +466,13 @@ void Battle_HullHit()
 		Sound_Music("die");
 		Hud_Log("Наш корабль тонет!");
 		Trace("PDM: battle, the hero sinks");
-		if (TownAuto == 7) { PostEvent("Battle_AutoExit", BATTLE_AUTO_EXIT_MS); }
+		if (TownAuto == 7 || TownAuto == 8) { PostEvent("Battle_AutoExit", BATTLE_AUTO_EXIT_MS); }
 		return;
 	}
 	Sound_Music("win");
 	Hud_Log("Враг идёт ко дну! Попаданий " + battleHits + " из " + battleShots);
 	Trace("PDM: battle, the enemy sinks after " + battleHits + " hits of " + battleShots + " shots");
-	if (TownAuto == 7) { PostEvent("Battle_AutoExit", BATTLE_AUTO_EXIT_MS); }
+	if (TownAuto == 7 || TownAuto == 8) { PostEvent("Battle_AutoExit", BATTLE_AUTO_EXIT_MS); }
 }
 
 void Battle_WaterHit()

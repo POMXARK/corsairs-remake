@@ -63,6 +63,25 @@ ACTIONS = {
     "talk": ["talk_1", "stand_calm"],
 }
 
+# the fight of the boarding (Boarding.dll, brd_anim.idf): Storm action <- PDM action, looped, its events.
+# The original has no flinch: a hit is taken with block_4 (ours). The blow lands at the middle of a hit.
+FIGHT_ACTIONS = {
+    "fight stand": ("stand_atack", True, ()),
+    "attack_fast_1": ("hit_1", False, (("Attack", "50%"),)),
+    "attack_fast_2": ("hit_3", False, (("Attack", "50%"),)),
+    "attack_force_1": ("hit_2", False, (("Attack", "50%"),)),
+    "attack_force_2": ("hit_4", False, (("Attack", "50%"),)),
+    "block": ("block_1", True, ()),
+    "block_hit": ("block_2", False, ()),
+    "parry_1": ("block_3", False, (("Parry start", "10%"), ("Parry end", "60%"))),
+    "hit_attack_1": ("block_4", False, ()),
+    "hit_parry": ("block_2", False, ()),
+    "death_1": ("death_1", False, ()),
+    "death_2": ("death_2", False, ()),
+    "Normal to fight": ("to_atack_pos", False, ()),
+    "Fight to normal": ("to_stand_pos", False, ()),
+}
+
 # the blades of the original: a fighter holds his twice, in the scabbard on the belt and drawn in the
 # hand, and the game shows one of them; out of a fight the drawn one is left out
 # zombi.dll, at the end of each action of a stand: rand % 5 == 0 -> do_some(rand % 3 + 1), else
@@ -287,7 +306,7 @@ def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights,
         text += f'data = "Head bone index", "{head}"\n'
     found = []
 
-    def section(name, start, end, speed, loop=True, data=(), rate=1.0):
+    def section(name, start, end, speed, loop=True, data=(), rate=1.0, events=()):
         nonlocal text
         reverse = start > end
         start, end = min(start, end, frames - 1), min(max(start, end), frames - 1)
@@ -298,6 +317,8 @@ def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights,
             text += f"speed = {rate:g}\n"
         for key, value in data:
             text += f'data = "{key}", "{value}"\n'
+        for event, at in events:
+            text += f'event = "{event}", {at}\n'
         if speed:
             text += f'data = "Walk speed", "{speed:.3f}"\n'
             # the Character entity plays a step sound (step_<material of the patch>) on these events
@@ -335,15 +356,30 @@ def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights,
             section(name, start, end, 0, data=[("Blend time", "0.2")])
         else:
             section(name, start, end, 0, loop=name != "dead")
+    for name, (src, loop, events) in FIGHT_ACTIONS.items():
+        if src not in actions:
+            continue
+        start, end, _ = actions[src]
+        found.append(name)
+        section(name, start, end, 0, loop=loop, events=events)
+    # the steps of the fight at the walk speed of the idf (stap_forward_atack runs backwards, 405-395)
+    if "stap_forward_atack" in actions and "stap_back_atack" in actions:
+        start, end, speed = actions["stap_forward_atack"]
+        speed = speed / 100.0 * k
+        found.append("fight walk")
+        for prefix in ("walk", "run"):
+            section("fight " + prefix, start, end, speed)
+            section("fight back " + prefix, *actions["stap_back_atack"][:2], -speed)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="ascii")
     return found
 
 
 def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: float = DEFAULT_SCALE,
-            textures: dict = None):
+            textures: dict = None, blade: str = "belt"):
     """Writes models/characters/<name>.gm, animation/<name>.{an,ani} and the textures to
-    textures/characters/; returns a summary line."""
+    textures/characters/; returns a summary line. blade="hand" writes <name>_brd.gm instead, the
+    fighter of the boarding: the drawn blade in the hand, none in the scabbard."""
     models = index_files(res / "MODELS" / "CHARACTERS")
     textures = textures or index_files(res / "TEXTURES")
     cff = models[Path(model).name.lower()]
@@ -367,7 +403,15 @@ def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: fl
     drawn = drawn_blades([m.texture for m in meshes], parents)
     # the head: the first part painted with a head or a face (doc-Head, hub-spa-face); a chicken has none
     head = next((part for part, m in enumerate(meshes) if "head" in m.texture.lower() or "face" in m.texture.lower()), None)
-    meshes = [m for part, m in enumerate(meshes) if part not in drawn]
+    hidden = drawn
+    gm_name = name
+    if blade == "hand":
+        blades = {part for part, m in enumerate(meshes) if Path(m.texture).stem.lower() in BLADES}
+        if not drawn:
+            return f"{name}: no blade to draw, skipped"
+        hidden = blades - drawn
+        gm_name = name + "_brd"
+    meshes = [m for part, m in enumerate(meshes) if part not in hidden]
 
     bone_parents = [-1] + [bone[parents[part]] for part in order[1:]]
     joints = [tuple(c * k for c in pos[order[0]][0])] + [tuple(c * k for c in pivots[part]) for part in order[1:]]
@@ -381,7 +425,7 @@ def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: fl
             rotations.append([quaternion(mat_mul(mat_t(rot[p][f]), rot[part][f])) for f in range(frames)])
 
     drift = check_pose(bone_parents, joints, root_positions, rotations, rot, pos, order, k)
-    write_gm(meshes, out / "models" / "characters" / f"{name}.gm", skinned=True)
+    write_gm(meshes, out / "models" / "characters" / f"{gm_name}.gm", skinned=True)
     write_an(out / "animation" / f"{name}.an", FPS, bone_parents, joints, root_positions, rotations)
     # anim_types.idf names the files in either case (traktir_man.idf for Traktir_Man.idf)
     anims = index_files(res / "WORLDS" / "CHARACTERS")
@@ -399,7 +443,7 @@ def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: fl
             dst.parent.mkdir(parents=True, exist_ok=True)
             convert_texture(src, dst)
     note = f", missing textures {' '.join(missing)}" if missing else ""
-    return (f"{name}: {len(order)} bones, {frames} frames, pose error {drift:.3f} m, "
+    return (f"{gm_name}: {len(order)} bones, {frames} frames, pose error {drift:.3f} m, "
             f"actions {' '.join(a.replace(' ', '_') for a in found)}{note}")
 
 
@@ -411,10 +455,11 @@ def main():
     ap.add_argument("anim")
     ap.add_argument("--name")
     ap.add_argument("--scale", type=float, default=DEFAULT_SCALE)
+    ap.add_argument("--blade", choices=("belt", "hand"), default="belt")
     a = ap.parse_args()
     res = Path(a.pdm)
     res = res / "RESOURCE" if (res / "RESOURCE").is_dir() else res
-    print(convert(res, Path(a.out), a.model, a.anim, a.name, a.scale))
+    print(convert(res, Path(a.out), a.model, a.anim, a.name, a.scale, blade=a.blade))
 
 
 if __name__ == "__main__":

@@ -11,7 +11,8 @@
 # TOWN_AUTO=5 sails out and into the port by the harbour of the island,
 # SEA_WAVES=sines makes the waves of the engine demos (a sum of sines) instead of the FFT sea (with RECONVERT=1);
 # SCENE=screens shows every screen of the interface in turn, then F1 (the status) in the town, and quits;
-# SCENE=battle starts at sea with a pirate attacking (F fires), TOWN_AUTO=7 fires by itself until he sinks and quits;
+# SCENE=battle starts at sea with a pirate attacking (F fires), TOWN_AUTO=7 fires by itself until he sinks and quits,
+# TOWN_AUTO=8 sails to him, boards him, fights his captain in the cabin by itself and quits;
 # SCENE=story runs the self-test of the story machine (every action of the original) and quits.
 # SOUND_FX_ONLY=1 mutes the music and the ambience of the locations, to hear the steps and the effects.
 set -euo pipefail
@@ -54,10 +55,13 @@ fi
 grep -A4 '^\[MAP\]' "$DIR/resource/ini/interfaces/mainmap.ini" 2>/dev/null | grep -qs 'command = click' && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
 # the towns and interiors (WORLDS/locations/*.loc), their patches and the characters with animation
 [ -f "$DIR/program/data/pdm_world.c" ] || python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"
+# the cabin of the boarding, the fighters with the blade drawn and the plates of the bars, after the characters (it
+# writes their .ani again); again for the data written before the plates
+grep -qs "PdmBoarding.hud" "$DIR/program/data/pdm_boarding.c" || python3 -I "$TOOLS/pdm_boarding.py" "$PDM" "$DIR"
 # the islands (DESC/<Island>.def, WORLDS/islands_x.idf), where the ship appears at each and their names
 grep -qs '"label"' "$DIR/data/islands/Highrock.json" || python3 -I "$TOOLS/pdm_island.py" "$PDM" "$DIR/resource" all --data "$DIR/data"
 # the toolbar of the sea (the commands, the pictures of the ships with flags, the bars) and its notes
-[ -f "$DIR/program/data/pdm_hud.c" ] || python3 -I "$TOOLS/pdm_hud.py" "$PDM" "$DIR"
+grep -qs "info_rows" "$DIR/program/data/pdm_hud.c" || python3 -I "$TOOLS/pdm_hud.py" "$PDM" "$DIR"
 # the music, the sounds and their aliases, the sounds of the kinds of location
 [ -f "$DIR/program/data/pdm_sound.c" ] || python3 -I "$TOOLS/pdm_sound.py" "$PDM" "$DIR"
 python3 -I "$TOOLS/pdm_data2c.py" "$DIR/data" "$DIR/program"
