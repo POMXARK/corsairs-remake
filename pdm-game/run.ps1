@@ -54,7 +54,7 @@ if (-not (Test-Path "$Demo/resource/particles/explosion.xps"))
 # the screens of the interface, the dialog window and the voices; again for screens made before the fog of
 # the map or the font of the notes of the toolbar
 $MainMap = "$Demo/resource/ini/interfaces/mainmap.ini"
-if (-not ((Test-Path $MainMap) -and ((Get-Content -Raw $MainMap) -match 'fogStamp') -and (Select-String -Quiet -Pattern 'PDM_HUD_18' -Path "$Demo/resource/ini/fonts.ini" -ErrorAction SilentlyContinue) -and (Test-Path "$Demo/program/data/pdm_screens.c") -and (Test-Path "$Demo/program/data/pdm_voices.c")))
+if (-not ((Test-Path $MainMap) -and ((Get-Content -Raw $MainMap) -match 'fogStamp') -and (Select-String -Quiet -Pattern 'BACKFILL' -Path "$Demo/resource/ini/interfaces/mainmenu.ini" -ErrorAction SilentlyContinue) -and (Select-String -Quiet -Pattern 'PDM_HUD_18' -Path "$Demo/resource/ini/fonts.ini" -ErrorAction SilentlyContinue) -and (Test-Path "$Demo/program/data/pdm_screens.c") -and (Test-Path "$Demo/program/data/pdm_voices.c")))
 {
     Invoke-Python "$Tools/pdm_ui.py" $Pdm $Demo
 }

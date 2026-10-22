@@ -40,7 +40,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageFont
+from PIL import Image, ImageEnhance, ImageFilter, ImageFont
 
 TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS.parent / "engine/demos/common"))
@@ -73,6 +73,8 @@ FONT_FIT = 0.85
 HUD_OUTLINE = 2
 # black is the colour key of the pictures of the original (the corners of the buttons, the cursor)
 KEY_COLOR = (0, 0, 0)
+# how far the blurred background goes beside a 4:3 screen of 800x600: 16:9 (Full HD, 2K) needs 134, 21:9 needs 300
+WIDE_BAND = 400
 ATTR = re.compile(r'(\w+):(?:"([^"]*)"|([^,:"]+))')
 
 
@@ -403,15 +405,24 @@ class Converter:
                     self.skipped.append(f"{section}.{key}: no {value}")
                     continue
                 stem = "back_" + out_name
-                nodes.append(("PICTURE", "BACKGROUND"))
                 rect = dict(entries).get("fon_rect")
                 if rect:
+                    nodes.append(("PICTURE", "BACKGROUND"))
                     # a window over the screen (the message box): the picture at fon_rect as it is
                     x, y, w, h = (int(v) for v in rect.split(","))
                     tex, tw, th = self.texture(image, stem)
                     lines += ["[BACKGROUND]", f"position = {x},{y},{x + w},{y + h}", f"textureName = {tex}",
                               f"textureRect = 0,0,{w / tw:g},{h / th:g}", ""]
                     continue
+                # a window wider than 4:3 shows the bands beside the screen: the background stretched, blurred
+                # and darkened under them, so they do not stay black (ours)
+                wide = image.resize((512, 192), Image.LANCZOS).filter(ImageFilter.GaussianBlur(12))
+                wide = ImageEnhance.Brightness(wide).enhance(0.55)
+                tex, tw, th = self.texture(wide, stem + "_wide")
+                nodes.append(("PICTURE", "BACKFILL"))
+                lines += ["[BACKFILL]", f"position = {-WIDE_BAND},0,{800 + WIDE_BAND},600", f"textureName = {tex}",
+                          f"textureRect = 0,0,1,{192 / th:g}", ""]
+                nodes.append(("PICTURE", "BACKGROUND"))
                 full = image.resize((1024, 768), Image.LANCZOS)
                 tex, tw, th = self.texture(full, stem)
                 self.back = (tex, 768 / th)
