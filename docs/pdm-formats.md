@@ -138,6 +138,17 @@ LAUNCH Story_line "Spanish_line"
 
 `u32, u32 count, u32`, затем `count` объектов: `u32 n` + `n × 132` байт (`u32` мусор/указатель, `name[64]`, `value[64]`, cp1251). Разбираются все 96 файлов до последнего байта. Порядок объектов важен: другие файлы ссылаются на них по индексу (`nation` в `.mtx` — номер в `nations.idf`: 0 england, 1 pirate, 2 france, 3 spain; груз `.shp` — номера в `Goods.idf`).
 
+Заряды в `Goods.idf` (`type 1`): `params` из пяти чисел и `firerange_modificator`.
+
+| заряд | params | firerange_modificator |
+|---|---|---|
+| Cannonballs | 10,8,1,100,3 | 1.0 |
+| Grapes | 3,20,10,50,2 | 0.5 |
+| Knippels | 5,30,3,75,5 | 0.8 |
+| Bombs | 7,10,6,90,3 | 0.9 |
+
+Пятое число равно `weight`. Первые три порт читает как урон корпусу, парусам и команде (ours: у книппелей наибольшее второе, у картечи — третье). Смысл четвёртого не установлен.
+
 ## DEF — устройство корабля (этап desc)
 
 `u32 count` + `count × 296`: `u32 index, u32 class, u32 sub, char file[256], float pos[3], float rot[3], i32 link` ([DEF.bt](https://github.com/AlexKimov/seadogs-file-formats)). Классы 200–209: Model, Rey, Sail, Cannon, Flag, Waterline, Patch, CannonSet, AllCannons, ShipTrace; 210–212 встречаются, смысл не известен.

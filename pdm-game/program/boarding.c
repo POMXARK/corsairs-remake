@@ -97,6 +97,8 @@ void Board_Crews()
 	string shipKey = PdmCharacters.(enemyKey).ship_key;
 	int ours = sti(PlayerShipCard.crew);
 	int theirs = sti(PdmShips.(shipKey).crew);
+	// what the guns have left of it (battle.c)
+	if (battleEnemyCrew >= 0) { theirs = battleEnemyCrew; }
 	float ourStrength = ours * (1.0 + 0.25 * sti(PlayerShipCard.skills.soldier));
 	float theirStrength = theirs * (1.0 + 0.25 * sti(PdmShips.(shipKey).skills.soldier));
 	int ourLoss = makeint(theirs * theirStrength / (ourStrength + theirStrength));

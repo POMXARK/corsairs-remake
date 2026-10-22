@@ -7,6 +7,11 @@
 // SCENE=battle starts at sea at the island of the hero with an enemy ahead; TOWN_AUTO=7 fires by itself
 // until the enemy sinks and quits; TOWN_AUTO=11 sends the hero on a ship of the first rank against the fort
 // of the island (fort.c). Within BOARD_DISTANCE the enemy can be boarded (boarding.c).
+// The charges are the goods of Goods.idf: params "hull,sails,crew,?,weight" (ours: the first three read as the
+// damage to the hull, the sails and the crew, against the hull damage of the balls), firerange_modificator the
+// reach. 1-4 load the balls, the grapes, the knippels, the bombs (control5-8 of controls.ini). The sails are
+// torn by SAIL (holes it draws and counts into Ship.SP and the speed), a crew under the minimum reloads slower,
+// with no crew the guns are silent.
 
 // shared/sea_ai/script_defines.h
 #define AI_MESSAGE_ADD_SHIP 51001
@@ -27,6 +32,7 @@
 #define BI_RELATION_ENEMY 0
 // "lsffffffl": name, position, angles, lifetime in ms (0 burns until the system ends itself)
 #define PS_CREATE 10000
+#define MSG_SAIL_SCRIPT_PROCESSING 40099
 // sound_service/include/sound_defines.h
 #define PCM_3D 1
 #define BATTLE_PI 3.14159265
@@ -53,9 +59,27 @@
 #define BATTLE_FIRE_SPREAD 0.6
 #define BATTLE_SCATTER 0.04
 #define BATTLE_MAST_HIT_DAMAGE 0.34
+// the charges in the order of hudChargeGoods (hud.c)
+#define BATTLE_BALLS 0
+#define BATTLE_GRAPES 1
+#define BATTLE_KNIPPELS 2
+#define BATTLE_BOMBS 3
+#define BATTLE_CHARGE_KEY 49
+// the hull param of the balls: their hull damage is the damage of the cannon
+#define BATTLE_BALL_HULL 10.0
+// the per cent of the sails and the men a hit takes: the cannon damage times the param of the charge times these
+#define BATTLE_SAIL_SCALE 0.02
+#define BATTLE_CREW_SCALE 0.05
+// a crew of a fraction of the minimum reloads this many times slower at most
+#define BATTLE_CREW_RELOAD_MAX 4.0
+// the enemy (ours): knippels while the sails of the hero are above this, grapes nearer than this, else balls
+#define BATTLE_KNIPPEL_SAILS 50.0
+#define BATTLE_GRAPE_DISTANCE 60.0
 // TOWN_AUTO=7 and 8: SEA_AI sails and fires the hero too (Sea_AddShip leaves him no MainCharacter); the
 // autotest quits this long after a ship sinks
 #define BATTLE_AUTO_EXIT_MS 8000
+// TOWN_AUTO=7: the ships may drift apart; the test reports both ships and quits after this
+#define BATTLE_AUTO_LIMIT_MS 200000
 // the camera of the autotests: 0..1 from close to the hull to far out, and the angle above the sea
 #define BATTLE_AUTO_CAMERA_DISTANCE 0.4
 #define BATTLE_AUTO_CAMERA_HEIGHT -0.3
@@ -77,6 +101,9 @@ int battleEnemy = -1;
 int battleShots = 0;
 int battleHits = 0;
 int battleBroadsides = 0;
+// the crew of the enemy after the guns, for the boarding (boarding.c); -1 without a battle
+int battleEnemyCrew = -1;
+string battleChargeNames[HUD_CHARGES] = {"ядра", "картечь", "книппели", "бомбы"};
 
 // SCENE=battle: at sea by the island of the hero, the enemy coming
 void Battle_Start()
@@ -93,6 +120,7 @@ void Battle_Create()
 	battleShots = 0;
 	battleHits = 0;
 	battleBroadsides = 0;
+	battleEnemyCrew = -1;
 	CreateEntity(&Particles, "particles");
 	CreateEntity(&AISea, "SEA_AI");
 	LayerAddObject(EXECUTE, &AISea, 0);
@@ -119,6 +147,7 @@ void Battle_Create()
 	SetEventHandler("Shp_HullHit", "Battle_HullHit", 0);
 	SetEventHandler("Ball_WaterHit", "Battle_WaterHit", 0);
 	SetEventHandler("ShpMastDamage", "Battle_MastDamage", 0);
+	SetEventHandler("evntRandomSailDmg", "Battle_SailHole", 0);
 	// SEA_AI asks these and reads the answer: without a handler it reads nothing and asserts
 	SetEventHandler("GetRelationEvent", "Battle_Relation", 0);
 	SetEventHandler("Shp_GetCurBallsNum", "Battle_BallsNum", 0);
@@ -132,10 +161,17 @@ void Battle_Create()
 	SetEventHandler("Ship_Bort_Fire", "Battle_BroadsideFired", 0);
 	SetEventHandler("Shp_BortReloaded", "Battle_BroadsideReloaded", 0);
 	SetEventHandler("Battle_AutoExit", "Battle_AutoExit", 0);
+	SetEventHandler("Battle_AutoLimit", "Battle_AutoLimit", 0);
 	SetEventHandler("Board_Start", "Board_Start", 0);
 	SetEventHandler("Battle_SailTo", "Battle_SailTo", 0);
 	SetEventHandler("Battle_SailToCheck", "Battle_SailToCheck", 0);
 	MapKey("Battle_Fire", BATTLE_FIRE_KEY);
+	string key;
+	for (int i = 0; i < HUD_CHARGES; i++)
+	{
+		key = "Battle_Charge" + i;
+		MapKey(key, BATTLE_CHARGE_KEY + i);
+	}
 }
 
 // deleting SEA_AI deletes its ships and their entities
@@ -146,6 +182,7 @@ void Battle_Release()
 	DelEventHandler("Shp_HullHit", "Battle_HullHit");
 	DelEventHandler("Ball_WaterHit", "Battle_WaterHit");
 	DelEventHandler("ShpMastDamage", "Battle_MastDamage");
+	DelEventHandler("evntRandomSailDmg", "Battle_SailHole");
 	DelEventHandler("GetRelationEvent", "Battle_Relation");
 	DelEventHandler("Shp_GetCurBallsNum", "Battle_BallsNum");
 	DelEventHandler("CannGRTime", "Battle_ReloadTime");
@@ -157,6 +194,7 @@ void Battle_Release()
 	DelEventHandler("Ship_Bort_Fire", "Battle_BroadsideFired");
 	DelEventHandler("Shp_BortReloaded", "Battle_BroadsideReloaded");
 	DelEventHandler("Battle_AutoExit", "Battle_AutoExit");
+	DelEventHandler("Battle_AutoLimit", "Battle_AutoLimit");
 	DelEventHandler("Board_Start", "Board_Start");
 	DelEventHandler("Battle_SailTo", "Battle_SailTo");
 	DelEventHandler("Battle_SailToCheck", "Battle_SailToCheck");
@@ -204,11 +242,13 @@ void Battle_AddShip(int i, float x, float z, float ay)
 	if (!IsEntity(&AISea)) { Battle_Create(); }
 	string group = "BattleGroup" + i;
 	aref cannon = GetAttributeN(&PdmCannons, Battle_CannonLine(i));
-	float reach = stf(cannon.firerange) * BATTLE_RANGE_SCALE;
 	SeaShips[i].SeaAI.Group.Name = group;
 	SeaShips[i].Ship.HP = sti(SeaShipTypes[i].HP);
 	SeaShips[i].Ship.Cannons.Type = 0;
-	SeaShips[i].Ship.Cannons.SpeedV0 = sqrt(reach * BATTLE_GRAVITY / sin(2.0 * BATTLE_GUN_ELEVATION));
+	Battle_SetCharge(i, Battle_Charge(i));
+	// the hero has the crew of his card, the others a full one until their card says (Battle_AddEnemy)
+	SeaShips[i].Crew.quantity = sti(SeaShipTypes[i].MaxCrew);
+	if (i == seaHero) { SeaShips[i].Crew.quantity = Pdm_Count(&PlayerShipCard, "crew"); }
 	SeaShips[i].Ship.Cannons.Borts = "";
 	// under full sail from the start (SHIP::InitSailState): the ships close in at once
 	SeaShips[i].Ship.Speed.z = 1.0;
@@ -243,6 +283,8 @@ void Battle_AddEnemy(float x, float z, float ay)
 	SeaShips[battleEnemy].Ship.Name = PdmShips.(shipKey).name;
 	SeaShips[battleEnemy].Ship.SP = 100;
 	SeaShipTypes[battleEnemy].SP = 100;
+	SeaShips[battleEnemy].Crew.quantity = sti(PdmShips.(shipKey).crew);
+	battleEnemyCrew = sti(PdmShips.(shipKey).crew);
 	SendMessage(&BattleInterface, "llaall", BI_IN_CREATE_SHIP, battleEnemy, &SeaShips[battleEnemy], &SeaShipTypes[battleEnemy], 0, BI_RELATION_ENEMY);
 	SendMessage(&AISea, "lllaa", AI_MESSAGE_SHIP_SET_TASK, AITASK_ATTACK, PRIMARY_TASK, &SeaShips[battleEnemy], &SeaShips[seaHero]);
 	Sound_Music(Battle_Music(sti(card.nation)));
@@ -250,7 +292,11 @@ void Battle_AddEnemy(float x, float z, float ay)
 	report = report + SeaShips[battleEnemy].Ship.HP + " against " + SeaShips[seaHero].Ship.HP;
 	Trace(report);
 	Hud_Log(card.name + " атакует!");
-	if (TownAuto == 7) { SendMessage(&AISea, "lllaa", AI_MESSAGE_SHIP_SET_TASK, AITASK_ATTACK, PRIMARY_TASK, &SeaShips[seaHero], &SeaShips[battleEnemy]); }
+	if (TownAuto == 7)
+	{
+		SendMessage(&AISea, "lllaa", AI_MESSAGE_SHIP_SET_TASK, AITASK_ATTACK, PRIMARY_TASK, &SeaShips[seaHero], &SeaShips[battleEnemy]);
+		PostEvent("Battle_AutoLimit", BATTLE_AUTO_LIMIT_MS);
+	}
 	// TOWN_AUTO=8: the ships sail to each other to board (boarding.c)
 	if (TownAuto == 8)
 	{
@@ -259,7 +305,8 @@ void Battle_AddEnemy(float x, float z, float ay)
 	}
 	// TOWN_AUTO=9: the hero gives "Плыть к" and is brought to the enemy
 	if (TownAuto == 9) { PostEvent("Battle_SailTo", 1000); }
-	Fort_Create(seaIsland);
+	// the autotests of the ships are without the fort: it would sink the enemy before the hero fires (11 tests it)
+	if (TownAuto == 0) { Fort_Create(seaIsland); }
 	// the autotests: the camera behind the hero, aside of the line to the enemy so that the hull does not
 	// cover it (SHIP_CAMERA Target), far and a little above, so that both ships and the fort beyond are seen
 	if (TownAuto != 0)
@@ -281,7 +328,14 @@ string Battle_Music(int nation)
 
 void Battle_Control(string control)
 {
-	if (control != "Battle_Fire" || !seaBattle || battleOver) { return; }
+	if (!seaBattle || battleOver) { return; }
+	string key;
+	for (int i = 0; i < HUD_CHARGES; i++)
+	{
+		key = "Battle_Charge" + i;
+		if (control == key) { Battle_LoadCharge(i); }
+	}
+	if (control != "Battle_Fire") { return; }
 	int before = battleBroadsides;
 	SendMessage(&AISea, "lal", AI_MESSAGE_CANNON_FIRE, &SeaShips[seaHero], 1);
 	if (battleBroadsides == before) { Hud_Log("Ни один заряженный борт не смотрит на врага"); }
@@ -326,6 +380,20 @@ void Battle_AutoExit()
 	ExitProgram();
 }
 
+void Battle_AutoLimit()
+{
+	if (battleOver) { return; }
+	Battle_Report(seaHero);
+	Battle_Report(battleEnemy);
+	Battle_AutoExit();
+}
+
+void Battle_Report(int i)
+{
+	string report = "PDM: battle, time is up, " + SeaShips[i].id + " hull " + SeaShips[i].Ship.HP;
+	Trace(report + ", sails " + makeint(stf(SeaShips[i].Ship.SP)) + ", crew " + Battle_Crew(i));
+}
+
 // the hero and the enemy are enemies, the rest friends; a fort by the nations (fort.c)
 int Battle_Relation()
 {
@@ -354,7 +422,18 @@ float Battle_ReloadTime()
 {
 	aref character = GetEventData();
 	aref cannon = GetAttributeN(&PdmCannons, Battle_CannonLine(sti(character.index)));
-	return stf(cannon.reloadtime) * BATTLE_RELOAD_SCALE + frnd();
+	return stf(cannon.reloadtime) * BATTLE_RELOAD_SCALE * Battle_CrewReload(sti(character.index)) + frnd();
+}
+
+// a crew under the minimum of the type serves the guns slower
+float Battle_CrewReload(int i)
+{
+	if (i == FORT_INDEX) { return 1.0; }
+	float least = stf(SeaShipTypes[i].MinCrew);
+	float crew = Battle_Crew(i);
+	if (crew >= least) { return 1.0; }
+	if (crew * BATTLE_CREW_RELOAD_MAX <= least) { return BATTLE_CREW_RELOAD_MAX; }
+	return least / crew;
 }
 
 // the delay between the order and the shot, different for every gun: the broadside rolls along
@@ -372,11 +451,138 @@ float Battle_FireHeight()
 	return 1.5;
 }
 
-// 1: a ball is rammed home
+// 1: a ball is rammed home; there is no one to load the guns of a ship without a crew
 int Battle_CannonLoad()
 {
 	aref character = GetEventData();
+	int i = sti(character.index);
+	if (i != FORT_INDEX && Battle_Crew(i) <= 0) { return 0; }
 	return 1;
+}
+
+// the charge a ship fires: the hero the loaded one of the panel, the fort balls, the enemy its choice
+int Battle_Charge(int i)
+{
+	if (i == seaHero) { return hudChargeLoaded; }
+	if (i == FORT_INDEX || !CheckAttribute(&SeaShips[i], "Ship.Charge")) { return BATTLE_BALLS; }
+	return sti(SeaShips[i].Ship.Charge);
+}
+
+// the charge and its reach: the muzzle speed gives the reach at the highest elevation (AICannon::CalcMaxFireDistance),
+// SEA_AI reads it at every aim
+void Battle_SetCharge(int i, int charge)
+{
+	if (i == seaHero) { hudChargeLoaded = charge; }
+	else { SeaShips[i].Ship.Charge = charge; }
+	string goods = hudChargeGoods[charge];
+	aref cannon = GetAttributeN(&PdmCannons, Battle_CannonLine(i));
+	float reach = stf(cannon.firerange) * BATTLE_RANGE_SCALE * stf(PdmGoods.(goods).firerange_modificator);
+	SeaShips[i].Ship.Cannons.SpeedV0 = sqrt(reach * BATTLE_GRAVITY / sin(2.0 * BATTLE_GUN_ELEVATION));
+}
+
+// 1-4: the hero loads a charge if the hold has it (ours: the loaded balls fly first, the next reload takes it)
+void Battle_LoadCharge(int charge)
+{
+	if (charge == hudChargeLoaded) { return; }
+	if (Hud_Goods(hudChargeGoods[charge]) <= 0)
+	{
+		Hud_Log("В трюме нет: " + battleChargeNames[charge]);
+		return;
+	}
+	Battle_SetCharge(seaHero, charge);
+	Hud_Log("Заряжаем " + battleChargeNames[charge]);
+	Trace("PDM: battle, the hero loads " + hudChargeGoods[charge]);
+}
+
+// the enemy (ours): knippels at the sails of the hero, grapes at his deck near, balls at his hull
+void Battle_EnemyCharge(int i)
+{
+	int charge = BATTLE_BALLS;
+	if (stf(SeaShips[seaHero].Ship.SP) > BATTLE_KNIPPEL_SAILS) { charge = BATTLE_KNIPPELS; }
+	if (Battle_HeroDistance(i) < BATTLE_GRAPE_DISTANCE) { charge = BATTLE_GRAPES; }
+	if (charge == Battle_Charge(i)) { return; }
+	Battle_SetCharge(i, charge);
+	Trace("PDM: battle, " + SeaShips[i].id + " loads " + hudChargeGoods[charge]);
+}
+
+float Battle_HeroDistance(int i)
+{
+	float dx = stf(SeaShips[i].ship.pos.x) - stf(SeaShips[seaHero].ship.pos.x);
+	float dz = stf(SeaShips[i].ship.pos.z) - stf(SeaShips[seaHero].ship.pos.z);
+	return sqrt(dx * dx + dz * dz);
+}
+
+// TOWN_AUTO=7: the hero loads the next charge the hold has after every broadside
+void Battle_AutoCharge()
+{
+	int charge = hudChargeLoaded;
+	for (int n = 0; n < HUD_CHARGES; n++)
+	{
+		charge = (charge + 1) % HUD_CHARGES;
+		// the grapes reach half as far: only near, or the hero waits for the enemy and fires nothing
+		if (charge == BATTLE_GRAPES && Battle_HeroDistance(battleEnemy) > BATTLE_GRAPE_DISTANCE) { continue; }
+		if (Hud_Goods(hudChargeGoods[charge]) > 0) { break; }
+	}
+	Battle_LoadCharge(charge);
+}
+
+// the n-th number of the list "a,b,c"
+float Battle_Param(string list, int n)
+{
+	int from = 0;
+	for (int i = 0; i < n; i++)
+	{
+		from = findSubStr(list, ",", from) + 1;
+		if (from <= 0) { return 0.0; }
+	}
+	int to = findSubStr(list, ",", from);
+	if (to < 0) { to = strlen(list); }
+	return stf(strcut(list, from, to - 1));
+}
+
+float Battle_ChargeParam(int charge, int n)
+{
+	string goods = hudChargeGoods[charge];
+	return Battle_Param(PdmGoods.(goods).params, n);
+}
+
+int Battle_Crew(int i)
+{
+	if (!CheckAttribute(&SeaShips[i], "Crew.quantity")) { return 0; }
+	return sti(SeaShips[i].Crew.quantity);
+}
+
+// the men lost to a hit; the hero loses them from his card, the enemy keeps the rest for the boarding
+void Battle_CrewHit(int i, int lost)
+{
+	int crew = Battle_Crew(i) - lost;
+	if (crew < 0) { crew = 0; }
+	SeaShips[i].Crew.quantity = crew;
+	if (i == seaHero) { PlayerShipCard.crew = crew; }
+	if (i == battleEnemy) { battleEnemyCrew = crew; }
+}
+
+// the per cent of the sails a hit takes: SAIL holes random sails of the ship until it is taken (Battle_SailHole),
+// counts Ship.SP from the holes and slows the ship by them (fHoleDepend of rigging.ini)
+void Battle_SailHit(int i, float lost)
+{
+	SendMessage(&Sail, "lslf", MSG_SAIL_SCRIPT_PROCESSING, "RandomSailsDmg", i, lost);
+}
+
+// "lslfflll": SAIL asks what a new hole of a sail takes; a hole is the share of the sail in the speed of the
+// ship by the most holes of the sail, in per cent
+float Battle_SailHole()
+{
+	int index = GetEventData();
+	string node = GetEventData();
+	int group = GetEventData();
+	float damage = GetEventData();
+	float share = GetEventData();
+	int holes = GetEventData();
+	int most = GetEventData();
+	int mask = GetEventData();
+	if (most <= 0) { return 0.0; }
+	return share * 100.0 / most;
 }
 
 float Battle_FireScatter()
@@ -407,7 +613,9 @@ void Battle_BroadsideFired()
 	int ship = GetEventData();
 	string bort = GetEventData();
 	if (index == seaHero) { battleBroadsides++; }
-	Trace("PDM: battle, " + index + " fires " + bort);
+	Trace("PDM: battle, " + index + " fires " + bort + " with " + hudChargeGoods[Battle_Charge(index)]);
+	if (index == seaHero && TownAuto == 7) { Battle_AutoCharge(); }
+	if (index != seaHero && index != FORT_INDEX) { Battle_EnemyCharge(index); }
 }
 
 // "as": the guns of a side are loaded again; the gunner of the original reports the side
@@ -488,10 +696,16 @@ void Battle_HullHit()
 	if (battleOver || owner == index) { return; }
 	if (owner == seaHero) { battleHits++; }
 	aref cannon = GetAttributeN(&PdmCannons, Battle_CannonLine(owner));
-	int hull = sti(SeaShips[index].Ship.HP) - makeint(stf(cannon.damage) * BATTLE_DAMAGE_SCALE);
+	float damage = stf(cannon.damage);
+	int charge = Battle_Charge(owner);
+	int hull = sti(SeaShips[index].Ship.HP) - makeint(damage * BATTLE_DAMAGE_SCALE * Battle_ChargeParam(charge, 0) / BATTLE_BALL_HULL);
 	if (hull < 0) { hull = 0; }
 	SeaShips[index].Ship.HP = hull;
-	Trace("PDM: battle, " + SeaShips[index].id + " hull " + hull);
+	Battle_SailHit(index, damage * Battle_ChargeParam(charge, 1) * BATTLE_SAIL_SCALE);
+	// a fraction of a man is lost by chance
+	Battle_CrewHit(index, makeint(damage * Battle_ChargeParam(charge, 2) * BATTLE_CREW_SCALE + frnd()));
+	string report = "PDM: battle, " + SeaShips[index].id + " hull " + hull + ", sails " + makeint(stf(SeaShips[index].Ship.SP));
+	Trace(report + ", crew " + Battle_Crew(index) + " (" + hudChargeGoods[charge] + ")");
 	if (hull > 0) { return; }
 	battleOver = true;
 	// SEA_AI stops steering and firing the ship and sinks it
