@@ -95,6 +95,13 @@ bool seaFromMap = false;
 bool seaAutoMapDone = false;
 // SCENE=battle (battle.c): Sea_AddShip gives the ships to SEA_AI, an enemy comes after the hero
 bool seaBattle = false;
+// the island Sea_Start was given, for a save (seaIsland is "" where the island has no harbour)
+string seaAt = "";
+// a loaded game (save.c) puts the ship where it was saved, not at the port
+bool seaLoadPos = false;
+float seaLoadX = 0.0;
+float seaLoadZ = 0.0;
+float seaLoadAy = 0.0;
 
 // The hero on his ship at the harbour of an island (a key of PdmIslands); the camera flies round it
 // until the player takes the mouse, the run needs no input.
@@ -134,6 +141,14 @@ void Sea_Start(string islandKey)
 			// to it), the ship there misses the port and sails off to the world map
 			ay = atan2(stf(PdmIslands.(islandKey).harbour_x) - x, stf(PdmIslands.(islandKey).harbour_z) - z);
 		}
+	}
+	seaAt = islandKey;
+	if (seaLoadPos)
+	{
+		x = seaLoadX;
+		z = seaLoadZ;
+		ay = seaLoadAy;
+		seaLoadPos = false;
 	}
 	// the ship entity steers the main character by the keys; SEA_AI takes it at its creation
 	seaHero = seaShipCount;

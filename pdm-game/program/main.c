@@ -8,6 +8,13 @@
 
 #define EXECUTE 0
 #define REALIZE 1
+// save.c, here for the files included before it: the files of the quick save and of the save made leaving a town,
+// the delay of that one, the autotest of saving and loading. SAVEFILE_, not SAVE_: the compiler does not tell
+// the case of names, SAVE_QUICK would be the function Save_Quick
+#define SAVEFILE_QUICK "save\quick"
+#define SAVEFILE_AUTOSAVE "save\auto"
+#define SAVEFILE_AUTO_MS 1000
+#define SAVEFILE_AUTO 12
 
 object Render;
 object Scene;
@@ -41,6 +48,7 @@ aref PlayerShipType;
 #include "menu.c"
 #include "map.c"
 #include "screens.c"
+#include "save.c"
 
 void MapKey(string controlName, int keyCode)
 {
@@ -69,14 +77,7 @@ void Main()
 	report = report + " (" + PlayerShipType.type + "), at " + PlayerCard.address.island;
 	Trace(report);
 
-	MapKey("Pdm_Quit", 27);
-	Screen_Init();
-	SetEventHandler("Control Activation", "Pdm_Control", 0);
-
-	Render.BackColor = argb(255, 0, 0, 0);
-	CreateEntity(&Scene, "Scene");
-	LayerAddObject(EXECUTE, &Scene, 0);
-	Sound_Init();
+	Pdm_Base();
 	// run.sh writes the scene to start with (SCENE=…) into data\start.c
 	if (StartScene == "story")
 	{
@@ -94,6 +95,22 @@ void Main()
 	else if (StartScene == "town") { Town_Start(StartTown, "sea"); }
 	else if (StartScene == "battle") { Battle_Start(); }
 	else { Sea_Start(PlayerCard.address.island); }
+	if (TownAuto == SAVEFILE_AUTO) { Save_AutoStart(); }
+}
+
+// what every scene stands on: the keys and the handlers of the game, the scene and the sound; a loaded game
+// (save.c OnLoad) makes them again, the engine has erased them
+void Pdm_Base()
+{
+	MapKey("Pdm_Quit", 27);
+	Save_Init();
+	Screen_Init();
+	SetEventHandler("Control Activation", "Pdm_Control", 0);
+
+	Render.BackColor = argb(255, 0, 0, 0);
+	CreateEntity(&Scene, "Scene");
+	LayerAddObject(EXECUTE, &Scene, 0);
+	Sound_Init();
 }
 
 void Pdm_Control()
@@ -101,7 +118,10 @@ void Pdm_Control()
 	string control = GetEventData();
 	// Escape on a screen goes back, the keys of the scene wait under it
 	if (control == "Pdm_Quit" && Screen_Escape()) { return; }
+	// F7 loads anywhere, even from the menu; F3 saves only in the game (save.c)
+	if (control == "Save_Load") { Save_Load(SAVEFILE_QUICK); return; }
 	if (screenOverGame) { return; }
+	if (control == "Save_Quick") { Save_Quick(); return; }
 	if (control == "Screen_Status") { Screen_Status(); return; }
 	Sea_Control(control);
 	// Escape in a dialog only leaves it, in the commands of the toolbar only closes them (the script hears the

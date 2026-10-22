@@ -1,6 +1,7 @@
 ﻿# Windows version of run.sh: converts the installed original (PDM 1.061) on the first run and starts
 # the engine in pdm-game/. The variables are those of run.sh: $env:PDM, RECONVERT, SCENE, TOWN,
-# TOWN_AUTO, SOUND_FX_ONLY.
+# TOWN_AUTO, SOUND_FX_ONLY,
+# FULLSCREEN (1 the full screen, 0 a window with a frame) and SCREEN (1920x1080).
 # Usage: run.ps1 [path to engine.exe] [engine options]
 #   without the engine path engine/build/default/Debug/engine.exe is taken (build.bat in the game root)
 $Demo = $PSScriptRoot
@@ -77,4 +78,8 @@ Invoke-Python "$Tools/pdm_logic2c.py" "$Demo/data" "$Demo/program"
     "int SoundFxOnly = $(Get-Env 'SOUND_FX_ONLY' '0');"
 ) | Set-Content -Encoding ascii "$Demo/program/data/start.c"
 
+# the window over engine.ini, as run.sh
+if ((Get-Env 'FULLSCREEN' '') -eq '1') { $EngineArgs += '--fullscreen' }
+elseif ((Get-Env 'FULLSCREEN' '') -eq '0') { $EngineArgs += '--windowed' }
+if (Get-Env 'SCREEN' '') { $EngineArgs += @('--size', (Get-Env 'SCREEN' '')) }
 Start-Demo -Folders 'save'

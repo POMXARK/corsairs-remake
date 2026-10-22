@@ -13,7 +13,10 @@
 # SCENE=screens shows every screen of the interface in turn, then F1 (the status) in the town, and quits;
 # SCENE=battle starts at sea with a pirate attacking (F fires), TOWN_AUTO=7 fires by itself until he sinks and quits,
 # TOWN_AUTO=8 sails to him, boards him, fights his captain in the cabin by itself and quits;
+# SCENE=sea TOWN_AUTO=12 saves at sea, lands, loads, lands again, saves in the town, loads and quits;
 # SCENE=story runs the self-test of the story machine (every action of the original) and quits.
+# The window (docs/build.md): FULLSCREEN=1 the full screen, FULLSCREEN=0 a window with a frame, SCREEN=1920x1080 its size;
+# by default engine.ini (a window of 1280x720). The engine options --fullscreen, --windowed, --size WxH do the same.
 # SOUND_FX_ONLY=1 mutes the music and the ambience of the locations, to hear the steps and the effects.
 set -euo pipefail
 ENGINE="$(realpath "$1")"
@@ -75,5 +78,12 @@ echo "int TownAuto = ${TOWN_AUTO:-0};" >> "$DIR/program/data/start.c"
 echo "int SoundFxOnly = ${SOUND_FX_ONLY:-0};" >> "$DIR/program/data/start.c"
 ln -sfn "$(dirname "$ENGINE")/resource/techniques" "$DIR/resource/techniques"
 
+# the window over engine.ini
+WINDOW=()
+[ "${FULLSCREEN:-}" = 1 ] && WINDOW+=(--fullscreen)
+[ "${FULLSCREEN:-}" = 0 ] && WINDOW+=(--windowed)
+[ -n "${SCREEN:-}" ] && WINDOW+=(--size "$SCREEN")
+# the saves of the game (program/save.c: F3, F7, the save leaving a town)
+mkdir -p "$DIR/save"
 cd "$DIR"
-exec "$ENGINE" "${@:2}"
+exec "$ENGINE" "${WINDOW[@]}" "${@:2}"

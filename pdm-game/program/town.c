@@ -19,6 +19,7 @@
 #define MSG_LOCATION_TEXTURESPATH 30141
 #define MSG_CHARACTER_SETMODEL 30200
 #define MSG_CHARACTER_GETPOS 30202
+#define MSG_CHARACTER_GETAY 30203
 #define MSG_CHARACTER_TELEPORT_AY 30211
 #define MSG_CHARACTER_TURNBYCHR 30341
 #define MSG_CHARACTER_HEADLOOK_DEFAULT 30380
@@ -160,6 +161,15 @@ void Town_Start(string loc, string from)
 	Trace("PDM town: " + loc + " of the island " + townIsland);
 	// the music of the towns of the nation of the island
 	if (townIsland != "") { Sound_TownMusic(sti(PdmIslands.(townIsland).nation)); }
+	Town_Handlers();
+	if (TownAuto) { Town_AutoPlan(); }
+	Town_Load(loc, from);
+	PostEvent("Town_Tick", TOWN_TICK_MS);
+}
+
+// the handlers of the town, for its start and for a game loaded in it (save.c)
+void Town_Handlers()
+{
 	SetEventHandler("EWhr_GetShadowDensity", "Town_ShadowDensity", 0);
 	SetEventHandler("EWhr_GetFogDensity", "Town_FogDensity", 0);
 	SetEventHandler("Town_Tick", "Town_Tick", 0);
@@ -176,9 +186,6 @@ void Town_Start(string loc, string from)
 	SetEventHandler("Town_DialogClose", "Town_DialogClose", 0);
 	SetEventHandler("Town_ExitGo", "Town_ExitGo", 0);
 	SetEventHandler("Town_HudGo", "Town_HudGo", 0);
-	if (TownAuto) { Town_AutoPlan(); }
-	Town_Load(loc, from);
-	PostEvent("Town_Tick", TOWN_TICK_MS);
 }
 
 void Town_MapKeys()
@@ -281,7 +288,8 @@ void Town_Load(string loc, string from)
 	townLoaded = true;
 	townGen++;
 	PostEvent("Town_Wander", TOWN_WANDER_MS, "l", townGen);
-	if (TownAuto) { PostEvent("Town_AutoGo", 3000); }
+	// the autotest of saving (save.c) has no walk of its own
+	if (TownAuto && TownAuto != SAVEFILE_AUTO) { PostEvent("Town_AutoGo", 3000); }
 	Trace("PDM town: in " + loc + " from " + from + ", " + townNpcCount + " characters");
 }
 
@@ -612,6 +620,9 @@ void Town_Go(string link)
 	{
 		Town_Release();
 		Sea_Start(townIsland);
+		// the original saves the game when the ship leaves the town; after the first frames, when the ship
+		// has written its place (save.c)
+		PostEvent("Save_Auto", SAVEFILE_AUTO_MS);
 		return;
 	}
 	if (to == "" || !CheckAttribute(&PdmLocations, to))
