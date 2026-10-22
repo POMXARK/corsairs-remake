@@ -1,6 +1,6 @@
 # Нейроозвучка реплик NPC
 
-Как озвучить диалоги NPC голосами из оригинала: бесплатно, локально на RTX 5080, пачкой через ComfyUI. Как подключить звук к движку и привязать каждую реплику к своему NPC.
+Как озвучить диалоги NPC голосами из оригинала: бесплатно, локально на RTX 5080, пачкой через ComfyUI или напрямую из Python. Как подключить звук к движку и привязать каждую реплику к своему NPC.
 
 ## Что есть в данных
 
@@ -32,11 +32,40 @@
 |---|---|---|---|---|
 | **Qwen3-TTS 1.7B Base** | Apache-2.0 | да (10 языков) | с 3 с | основная: короткие образцы, свободная лицензия |
 | **Chatterbox Multilingual** (Resemble AI) | MIT | да (23 языка) | zero-shot | запасная; в ComfyUI ноды `ComfyUI_Fill-ChatterBox` |
+| **Fun-CosyVoice3 0.5B** (Alibaba, FunAudioLLM) | Apache-2.0 | да (9 языков) | с 3 с, лучше 3–10 с | проверить против Qwen3-TTS (шаг 4б): меньше и быстрее, есть instruct и теги `[breath]` |
 | **ESpeech-TTS-1** (F5-TTS, обучена на русском) | Apache-2.0 по карточке | только русский | по образцу и его тексту | если ударения и интонация у первых двух хуже |
 
 Почему не другие:
 - **ACE-Step, YuE, MiniMax Music** из шаблонов ComfyUI делают музыку и песни, а не речь.
 - **XTTS-v2, Fish Speech / OpenAudio, F5-TTS base и её русские дообучения** (`hotstone228`, `attashe`) — веса под некоммерческими лицензиями (CPML, CC-BY-NC).
+
+### ComfyUI или напрямую
+
+ComfyUI — лишь одна из оболочек для запуска модели. Шаблоны и ноды в его Manager — это то, что кто-то уже обернул, а не список всех моделей. Почти у каждой TTS-модели есть свой репозиторий с Python API: `git clone`, `pip install -r requirements.txt`, веса с Hugging Face — и модель вызывается из скрипта. Обходить ComfyUI стоит, если:
+- для модели нет нод или они отстают от новой версии;
+- нужен режим, которого ноды не дают (у CosyVoice3 — `inference_cross_lingual`, теги `[breath]`, замена произношения);
+- не хочется собирать граф: скрипт берёт `lines.jsonl` и пишет те же файлы.
+
+Для пакетного прогона результат один: `comfy_voice_batch.py` и `cosyvoice_batch.py` пропускают готовые реплики, ведут `tries.json`, склеивают куски одинаково и в конце делают `--bind`. Скрипты можно чередовать, а `pdm_voice_check.py` проверяет файлы любого из них.
+
+### CosyVoice 3 или Qwen3-TTS
+
+Обе модели под Apache-2.0, обе знают русский и клонируют голос с 3 секунд. Опубликованных замеров на русском нет ни у той, ни у другой: в карточке CosyVoice3 только китайский и английский (CER 1,21 % на test-zh, WER 2,24 % на test-en). Поэтому выбор делается пробой на наших данных, а не по таблицам.
+
+| | Qwen3-TTS 1.7B | Fun-CosyVoice3 0.5B |
+|---|---|---|
+| размер | 1,7 млрд | 0,5 млрд, веса ~2 ГБ: быстрее, меньше памяти |
+| ударения `+` из `replace.tsv` | понимает | не понимает, скрипт их убирает; неверное ударение правится в `replace.tsv` другим написанием слова, проверяется на пробе |
+| короткие образцы | с 3 с | 3–10 с лучше всего, до 2 с звук мягче. У нас медиана 2,5 с, 155 из 252 образцов короче 3 с |
+| ComfyUI | ноды Qwen3-TTS | ноды `ComfyUI_FL-CosyVoice3` или TTS Audio Suite |
+| без ComfyUI | свой репозиторий | `cosyvoice_batch.py` (шаг 4б) |
+
+Короткие образцы — главный риск CosyVoice3 в нашем случае. Порядок пробы:
+1. `--limit 20` одними и теми же репликами для каждой модели, в разные копии `resource/sounds/voices/lines`.
+2. `pdm_voice_check.py` на каждой копии: средний CER и число строк в `redo.txt` сравнивают объективно.
+3. На слух — те же 20 реплик, особенно персонажи с образцом короче 2 с.
+
+Выигравшая модель озвучивает всё. Можно и смешать: персонажей, у которых голос «не держится» на одной модели, перегенерировать на другой (`--only <персонаж>`).
 
 Перед установкой проверьте лицензию на странице модели на Hugging Face: у дообученных версий она часто другая, чем у базы.
 
@@ -49,6 +78,7 @@
 | `tools/pdm_voice_lines.py` | реплики → `data/voice/lines.jsonl`, привязка → `program/data/pdm_voice_lines.c` (шаги 1, 3, 7) |
 | `tools/pdm_voice_refs.py` | текст образцов через Whisper → `data/voice/refs.tsv` (шаг 2) |
 | `tools/comfy_voice_batch.py` | очередь ComfyUI на все реплики (шаг 4) |
+| `tools/cosyvoice_batch.py` | то же через Python API Fun-CosyVoice3, без ComfyUI (шаг 4б) |
 | `tools/pdm_voice_check.py` | проверка Whisper'ом, список на перегенерацию (шаг 5) |
 | `tools/voice/llm_prep_prompt.txt` | системный промт локальной LLM для подготовки текста (шаг 3) |
 | `tools/voice/instruct_prompt.txt` | описания голосов по классам моделей для моделей с instruct (шаг 4) |
@@ -148,6 +178,34 @@ python3 -I tools/comfy_voice_batch.py pdm-game --comfy http://192.168.1.10:8188 
 
 Сколько ждать — уточнит первая сотня реплик: модель на 1–2 млрд параметров на 5080 обычно быстрее реального времени. 7 часов речи займут 2–7 часов. Скрипт печатает оценку оставшегося времени.
 
+## Шаг 4б. CosyVoice3 без ComfyUI
+
+На машине с видеокартой (Linux или Windows, Python 3.10):
+
+```bash
+git clone --recursive https://github.com/FunAudioLLM/CosyVoice.git ~/CosyVoice
+cd ~/CosyVoice && conda create -n cosyvoice -y python=3.10 && conda activate cosyvoice
+pip install -r requirements.txt
+python -c "from huggingface_hub import snapshot_download; \
+  snapshot_download('FunAudioLLM/Fun-CosyVoice3-0.5B-2512', local_dir='pretrained_models/Fun-CosyVoice3-0.5B')"
+```
+
+Из `corsairs-remake`, в том же окружении:
+
+```bash
+python -I tools/cosyvoice_batch.py pdm-game --repo ~/CosyVoice --limit 10            # проба
+python -I tools/cosyvoice_batch.py pdm-game --repo ~/CosyVoice --only padre_ignacio  # один персонаж или диалог
+python -I tools/cosyvoice_batch.py pdm-game --repo ~/CosyVoice                       # всё
+python -I tools/cosyvoice_batch.py pdm-game --repo ~/CosyVoice --redo pdm-game/data/voice/redo.txt
+```
+
+Режим выбирается для каждой реплики:
+- есть текст образца в `refs.tsv` (шаг 2) — `inference_zero_shot`, самый точный клон;
+- текста нет — `inference_cross_lingual`, только по звуку;
+- `--instruct` — `inference_instruct2` с описанием голоса из `instruct_prompt.txt`. Описание меняет манеру (возраст, настроение, темп), тембр по-прежнему берётся из образца.
+
+Сид — `--seed` + попытки из `tries.json` + номер куска, повторный прогон даёт тот же звук. Модель выдаёт 24 кГц, `join` приводит к 22050 Гц моно, как в оригинале.
+
 ## Шаг 5. Проверка качества
 
 ```bash
@@ -207,6 +265,8 @@ rm -r $D && python3 -I tools/pdm_voice_lines.py pdm-game --bind            # у�
 4. Папку `resource/sounds/voices/lines` и `data/voice` перенести на машину с игрой, если ComfyUI на другой; `--bind`.
 
 ## Источники
+
+- Fun-CosyVoice3 0.5B, Apache-2.0, 9 языков с русским: [huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512](https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512), код и `example.py`: [github.com/FunAudioLLM/CosyVoice](https://github.com/FunAudioLLM/CosyVoice), ноды [ComfyUI_FL-CosyVoice3](https://github.com/filliptm/ComfyUI_FL-CosyVoice3)
 
 - Qwen3-TTS, Apache-2.0, русский, клон с 3 с: [simonwillison.net](https://simonwillison.net/2026/Jan/22/qwen3-tts), [gitee.com/lxin0/Qwen3-TTS](https://gitee.com/lxin0/Qwen3-TTS)
 - Chatterbox Multilingual, MIT, 23 языка: [huggingface.co/ResembleAI/chatterbox](https://huggingface.co/ResembleAI/chatterbox/blob/refs%2Fpr%2F48/README.md), ноды [ComfyUI_Fill-ChatterBox](https://github.com/filliptm/ComfyUI_Fill-ChatterBox)

@@ -7,7 +7,8 @@
 | [RESEARCH.md](RESEARCH.md) | обзор форков Storm Engine и похожих проектов (октябрь 2026) |
 | [original-vs-remake.md](original-vs-remake.md) | как сделан оригинал и ремейк, отличия, находки, скрины внутренних тестов |
 | [pdm-formats.md](pdm-formats.md) | форматы оригинальных «Корсаров» (TF, TGA, CFF, A, D, IDF, DEF, MTX, SHP, QL) и конвертер всего RESOURCE `tools/convert.*` |
-| [voice-over.md](voice-over.md) | нейроозвучка реплик NPC: извлечение и привязка реплик, бесплатные модели с клоном голоса, пакетный прогон через ComfyUI API, подключение к движку |
+| [autotests.md](autotests.md) | как устроены автотесты (`TOWN_AUTO`, цепочки `PostEvent`), команды прогона, чтения логов, записи видео и проверки кадров |
+| [voice-over.md](voice-over.md) | нейроозвучка реплик NPC: извлечение и привязка реплик, бесплатные модели с клоном голоса, пакетный прогон через ComfyUI API или Python (CosyVoice3), подключение к движку |
 | [ai-models.md](ai-models.md) | нейрогенерация 3D-моделей: виды модели, бесплатные шаблоны ComfyUI (Pixal3D, TRELLIS.2), пакетный прогон, перенос костей в `.gm` |
 | [archive.md](archive.md) | сборка из архива без git (Windows): что поставить, `local.ps1`, первый запуск собирает движок и конвертирует оригинал |
 
