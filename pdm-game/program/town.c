@@ -874,12 +874,17 @@ void Town_AutoPlan()
 	// 4: out to sea and back to the pier (Sea_ToPort), then into the tavern; 5: the same, the ship
 	// sails into the port by the harbour (sea.c Sea_AtHarbour)
 	// 6: out to sea, over the world map to the next island and into its port (map.c)
-	// 10: through the menu of the land (Tab, hud.c) from the pier to the tavern, the shipyard and back to the street
+	// 10: through the menu of the land (Tab, hud.c) from the pier to every place of the town, each one from
+	// another, then from the tavern to the sea
 	if (TownAuto == 10)
 	{
+		Town_PlanAdd("hud", "store", "");
+		Town_PlanAdd("hud", "townhall", "");
 		Town_PlanAdd("hud", "tavern", "");
 		Town_PlanAdd("hud", "shipyard", "");
 		Town_PlanAdd("hud", "street", "");
+		Town_PlanAdd("hud", "tavern", "");
+		Town_PlanAdd("hud", "sea", "");
 		return;
 	}
 	if (TownAuto == 4 || TownAuto == 5 || TownAuto == 6) { Town_PlanAdd("go", "sea", ""); }

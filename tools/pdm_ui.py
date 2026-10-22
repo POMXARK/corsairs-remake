@@ -69,6 +69,8 @@ FREE_FONT = FREE_FONTS["seawolf"]
 FONT_OVERSAMPLE = 1.5
 # the free fonts are wider than log-russ: at the full height "Продолжить игру" does not fit its button
 FONT_FIT = 0.85
+# the outline of the font of the notes of the toolbar, PDM_HUD_18, in texels
+HUD_OUTLINE = 2
 # black is the colour key of the pictures of the original (the corners of the buttons, the cursor)
 KEY_COLOR = (0, 0, 0)
 ATTR = re.compile(r'(\w+):(?:"([^"]*)"|([^,:"]+))')
@@ -743,6 +745,11 @@ class Converter:
 
         # the interface editor of XINTERFACE always loads interface_normal
         self.fonts["interface_normal"] = self.fonts[self.font("logbook,20")]
+        # the notes of the toolbar (hud.c) over the world: logbook 18 with a dark outline, without it the light
+        # text is lost on the sand of a street (ours)
+        size, _, _, ttf = self.fonts[self.font("logbook,18")]
+        ascent, descent = ImageFont.truetype(str(ttf), size).getmetrics()
+        self.fonts["pdm_hud_18"] = (size, HUD_OUTLINE, (ascent + descent + HUD_OUTLINE * 2) / FONT_OVERSAMPLE, ttf)
         used = ", ".join(f"{face} - {ttf.name}" + ("" if original else " (SIL Open Font License)")
                          for face, (ttf, original) in sorted(self.ttfs.items()))
         write_fonts({name: (ttf, size, outline) for name, (size, outline, _, ttf) in self.fonts.items()},

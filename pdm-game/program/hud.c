@@ -50,14 +50,15 @@
 // TOWN_AUTO=7: the corner shows the enemies from then on
 #define HUD_AUTO_CORNER_MS 20000
 #define MSG_BATTLE_LAND_MAKE_COMMAND 46105
-// TOWN_AUTO=10: the menu of the land stands open so long before its command
-#define HUD_AUTO_LAND_MS 1500
+// TOWN_AUTO=10: the pause between the steps of the autotest in the menu of the land
+#define HUD_AUTO_LAND_MS 700
 // the places of a town in the menu of the land, in the order of the street
 #define HUD_LAND_PLACES 6
 string hudLandPlaces[HUD_LAND_PLACES] = {"street", "tavern", "store", "shipyard", "townhall", "sea"};
 object LandInterface;
 bool hudLand = false;
 string hudLandAuto = "";
+int hudLandAutoSteps = 0;
 
 object BattleInterface;
 object ScreenLog;
@@ -128,7 +129,7 @@ void Hud_CreateLog()
 	if (hudSea) { top = HUD_NAV_FRAME + 24.0; }
 	act.left = hudW - Hud_Px(80.0);
 	act.top = Hud_Px(top);
-	act.text1.font = "PDM_LOGBOOK_18";
+	act.text1.font = "PDM_HUD_18";
 	act.text1.scale = 1.0;
 	act.text1.color = argb(255, 255, 230, 160);
 	// the note ends at the right edge of the icon: "Выход в море" is wider than the icon (ours)
@@ -212,7 +213,7 @@ void Hud_LandStart()
 	list.CommandIconHeight = Hud_Px(64.0);
 	list.CommandIconSpace = Hud_Px(HUD_PIC_STEP - HUD_PIC_W);
 	list.CommandMaxIconQuantity = 8;
-	list.CommandNoteFont = "PDM_LOGBOOK_18";
+	list.CommandNoteFont = "PDM_HUD_18";
 	list.CommandNoteColor = argb(255, 255, 230, 160);
 	list.CommandNoteScale = 1.0;
 	list.CommandNoteOffset = Hud_Pos(0.0, -56.0);
@@ -290,10 +291,19 @@ void Hud_LandLaunch()
 	if (name != "Cancel") { PostEvent("Town_HudGo", 0, "sl", name, townGen); }
 }
 
-// TOWN_AUTO=10: opens the menu, a moment later goes to the place as its command would
+// TOWN_AUTO=10: opens the menu and steps to the place as the arrows do, one step a while, then confirms it: the
+// command goes through BI_LaunchCommand as from the keys
 void Hud_LandAutoOpen(string place)
 {
 	hudLandAuto = place;
+	hudLandAutoSteps = 0;
+	string at;
+	for (int i = 0; i < HUD_LAND_PLACES; i++)
+	{
+		at = hudLandPlaces[i];
+		if (at == place) { break; }
+		if (Town_CanGo(at)) { hudLandAutoSteps++; }
+	}
 	SendMessage(&LandInterface, "ls", MSG_BATTLE_LAND_MAKE_COMMAND, "activate");
 	PostEvent("Hud_LandAuto", HUD_AUTO_LAND_MS);
 }
@@ -301,9 +311,15 @@ void Hud_LandAutoOpen(string place)
 void Hud_LandAuto()
 {
 	if (!hudLand) { return; }
-	SendMessage(&LandInterface, "ls", MSG_BATTLE_LAND_MAKE_COMMAND, "cancel");
+	if (hudLandAutoSteps > 0)
+	{
+		hudLandAutoSteps--;
+		SendMessage(&LandInterface, "ls", MSG_BATTLE_LAND_MAKE_COMMAND, "right");
+		PostEvent("Hud_LandAuto", HUD_AUTO_LAND_MS);
+		return;
+	}
 	Trace("PDM hud: land command " + hudLandAuto + " (autotest)");
-	PostEvent("Town_HudGo", 0, "sl", hudLandAuto, townGen);
+	SendMessage(&LandInterface, "ls", MSG_BATTLE_LAND_MAKE_COMMAND, "confirm");
 }
 
 // ---------- at sea ----------
@@ -352,7 +368,7 @@ void Hud_Start()
 	list.CommandIconHeight = Hud_Px(64.0);
 	list.CommandIconSpace = Hud_Px(HUD_PIC_STEP - HUD_PIC_W);
 	list.CommandMaxIconQuantity = 8;
-	list.CommandNoteFont = "PDM_LOGBOOK_18";
+	list.CommandNoteFont = "PDM_HUD_18";
 	list.CommandNoteColor = argb(255, 255, 230, 160);
 	list.CommandNoteScale = 1.0;
 	// the note above the icon, where the original prints it over the row (ours: it follows the chosen icon)
