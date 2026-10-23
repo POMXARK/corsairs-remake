@@ -495,7 +495,7 @@ def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: fl
     # anim_types.idf names the files in either case (traktir_man.idf for Traktir_Man.idf)
     anims = index_files(res / "WORLDS" / "CHARACTERS")
     found = write_ani(out / "animation" / f"{name}.ani", name, read_actions(anims[anim.lower()]), k,
-                      len(root_positions), [p[1] for p in root_positions[:frames]], rotations,
+                      len(root_positions), [p[1] for p in root_positions], rotations,
                       head=order.index(head) if head is not None else None, smooth=cycles)
     missing = []
     for stem in sorted(used):

@@ -25,17 +25,19 @@ usage: pdm_world.py <PDM_dir> <game_dir> [loc ...]   (default: every .loc)
 import math
 import struct
 import sys
+import tempfile
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS))
 import cff2gm  # noqa: E402
 import pdm_character  # noqa: E402
+import pdm_props3d  # noqa: E402
 import pdm_sound  # noqa: E402
 from cff2gm import Mesh, write_gm  # noqa: E402
 from pdm2storm import convert_texture, parse_idf  # noqa: E402
 from pdm_ship import index_files  # noqa: E402
-from storm_formats import write_ptc  # noqa: E402
+from storm_formats import read_tx, write_ptc, write_tx  # noqa: E402
 
 K = pdm_character.DEFAULT_SCALE
 # a .gm object indexes its vertices with 16 bits
@@ -804,10 +806,21 @@ class World:
         self.tile_textures = set()
         self.done_models = {}
         self.lines = []
+        self.pictures = {}
+        self.generated = {}
 
     def texture(self, stem):
         self.used_textures.add(stem.lower())
         return f"{stem.lower()}.tga"
+
+    def picture(self, stem):
+        """The RGBA picture of a texture of the original (the sprites are cut out of its alpha)."""
+        if stem not in self.pictures:
+            with tempfile.TemporaryDirectory() as tmp:
+                dst = Path(tmp) / "t.tx"
+                convert_texture(self.textures[stem], dst)
+                self.pictures[stem] = read_tx(dst)
+        return self.pictures[stem]
 
     def model(self, name: str):
         """Converts a location model and its patch once; returns the stem the script loads."""
@@ -832,6 +845,9 @@ class World:
             print(f"  {stem}: {seams} triangles split at T-junctions")
         if tiles:
             print(f"  {stem}: {len(tiles)} textures laid once, kept off their edges")
+        meshes, props = pdm_props3d.build(meshes, self.picture, self.generated, Mesh)
+        if any(props.values()):
+            print(f"  {stem}: {props['trees']} trees and {props['signs']} signs modelled")
         meshes = merge_by_texture(meshes, stem)
         write_gm(meshes, self.out / "models" / "locations" / f"{stem}.gm", bsp=True)
         self.done_models[stem] = len(meshes)
@@ -906,6 +922,8 @@ class World:
             convert_texture(src, dst)
             if stem in self.tile_textures:
                 unframe(dst)
+        for name, image in self.generated.items():
+            write_tx(image, self.out / "textures" / "locations" / f"{name}.tx")
         return missing
 
     def write_script(self):
