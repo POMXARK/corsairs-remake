@@ -2,7 +2,8 @@
 """The floor of a location seen from above, as pdm_world.py makes it, to check the cut obstacles.
 
 Green: the patch the characters walk on after the obstacles are cut out. Red: the triangles of the
-location model in the band of the body (pdm_world.BODY). Blue: the points of the .loc, which stay free.
+location model in the band of the body (pdm_world.BODY). Blue: the points of the .loc (the
+character points stay free) and the exit boxes.
 
 usage: ptc_top.py <PDM RESOURCE dir> <WORLDS/locations/*.loc> <out.png>
 """
@@ -29,15 +30,11 @@ def main():
         return next(p for p in root.rglob("*.cff") if p.stem.lower() == stem)
 
     patch_cff, model_cff = find(loc["patch"]), find(loc["model"])
-    triangles = w.patch_triangles(patch_cff)
-    points = [] if loc["interiors"] else [(p["pos"][0] * w.K, p["pos"][2] * w.K) for p in loc["points"]]
-    triangles = triangles + w.implicit_floor(patch_cff, triangles, points)
+    start = time.time()
+    floor = [t for t, _ in w.walk_floor(patch_cff, model_cff, loc)]
+    print(f"{len(floor)} floor triangles, {time.time() - start:.1f} s")
     keep = [(p["pos"][0] * w.K, p["pos"][2] * w.K) for p in loc["points"]]
     boxes = [tuple(c * w.K for c in p["box"]) for p in loc["points"] if p["type"] == 1]
-    start = time.time()
-    blocked = w.blocked_cells(model_cff, triangles, keep, boxes)
-    floor = [t for t, _ in w.clean_patch(w.cut_obstacles(triangles, blocked))]
-    print(f"{len(blocked)} blocked cells, {len(floor)} floor triangles, {time.time() - start:.1f} s")
 
     xs = [p[0] for t in floor for p in t]
     zs = [p[2] for t in floor for p in t]
@@ -59,6 +56,8 @@ def main():
                 draw.polygon([at(p) for p in q], outline=(220, 40, 40))
     for x, z in keep:
         draw.ellipse([at((x - .2, 0, z + .2)), at((x + .2, 0, z - .2))], outline=(0, 0, 255))
+    for x0_, z0_, x1_, z1_ in boxes:
+        draw.rectangle([at((x0_, 0, z1_)), at((x1_, 0, z0_))], outline=(0, 0, 255))
     img.save(out)
     print(out)
 

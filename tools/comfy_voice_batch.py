@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -41,7 +42,10 @@ class Comfy:
     def call(self, path, data=None):
         req = urllib.request.Request(self.url + path, json.dumps(data).encode() if data is not None else None,
                                      {"Content-Type": "application/json"})
-        return json.load(urllib.request.urlopen(req, timeout=60))
+        try:
+            return json.load(urllib.request.urlopen(req, timeout=60))
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(f"ComfyUI {path}: HTTP {e.code}: {e.read().decode(errors='replace')[:3000]}") from None
 
     def upload(self, path: Path, subfolder: str):
         """/upload/image takes any file into input/<subfolder>, as the Load Audio node of the UI does."""

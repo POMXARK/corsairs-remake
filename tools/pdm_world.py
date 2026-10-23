@@ -278,10 +278,12 @@ def inside(poly, x, z):
 
 
 def ear_clip(poly):
-    """Triangles of a simple polygon (x, z)."""
+    """Triangles of a simple polygon (x, z): the fattest ear first (ours: the first ear made a fan of
+    needles from one corner, cut by the obstacles into slivers that met at no edge, invisible walls)."""
     poly = ccw(list(poly))
     out = []
     while len(poly) > 3:
+        best = None
         for i in range(len(poly)):
             a, b, c = poly[i - 1], poly[i], poly[(i + 1) % len(poly)]
             if area2([a, b, c]) <= EPS:
@@ -289,11 +291,14 @@ def ear_clip(poly):
             if any(p not in (a, b, c) and all(area2(e) >= 0 for e in ([a, b, p], [b, c, p], [c, a, p]))
                    for p in poly):
                 continue
-            out.append((a, b, c))
-            del poly[i]
-            break
-        else:
+            fat = area2([a, b, c]) / max(math.dist(a, b), math.dist(b, c), math.dist(c, a)) ** 2
+            if best is None or fat > best[0]:
+                best = (fat, i)
+        if best is None:
             break  # not simple: what is left stays out
+        i = best[1]
+        out.append((poly[i - 1], poly[i], poly[(i + 1) % len(poly)]))
+        del poly[i]
     if len(poly) == 3:
         out.append(tuple(poly))
     return out
@@ -325,6 +330,7 @@ EPS = 1e-6
 SNAP = 1e-3  # metres: points closer than this are one vertex
 LEVEL = 0.4  # metres: floors farther apart in height are different floors
 MIN_AREA = 1e-4  # square metres: slivers smaller than this are dropped
+MERGE = 4  # SNAP: vertices of one level this near are one, a sliver between them goes (ours)
 GRID = 1.0  # metres: the cell of the vertex lookup
 
 
@@ -382,8 +388,10 @@ def overlaps(b1, b2):
 
 
 def plane(tri):
-    """y = f(x, z) over the triangle."""
-    (x0, y0, z0), (x1, y1, z1), (x2, y2, z2) = tri
+    """y = f(x, z) over the triangle, or over a flat convex polygon: by its widest corner."""
+    k = max(range(1, len(tri) - 1), key=lambda k: abs((tri[k][0] - tri[0][0]) * (tri[k + 1][2] - tri[0][2])
+                                                      - (tri[k + 1][0] - tri[0][0]) * (tri[k][2] - tri[0][2])))
+    (x0, y0, z0), (x1, y1, z1), (x2, y2, z2) = tri[0], tri[k], tri[k + 1]
     det = (x1 - x0) * (z2 - z0) - (x2 - x0) * (z1 - z0)
     a = ((y1 - y0) * (z2 - z0) - (y2 - y0) * (z1 - z0)) / det
     c = ((x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)) / det
@@ -457,12 +465,43 @@ def clean_patch(triangles):
         if len(ring) >= 3:
             polys.append((ring, height))
 
+    # vertices of one level closer than MERGE are one (ours): two pieces cut apart by a few mm met at
+    # no edge, the sliver between them was a fold or a gap, an invisible wall across the floor
+    parent = {}
+
+    def root(v):
+        while parent.get(v, v) != v:
+            v = parent[v]
+        return v
+
+    near = {}
+    for vs in levels.values():
+        for v in vs:
+            near.setdefault((v[0] // MERGE, v[1] // MERGE), []).append(v)
+    for (i, j), vs in near.items():
+        for v in vs:
+            for q in (q for di in (-1, 0, 1) for dj in (-1, 0, 1) for q in near.get((i + di, j + dj), ())):
+                if q < v and abs(q[0] - v[0]) <= MERGE and abs(q[1] - v[1]) <= MERGE and abs(q[2] - v[2]) < LEVEL:
+                    a, b = root(q), root(v)
+                    if a != b:
+                        parent[max(a, b)] = min(a, b)
+    merged = []
+    for ring, height in polys:
+        r = []
+        for v in map(root, ring):
+            if not r or r[-1] != v:
+                r.append(v)
+        if len(r) > 1 and r[0] == r[-1]:
+            r.pop()
+        if len(r) >= 3 and area2([(v[0], v[1]) for v in r]) > 0:
+            merged.append((r, height))
+    polys = merged
+
     # the vertices in cells of GRID metres, to find those on an edge
     cell = round(GRID / SNAP)
     grid = {}
-    for vs in levels.values():
-        for v in vs:
-            grid.setdefault((v[0] // cell, v[1] // cell), []).append(v)
+    for v in {root(v) for vs in levels.values() for v in vs}:
+        grid.setdefault((v[0] // cell, v[1] // cell), []).append(v)
 
     def on_edge(a, b):
         dx, dz = b[0] - a[0], b[1] - a[1]
@@ -486,6 +525,12 @@ def clean_patch(triangles):
         for i, a in enumerate(keys):
             ring.append(a)
             ring += on_edge(a, keys[(i + 1) % len(keys)])
+        # a piece thinner than 2 SNAP (ours): a sliver along a long edge, its points split the edges of
+        # the neighbours on both sides already; kept, its fan folded and was walled off as a fold, an
+        # invisible wall across the floor
+        flat = [(v[0], v[1]) for v in ring]
+        if abs(area2(flat)) / max(math.dist(p, q) for p in flat for q in flat) < 2:
+            continue
         if len(ring) == 3:
             fan = [ring]
         else:
@@ -494,7 +539,8 @@ def clean_patch(triangles):
             cz = sum(v[1] for v in ring) / len(ring) * SNAP
             fan = [[vertex(cx, cz, height(cx, cz)), ring[i - 1], ring[i]] for i in range(len(ring))]
         for tri in fan:
-            if abs(area2([(v[0], v[1]) for v in tri])) * SNAP * SNAP > MIN_AREA:
+            # counter-clockwise as the outline (ours): snapped to SNAP, a fan of a narrow piece may turn over
+            if area2([(v[0], v[1]) for v in tri]) * SNAP * SNAP > MIN_AREA:
                 out.append(list(tri))
 
     # one neighbour per edge, on its other side
@@ -537,15 +583,17 @@ def clean_patch(triangles):
 CELL = 0.15  # metres
 BODY = (0.3, 1.6)  # metres above the floor: what a walking body bumps into, from the height of the feelers
 REACH = 2  # cells: a blocked square grows by this, 0.3-0.375 m, the reach of the feelers
-FREE = 0.45  # metres around a point of the location (a character, an exit) stay walkable
+FREE = 0.45  # metres around a point a character stands on stay walkable
+PAD = 0.25  # metres: half the side of the floor laid under a point the patch has no floor at the height of
 
 
 def cell_range(lo, hi):
     return range(math.floor(lo / CELL), math.floor(hi / CELL) + 1)
 
 
-def blocked_cells(model: Path, triangles, points, boxes):
-    """{(i, j): [floor heights]} of the squares a body cannot stand on."""
+def blocked_cells(model: Path, triangles, points):
+    """{(i, j): [floor heights]} of the squares a body cannot stand on. The exits are not kept: a door
+    box runs into the house, the walls and the door leaf cut it like any other wall (ours)."""
     floors = {}  # the floor heights over the centre of a square
     for t in triangles:
         height, poly = plane(t), ccw([(p[0], p[2]) for p in t])
@@ -597,8 +645,7 @@ def blocked_cells(model: Path, triangles, points, boxes):
 
     def free(i, j):
         x, z = (i + 0.5) * CELL, (j + 0.5) * CELL
-        return (any(math.dist((x, z), p) < FREE for p in points)
-                or any(b[0] - CELL <= x <= b[2] + CELL and b[1] - CELL <= z <= b[3] + CELL for b in boxes))
+        return any(math.dist((x, z), p) < FREE for p in points)
     return {c: hs for c, hs in grown.items() if not free(*c)}
 
 
@@ -619,7 +666,9 @@ def clip3(poly, a, b):
 
 
 def cut_obstacles(triangles, blocked):
-    """The patch triangles without the blocked squares of their floor."""
+    """The patch triangles without the blocked squares of their floor: convex pieces, not cut into
+    triangles here (ours): the diagonals of the long thin strips between the squares, cut again by
+    clean_patch, went a few cm apart and left invisible walls across the streets."""
     out = []
     for t in triangles:
         height, poly = plane(t), ccw([(p[0], p[2]) for p in t])
@@ -650,9 +699,46 @@ def cut_obstacles(triangles, blocked):
                     ((i1 + 1) * CELL, (j1 + 1) * CELL), (i0 * CELL, (j1 + 1) * CELL)]
             hb = bounds(hole)
             pieces = [q for p in pieces for q in (subtract(p, hole) if overlaps(bounds(p), hb) else [p])]
-        for p in pieces:
-            out += [tuple((q[0], height(*q), q[1]) for q in (p[0], p[k], p[k + 1])) for k in range(1, len(p) - 1)]
+        out += [tuple((q[0], height(*q), q[1]) for q in p) for p in pieces]
     return out
+
+
+def heights_at(triangles, x, z):
+    out = []
+    for t in triangles:
+        poly = ccw([(p[0], p[2]) for p in t])
+        if all(area2([poly[k - 1], poly[k], (x, z)]) >= -EPS for k in range(len(poly))):
+            out.append(plane(t)(x, z))
+    return out
+
+
+def point_pads(triangles, loc):
+    """Floor squares at the height of the points standing under a floor of the patch and over none:
+    the shipwright of shipyard_eng stands at y = 0 behind his counter, under the lid of the patch over
+    it, the drinkers by the wall of the tavern under its gallery. The engine puts a character on the
+    floor nearest in height, without these on the lid (ours)."""
+    pads = []
+    for p in loc["points"]:
+        if p["type"] == 1:
+            continue
+        x, y, z = (c * K for c in p["pos"])
+        hs = heights_at(triangles, x, z)
+        if hs and all(abs(h - y) >= LEVEL for h in hs):
+            a, b, c, d = ((x - PAD, y, z - PAD), (x + PAD, y, z - PAD), (x + PAD, y, z + PAD), (x - PAD, y, z + PAD))
+            pads += [(a, c, b), (a, d, c)]
+    return pads
+
+
+def walk_floor(patch_cff: Path, model_cff: Path, loc):
+    """The patch the characters walk on, for write_ptc."""
+    triangles = patch_triangles(patch_cff)
+    # only an interior walks on the ground inside its walls; the walls of a town are houses
+    points = [] if loc["interiors"] else [(p["pos"][0] * K, p["pos"][2] * K) for p in loc["points"]]
+    # the floor goes last: where the patch has a floor of its own, that one is kept
+    triangles = triangles + implicit_floor(patch_cff, triangles, points)
+    keep = [(p["pos"][0] * K, p["pos"][2] * K) for p in loc["points"] if p["type"] != 1]
+    triangles = cut_obstacles(triangles, blocked_cells(model_cff, triangles, keep))
+    return clean_patch(triangles + point_pads(triangles, loc))
 
 
 class World:
@@ -698,19 +784,12 @@ class World:
         self.done_models[stem] = len(meshes)
         return stem
 
-    def patch(self, name: str, points, loc):
+    def patch(self, name: str, loc):
         cff = self.models.get(Path(name).name.lower())
         if cff is None:
             print(f"  missing patch {name}")
             return None
-        triangles = patch_triangles(cff)
-        # the floor goes last: where the patch has a floor of its own, that one is kept
-        triangles = triangles + implicit_floor(cff, triangles, points)
-        keep = [(p["pos"][0] * K, p["pos"][2] * K) for p in loc["points"]]
-        boxes = [tuple(c * K for c in p["box"]) for p in loc["points"] if p["type"] == 1]
-        triangles = cut_obstacles(triangles, blocked_cells(self.models[Path(loc["model"]).name.lower()],
-                                                           triangles, keep, boxes))
-        triangles = clean_patch(triangles)
+        triangles = walk_floor(cff, self.models[Path(loc["model"]).name.lower()], loc)
         # named by the patch: locations with one model can have different patches
         stem = cff.stem.lower()
         # the material of the floor gives the sound of the steps on it
@@ -722,9 +801,7 @@ class World:
         loc = parse_loc(path)
         key = path.stem
         model = self.model(loc["model"])
-        # only an interior walks on the ground inside its walls; the walls of a town are houses
-        points = [] if loc["interiors"] else [(p["pos"][0] * K, p["pos"][2] * K) for p in loc["points"]]
-        patch = self.patch(loc["patch"], points, loc) if model else None
+        patch = self.patch(loc["patch"], loc) if model else None
         at = f"PdmLocations.{key}"
         add = self.lines.append
         add(f'\t{at}.id = "{key}";')
