@@ -51,6 +51,13 @@ POLL = 2.0
 
 
 class Comfy3D(Comfy):
+    def queue(self, graph) -> str:
+        """ComfyUI runs the outputs that passed the check and silently drops the others: say what it dropped."""
+        r = self.call("/prompt", {"prompt": graph, "client_id": "pdm-voice"})
+        if r.get("node_errors"):
+            raise RuntimeError(f"ComfyUI rejects nodes: {json.dumps(r['node_errors'], ensure_ascii=False)[:1500]}")
+        return r["prompt_id"]
+
     def result(self, pid):
         """The 3D file of a finished prompt, None while it runs; an error of the graph stops the run."""
         h = self.call(f"/history/{pid}")
