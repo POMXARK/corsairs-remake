@@ -18,3 +18,5 @@ dist/
 # portable ComfyUI (Easy-Install) next to the game: gigabytes of Python and models
 ComfyUI-Easy-Install/
 work_3D/
+# portable Blender next to the game
+blender-*/
