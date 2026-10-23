@@ -68,7 +68,7 @@ python3 -I tools/pdm_model_views.py pdm-game hero1 characters/girl1 --size 1024
 
 ```bash
 python tools/pdm_models_all.py pdm-game hero1 officer1 --quality normal          # виды → перерисовка → 3D → облегчение
-python tools/pdm_models_all.py pdm-game --steps refine,3d,optimize --redo        # заново для всех, у которых уже есть виды
+python tools/pdm_models_all.py pdm-game --steps refine,model,optimize --redo        # заново для всех, у которых уже есть виды
 python tools/pdm_models_all.py pdm-game hero1 --install                          # и поставить в игру (--restore в pdm_glb2gm.py вернёт оригинал)
 ```
 

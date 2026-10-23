@@ -7,7 +7,7 @@ pdm_glb_optimize.py, pdm_glb2gm.py) and skips what it has made already, so the r
 started again; --redo makes the models again with the next seed. The last step (--install) puts the models into
 the game in place of the originals (pdm_glb2gm.py --restore brings the originals back), it is not a default.
 
-usage: pdm_models_all.py <game dir> [<model> ...] [--steps views,refine,3d,optimize] [--install] [--redo]
+usage: pdm_models_all.py <game dir> [<model> ...] [--steps views,refine,model,optimize] [--install] [--redo]
          [--quality normal] [--crop 0.05] [--faces 12000] [--tex 1024] [--comfy URL] [--set Class.input=value ...]
   <model>: characters/hero1 or hero1; none given: the models that have views already (the views step is skipped)
 """
@@ -17,12 +17,12 @@ import sys
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parent
-STEPS = ("views", "refine", "3d", "optimize")
+STEPS = ("views", "refine", "model", "optimize")
 
 
 def run(*cmd):
     print("\n> " + " ".join(map(str, cmd)), flush=True)
-    if subprocess.run([sys.executable, "-I", *map(str, cmd)]).returncode != 0:
+    if subprocess.run([sys.executable, *map(str, cmd)]).returncode != 0:
         sys.exit(f"pdm_models_all: {Path(cmd[0]).name} failed")
 
 
@@ -43,7 +43,7 @@ def main():
     steps = a.steps.split(",")
     for s in steps:
         if s not in STEPS:
-            sys.exit(f"pdm_models_all: no step {s} (views, refine, 3d, optimize)")
+            sys.exit(f"pdm_models_all: no step {s} (views, refine, model, optimize)")
     ai = a.game / "data" / "ai_models"
     if "views" in steps and a.models:  # without names the views that are there are taken
         run(TOOLS / "pdm_model_views.py", a.game, *a.models)
@@ -55,7 +55,7 @@ def main():
     redo = ["--redo", *names] if a.redo else []
     if "refine" in steps:
         run(TOOLS / "comfy_view_refine.py", a.game, "--comfy", a.comfy, "--only", *names, *redo)
-    if "3d" in steps:
+    if "model" in steps:
         views = ai / ("views_refined" if "refine" in steps or (ai / "views_refined").exists() else "views")
         extra = ["--set", *a.set] if a.set else []
         run(TOOLS / "comfy_model_batch.py", a.game, "--comfy", a.comfy, "--views", views, "--only", *names,
