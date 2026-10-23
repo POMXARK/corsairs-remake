@@ -289,3 +289,5 @@ rm -r $D && python3 -I tools/pdm_voice_lines.py pdm-game --bind            # у�
 ## Запись видео из игры (F9)
 
 В `pdm-game/engine.ini` включено `record_video = 1`. F9 запускает `ffmpeg` (x11grab на Linux, gdigrab на Windows) на окно игры, повторное F9 заканчивает запись; файл `<дата>.mp4` лежит в каталоге Screenshots рядом со снимками F8. Нужен `ffmpeg` в PATH или `ffmpeg_path`. Звук — `record_audio_input`, например `-f pulse -i <sink>.monitor` или `-f dshow -i audio=<устройство>`. Не проверено на Windows.
+
+Windows, звук игры: `record_audio_loopback = 1` в `engine.ini` (в `pdm-game` включено). Движок сам пишет то, что играет на устройстве вывода по умолчанию (WASAPI loopback, виртуальные устройства не нужны), и при остановке записи ffmpeg склеивает звук с видео: сначала в `Screenshots` появляются `<дата>.video.mp4` и `.pcm`, через пару секунд итоговый `<дата>.mp4`, части удаляются. Если звук отстаёт или опережает, меняйте `record_audio_skip_ms` (по умолчанию 300). `record_audio_input` (dshow) имеет приоритет. Не проверено на Windows: код собран только на Linux, где loopback-запись выключена.
