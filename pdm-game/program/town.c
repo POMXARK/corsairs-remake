@@ -245,8 +245,8 @@ void Town_Load(string loc, string from)
 	TownWeather.Fog.Density = 0.004;
 	TownWeather.Fog.Color = argb(0, 150, 180, 210);
 	TownWeather.Sun.Color = argb(0, 255, 240, 215);
-	TownWeather.Sun.Ambient = argb(0, 120, 120, 130);
-	TownWeather.Sun.HeightAngle = 0.9;
+	TownWeather.Sun.Ambient = argb(0, 105, 105, 115);
+	TownWeather.Sun.HeightAngle = 0.62;
 	TownWeather.Sun.AzimuthAngle = 2.5;
 	TownWeather.isDone = "";
 	Render.BackColor = argb(255, 150, 180, 210);
@@ -666,8 +666,8 @@ void Sea_ToPort()
 
 ref Town_ShadowDensity()
 {
-	townShadow[0] = argb(255, 96, 96, 96);
-	townShadow[1] = argb(255, 96, 96, 64);
+	townShadow[0] = argb(255, 40, 40, 40);
+	townShadow[1] = argb(255, 40, 40, 30);
 	return &townShadow;
 }
 
