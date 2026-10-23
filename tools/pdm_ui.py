@@ -199,6 +199,8 @@ class Converter:
             if "=" in line and not line.lstrip().startswith(("//", "[")):
                 key, value = line.split("=", 1)
                 strings.setdefault(key.strip(), value.strip().replace('"', "'"))
+        # the voices of the characters, a row of [Options] the original has not got (ours)
+        strings.setdefault("OptVoices", "Голоса NPC")
         return strings
 
     def ttf(self, face):
@@ -305,6 +307,41 @@ class Converter:
                          (prefix + "right", half + 2, top, w, top + h)]
         self.pictures[group] = (tex, tw, th, pictures, (w, h))
         return group, (w, h)
+
+    def options_volume(self):
+        """The volume of [Options] (ours): a row "- 80% +" beside the check of the effects, of the music and of the
+        voices of the characters, and the check of the voices (LB_VOICEON) the original has not got. A click on - or +
+        changes the volume by a step, the scripts (options.c) show the value."""
+        group = "PDM_MENU_CHECK"
+        tex, tw, th, _, (w, h) = self.pictures[group]
+        big = self.font("logbook,27,0")
+        small = "pdm_logbook_italic_18"
+        nodes, lines = [], []
+        # the check of the voices under the music, as the ones of the sound
+        y = 255
+        nodes += [("TEXTBUTTON", "LB_VOICEON"), ("PICTURE", "LB_VOICEON_OFF")]
+        lines += ["[LB_VOICEON]", f"position = 264,{y},{264 + w},{y + h}", f"group = {group}", f"font = {big}",
+                  f"fontScale = {1 / FONT_OVERSAMPLE:.3f}", "strOffset = 4", "fontColor = 255,255,255,255",
+                  "fontColorSelected = 255,255,255,255", "fontColorPressed = 255,255,255,255",
+                  "unselectableFontColor = 255,128,128,128", "command = click", "command = activate",
+                  "command = deactivate", "",
+                  "[LB_VOICEON_OFF]", f"position = 264,{y},{264 + w},{y + h}", f"textureName = {tex}",
+                  f"textureRect = 0,{(h + 2) / th:g},{w / tw:g},{(2 * h + 2) / th:g}", "bNotUse = 1", ""]
+        for name, row in (("FX", 130), ("MUSIC", 205), ("VOICE", 255)):
+            cy = row + h // 2 - 8
+            for node, x0, x1, font, align, text in ((f"LB_{name}DOWN", 336, 358, small, "center", "-"),
+                                                     (f"LB_{name}VAL", 360, 450, small, "center", "100%"),
+                                                     (f"LB_{name}UP", 452, 474, small, "center", "+")):
+                nodes.append(("FORMATEDTEXT", node))
+                lines += [f"[{node}]", f"position = {x0},{cy},{x1},{cy + 22}", f"font = {font}",
+                          f"fontScale = {1 / FONT_OVERSAMPLE:.3f}", f"lineSpace = {round(self.fonts[font][2])}",
+                          "color = 255,255,255,255", f"alignment = {align}"]
+                lines += ["command = click", ""] if node != f"LB_{name}VAL" else [""]
+        nodes.append(("FORMATEDTEXT", "LB_VOICELABEL"))
+        lines += ["[LB_VOICELABEL]", f"position = 70,{255 + 7},230,{255 + 25}", f"font = {small}",
+                  f"fontScale = {1 / FONT_OVERSAMPLE:.3f}", f"lineSpace = {round(self.fonts[small][2])}",
+                  "color = 255,255,255,255", "alignment = right", "string = OptVoices", ""]
+        return nodes, lines
 
     # ---------- a screen ----------
 
@@ -555,7 +592,9 @@ class Converter:
                 continue
             x, y = self.position(a, w, h)
             rects.setdefault((x, y, w, h), []).append(key)
-            shown.append((key, a, group, x, y, w, h, rects[(x, y, w, h)][0] != key))
+            # the handles of the sliders of the original cannot be dragged: the rows of OPTIONS_VOLUME replace them (ours)
+            gone = section == "Options" and key.lower() in ("lb_soundpos", "lb_musicpos")
+            shown.append((key, a, group, x, y, w, h, rects[(x, y, w, h)][0] != key or gone))
         names = [k.upper() for k, a, *_, hidden in shown if not hidden and text_key(a.get("txt", ""))]
         for key, a, group, x, y, w, h, hidden in shown:
             font = self.font(a.get("font", "logbook,27,0"))
@@ -585,6 +624,11 @@ class Converter:
                 nodes.append(("PICTURE", node + "_OFF"))
                 lines += [f"[{node}_OFF]", f"position = {x},{y},{x + w},{y + h}", f"textureName = {tex}",
                           f"textureRect = 0,{(h + 2) / th:g},{w / tw:g},{(2 * h + 2) / th:g}", "bNotUse = 1", ""]
+
+        if section == "Options":
+            n, l = self.options_volume()
+            nodes += n
+            lines += l
 
         head = [f"; converted by tools/pdm_ui.py from [{section}] of INI/{self.ini_name} of the original"]
         head += notes and ["; the layout of the original for the scripts of the screen:"] + notes

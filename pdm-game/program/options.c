@@ -15,9 +15,15 @@ string optionsSize = "";
 bool optionsFull = false;
 // the page opened again after "Применить" keeps the choice, opened from the menu it shows the window
 bool optionsKeep = false;
-// the sound and the music of the session
+// the sound and the music of the session, their volume in percent and the neural voices of the characters
+// (docs/voice-over.md): the volumes begin as the game played them before the page had sliders
 bool optionsFx = true;
 bool optionsMusic = true;
+bool optionsVoice = true;
+int optionsVolFx = 80;
+int optionsVolMusic = 50;
+int optionsVolVoice = 100;
+#define OPTIONS_VOLUME_STEP 10
 // the save when the ship leaves a town (save.c)
 bool optionsAutosave = true;
 
@@ -78,7 +84,9 @@ void Options_Fill()
 	Options_Check("LB_WINDOWED", optionsFull);
 	Options_Check("LB_SOUNDON", optionsFx);
 	Options_Check("LB_MUSICON", optionsMusic);
+	Options_Check("LB_VOICEON", optionsVoice);
 	Options_Check("LB_AUTOSAVE", optionsAutosave);
+	Options_Volumes();
 	Options_Off("LB_SWAPMOUSEX");
 	Options_Off("LB_SWAPMOUSEY");
 	Options_Off("LB_ALIASING");
@@ -88,6 +96,54 @@ void Options_Fill()
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_GAMMA", false);
 }
 
+int Options_Step(int volume, int step)
+{
+	int v = volume + step;
+	if (v < 0) { v = 0; }
+	if (v > 100) { v = 100; }
+	return v;
+}
+
+void Options_Volumes()
+{
+	for (int i = 0; i < 3; i++)
+	{
+		string row = "";
+		if (i == 0) { row = "FX"; }
+		if (i == 1) { row = "MUSIC"; }
+		if (i == 2) { row = "VOICE"; }
+		Screen_Text("LB_" + row + "DOWN", "(-)");
+		Screen_Text("LB_" + row + "UP", "(+)");
+	}
+	Screen_Text("LB_FXVAL", optionsVolFx + "%");
+	Screen_Text("LB_MUSICVAL", optionsVolMusic + "%");
+	Screen_Text("LB_VOICEVAL", optionsVolVoice + "%");
+}
+
+// - and + of a row of the volume (pdm_ui.py options_volume); true if the click was one of them
+bool Options_Slider(string node)
+{
+	int step = 0;
+	if (findSubStr(node, "DOWN", 0) > 0) { step = 0 - OPTIONS_VOLUME_STEP; }
+	if (findSubStr(node, "UP", 0) > 0) { step = OPTIONS_VOLUME_STEP; }
+	if (step == 0) { return false; }
+	bool known = true;
+	if (node == "LB_FXDOWN" || node == "LB_FXUP") { optionsVolFx = Options_Step(optionsVolFx, step); }
+	else
+	{
+		if (node == "LB_MUSICDOWN" || node == "LB_MUSICUP") { optionsVolMusic = Options_Step(optionsVolMusic, step); }
+		else
+		{
+			if (node == "LB_VOICEDOWN" || node == "LB_VOICEUP") { optionsVolVoice = Options_Step(optionsVolVoice, step); }
+			else { known = false; }
+		}
+	}
+	if (!known) { return false; }
+	Options_Volumes();
+	Sound_Volume();
+	return true;
+}
+
 // a click on the page; true if it was one of its own
 bool Options_Click(string node)
 {
@@ -95,6 +151,8 @@ bool Options_Click(string node)
 	if (node == "LB_WINDOWED") { optionsFull = !optionsFull; Options_Check(node, optionsFull); return true; }
 	if (node == "LB_SOUNDON") { optionsFx = !optionsFx; Options_Check(node, optionsFx); Sound_Volume(); return true; }
 	if (node == "LB_MUSICON") { optionsMusic = !optionsMusic; Options_Check(node, optionsMusic); Sound_Volume(); return true; }
+	if (node == "LB_VOICEON") { optionsVoice = !optionsVoice; Options_Check(node, optionsVoice); return true; }
+	if (Options_Slider(node)) { return true; }
 	if (node == "LB_AUTOSAVE") { optionsAutosave = !optionsAutosave; Options_Check(node, optionsAutosave); return true; }
 	if (node == "LB_APPLY") { Options_Apply(); return true; }
 	return false;
@@ -110,6 +168,7 @@ void Options_Apply()
 	int full = 0;
 	if (optionsFull) { full = 1; }
 	Render.SetScreen.full_screen = full;
+	Render.restart = 0;
 	// the render takes it at the start of the next frame; the page is laid out again for the new window
 	PostEvent("Options_Reopen", OPTIONS_REOPEN_MS);
 }
@@ -117,5 +176,10 @@ void Options_Apply()
 void Options_Reopen()
 {
 	Trace("PDM options: the window is " + Options_Current() + ", full screen " + Render.full_screen);
-	if (screenName == "options") { optionsKeep = true; Screen_Show("options"); }
+	if (screenName != "options") { return; }
+	optionsKeep = true;
+	Screen_Show("options");
+	// the device could not take the window (native Direct3D 9 keeps resources of the scene): engine.ini has the
+	// screen, the next launch opens it
+	if (CheckAttribute(&Render, "restart") && sti(Render.restart) != 0) { Screen_Text("LB_RESOLUTION", optionsSize + " (после перезапуска)"); }
 }

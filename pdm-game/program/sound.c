@@ -34,15 +34,16 @@ void Sound_Init()
 	soundLoops[1] = 0;
 }
 
-// the effects and the music, as the checks of "Настройки" (options.c) say
+// the effects, the music and the voices, as the checks and the volume of "Настройки" (options.c) say
 void Sound_Volume()
 {
-	float fx = 0.8;
-	float music = 0.5;
+	float fx = optionsVolFx * 0.01;
+	float music = optionsVolMusic * 0.01;
+	float speech = optionsVolVoice * 0.01;
 	if (!optionsFx) { fx = 0.0; }
 	// SOUND_FX_ONLY=1 (run.sh): no music, for the tests of the effects
 	if (SoundFxOnly || !optionsMusic) { music = 0.0; }
-	SendMessage(&Sound, "lfff", MSG_SOUND_SET_MASTER_VOLUME, fx, music, 1.0);
+	SendMessage(&Sound, "lfff", MSG_SOUND_SET_MASTER_VOLUME, fx, music, speech);
 }
 
 // the music by its alias of mmusic.ini (Main, Freesailing, eTown ...: attribute names are not case

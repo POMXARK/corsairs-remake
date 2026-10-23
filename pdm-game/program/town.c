@@ -771,7 +771,8 @@ void Town_DialogNode(string node)
 	makearef(nd, PdmDialogs.(townTalkKey).(node));
 	TownDialog.Text = nd.text;
 	// the neural voice of the speech (docs/voice-over.md), said after the greeting; the entity cuts the last one
-	if (CheckAttribute(&PdmVoiceLines, townTalkKey + "." + node)) { TownDialog.voice = PdmVoiceLines.(townTalkKey).(node); }
+	DeleteAttribute(&TownDialog, "voice");
+	if (optionsVoice && CheckAttribute(&PdmVoiceLines, townTalkKey + "." + node)) { TownDialog.voice = PdmVoiceLines.(townTalkKey).(node); }
 	DeleteAttribute(&TownDialog, "Links");
 	int n = GetAttributesNum(nd);
 	int shown = 0;
