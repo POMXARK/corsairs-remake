@@ -2,8 +2,8 @@
 """A .gm of pdm-game/resource as a GLB: the low-poly original as the target of baking and the input of mesh refinement
 (UltraShape and the like), docs/ai-models.md (ours).
 
-One primitive per object of the .gm with its texture and UVs, positions as pdm_model_views.py draws them (the frame the
-views of the model and pdm_glb2gm.py use), the bone of every vertex in a second file <out>.bones.json (list per
+One primitive per object of the .gm with its texture and UVs, in the frame of glTF (z negated, the faces turned: the front along +z), so pdm_glb2gm.py
+puts it back where it was, the bone of every vertex in a second file <out>.bones.json (list per
 object), so the new geometry can be bound to the same skeleton later.
 
 usage: pdm_gm2glb.py <game dir> <model> [--out data/ai_models/glb/<name>_orig.glb]
@@ -20,6 +20,9 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pdm_model_views import find_model, load_texture, read_gm, texture_index  # noqa: E402
+
+
+FLIP = np.array((1.0, 1.0, -1.0))  # the engine looks along -z, glTF along +z: the mirror the other way is pdm_glb2gm.py
 
 
 def build(gm, index):
@@ -55,10 +58,10 @@ def build(gm, index):
             materials.append(mat)
             mat_of[tex] = len(materials) - 1
         meshes_prims.append({"attributes": {
-            "POSITION": accessor(p.astype("<f4"), 5126, "VEC3", 34962, True),
-            "NORMAL": accessor(n.astype("<f4"), 5126, "VEC3", 34962),
+            "POSITION": accessor((p * FLIP).astype("<f4"), 5126, "VEC3", 34962, True),
+            "NORMAL": accessor((n * FLIP).astype("<f4"), 5126, "VEC3", 34962),
             "TEXCOORD_0": accessor(uv.astype("<f4"), 5126, "VEC2", 34962)},
-            "indices": accessor(tris.astype("<u4").reshape(-1), 5125, "SCALAR", 34963),
+            "indices": accessor(tris[:, ::-1].astype("<u4").reshape(-1), 5125, "SCALAR", 34963),
             "material": mat_of[tex]})
     nodes = [{"mesh": i, "name": o[0]} for i, o in enumerate(gm["objects"])]
     doc = {"asset": {"version": "2.0", "generator": "pdm_gm2glb"}, "scene": 0,

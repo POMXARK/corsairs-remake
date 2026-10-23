@@ -225,3 +225,20 @@ python tools\pdm_models_all.py pdm-game hero1 --parts --steps optimize --install
 - Левая рука — форма верная, цвет красный вместо чёрного.
 - Правая рука и сабля — плохие. Второй seed (`--redo`) не помог: рука снова выросла в целое тело с двумя руками, цвет серо-коричневый, сабля — тонкая игла с белыми пятнами. Причина во входе: плоский чёрный рукав без теней сеть не читает как форму, поэтому смена seed ничего не меняет.
 - Что делать: перерисовать виды рук и сабли на шаге `refine` с промптом про материал и складки (раздел выше), либо оставить эти части оригинальными (режим «только перечисленные части» — планируется, `--only-parts`).
+
+### Собрать только хорошие части и откатить (`--only-parts`)
+
+`--only-parts head,torso,legs` берёт перечисленные группы из нейромоделей, остальные остаются оригинальными (их объекты проходят через ту же подгонку и привязку костей). Проверка на оригинале: 0,0 см, 1828 граней, 17 костей, `--restore` возвращает файл побайтно (md5 совпадает).
+
+```powershell
+cd C:\corsairs-remake
+git pull origin pdm-launch
+Copy-Item pdm-game\resource\models\characters\hero1.gm hero1.gm.backup
+python tools\pdm_models_all.py pdm-game hero1 --parts --only-parts head,torso,legs --steps optimize --install
+```
+Откат к оригиналу (оригинал хранится в `pdm-game\data\ai_models\orig\`, копия делается при первой установке):
+```powershell
+cd C:\corsairs-remake
+python tools\pdm_glb2gm.py pdm-game hero1 --restore
+```
+Добавить другие части позже: дописать их в `--only-parts` (например, `head,torso,legs,arm_l`), оригинал не пересоздаётся.

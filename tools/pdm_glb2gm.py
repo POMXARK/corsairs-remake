@@ -18,6 +18,7 @@ and sails, a location) is left alone: they belong to the old geometry.
 the original and bound to the bones of that part only; the parts become one model.
 
 usage: pdm_glb2gm.py <game dir> <name> [<name> ...] [--glb data/ai_models/glb] [--tex 1024] [--restore] [--parts]
+                     [--only-parts head,torso,...]
   <name>: the stem the views and the GLB have (hero1), the model is found under resource/models
 """
 import argparse
@@ -202,7 +203,7 @@ def build(glb: Path, stem_base: str, ref_pos, ref_bone, skinned, tex_dir, prefix
     return meshes, total, yaw, k, err
 
 
-def convert(game: Path, name: str, glbs: Path, tex_size: int, by_part: bool = False):
+def convert(game: Path, name: str, glbs: Path, tex_size: int, by_part: bool = False, only=None):
     model = find_model(game, name)
     rel = model.relative_to(game / "resource" / "models")
     orig = game / "data" / "ai_models" / "orig" / rel
@@ -225,6 +226,12 @@ def convert(game: Path, name: str, glbs: Path, tex_size: int, by_part: bool = Fa
     for part, bones in (PARTS.items() if by_part else [(None, None)]):
         objs = ref["objects"] if part is None else part_objects(ref, bones)
         glb = glbs / (f"{name}.glb" if part is None else f"{name}_{part}.glb")
+        if only is not None and part not in only:
+            # a part that is not taken from the network stays what it was: the original objects go through the same fit
+            from pdm_gm2glb import build as gm2glb  # noqa: E402
+            glb = game / "data" / "ai_models" / "glb_keep" / f"{name}_{part}.glb"
+            glb.parent.mkdir(parents=True, exist_ok=True)
+            glb.write_bytes(gm2glb({"objects": objs}, textures))
         if not glb.exists():
             sys.exit(f"pdm_glb2gm: no {glb} (comfy_model_batch.py)")
         jobs.append((glb, f"ai_{name}" + ("" if part is None else f"_{part}"),
@@ -251,6 +258,8 @@ def main():
     ap.add_argument("--tex", type=int, default=1024)
     ap.add_argument("--restore", action="store_true")
     ap.add_argument("--parts", action="store_true", help="<name>_<part>.glb of every group of pdm_model_views.PARTS")
+    ap.add_argument("--only-parts", help="with --parts: the groups taken from the GLBs (head,torso,...), the others "
+                                         "stay as the original has them")
     a = ap.parse_args()
     glbs = a.glb or a.game / "data" / "ai_models" / "glb"
     for name in a.names:
@@ -264,7 +273,10 @@ def main():
             continue
         if not a.parts and not (glbs / f"{name}.glb").exists():
             sys.exit(f"pdm_glb2gm: no {glbs / (name + '.glb')} (comfy_model_batch.py)")
-        print(convert(a.game, name, glbs, a.tex, a.parts), flush=True)
+        only = set(a.only_parts.split(",")) if a.only_parts else None
+        if only and not only <= set(PARTS):
+            sys.exit(f"pdm_glb2gm: no group {', '.join(sorted(only - set(PARTS)))}, there are {', '.join(PARTS)}")
+        print(convert(a.game, name, glbs, a.tex, a.parts or only is not None, only), flush=True)
 
 
 if __name__ == "__main__":

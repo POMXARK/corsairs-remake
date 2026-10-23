@@ -33,6 +33,7 @@ def main():
     ap.add_argument("--steps", default=",".join(STEPS))
     ap.add_argument("--install", action="store_true")
     ap.add_argument("--parts", action="store_true", help="a character part by part (pdm_model_views.PARTS)")
+    ap.add_argument("--only-parts", help="with --parts: the groups taken from the networks (head,torso,...), the rest stays original")
     ap.add_argument("--redo", action="store_true")
     ap.add_argument("--quality", default="normal")
     ap.add_argument("--crop", type=float, default=0.05)
@@ -53,7 +54,8 @@ def main():
     if a.parts:
         sys.path.insert(0, str(TOOLS))
         from pdm_model_views import PARTS  # noqa: E402
-    names = [f"{m}_{part}" for m in models for part in PARTS] if a.parts else models or sorted(
+    names = [f"{m}_{part}" for m in models for part in PARTS if not a.only_parts or part in a.only_parts.split(",")
+             ] if a.parts else models or sorted(
         p.name[:-len("_front.png")] for p in (ai / "views").glob("*_front.png"))
     if not names:
         sys.exit(f"pdm_models_all: no views in {ai / 'views'}")
@@ -73,7 +75,7 @@ def main():
         run(TOOLS / "pdm_glb_optimize.py", a.game, *names, "--faces", a.faces, "--tex", a.tex)
     if a.install:
         run(TOOLS / "pdm_glb2gm.py", a.game, *(models if a.parts else names), "--glb", ai / "glb_opt", "--tex", a.tex,
-            *(["--parts"] if a.parts else []))
+            *(["--parts"] if a.parts else []), *(["--only-parts", a.only_parts] if a.only_parts else []))
     print("\npdm_models_all: done")
 
 
