@@ -185,3 +185,43 @@ python tools/comfy_model_batch.py pdm-game ... --redo (Get-Content pdm-game\data
 ```
 
 Подсказка модели: сети Pixal3D/TRELLIS.2 принимают только картинку, текст не читают. Текстом управляется шаг `refine` (Qwen-Image edit, `comfy_view_refine.py --prompt "..."`): он перерисовывает виды до генерации. Для плоского чёрного бархата в промпт добавляют материал и складки («black velvet sleeve with soft folds and visible shading»), иначе сеть не видит формы.
+
+### Порядок работы с частями: команды
+
+Все команды — одним блоком PowerShell из `C:\corsairs-remake`; в `--out` предпросмотра пути только абсолютные (Blender запускается из другой папки).
+
+1. Виды частей и генерация (≈5–10 мин на часть, в фоне):
+```powershell
+cd C:\corsairs-remake
+git pull origin pdm-launch
+python tools\pdm_models_all.py pdm-game hero1 --parts --steps views,model --workflow tools\model3d\gameready_api.json --crop 0.05
+```
+2. Предпросмотр всех частей в одной картинке (колонка на часть: спереди, три четверти, сбоку):
+```powershell
+cd C:\corsairs-remake
+$g = "C:\corsairs-remake\pdm-game\data\ai_models\glb"
+& "C:\corsairs-remake\blender-5.4.0-alpha+main.93eeecf73c12-windows.amd64-release\blender.exe" -b -P C:\corsairs-remake\tools\pdm_glb_preview.py -- --out C:\corsairs-remake\hero1_parts.png --size 512 "$g\hero1_head.glb" "$g\hero1_torso.glb" "$g\hero1_arm_l.glb" "$g\hero1_arm_r.glb" "$g\hero1_sword.glb" "$g\hero1_legs.glb"
+start C:\corsairs-remake\hero1_parts.png
+```
+3. Автопроверка (форма и цвет по видам):
+```powershell
+cd C:\corsairs-remake
+python tools\pdm_model_check.py pdm-game
+```
+4. Перегенерация плохих частей со следующим seed (только перечисленные; зерно хранится в `glb\seeds.json`):
+```powershell
+cd C:\corsairs-remake
+python tools\comfy_model_batch.py pdm-game --comfy http://127.0.0.1:8188 --views pdm-game\data\ai_models\views --only hero1_arm_r hero1_sword --redo hero1_arm_r hero1_sword --quality normal --crop 0.05 --workflow tools\model3d\gameready_api.json
+```
+5. Сборка в одну модель и установка в игру (после проверки всех частей):
+```powershell
+cd C:\corsairs-remake
+python tools\pdm_models_all.py pdm-game hero1 --parts --steps optimize --install
+```
+
+### Журнал первого прогона hero1 по частям (2026-10-23)
+
+- Голова, торс, ноги — хорошие: глаза открыты, вышивка и жабо читаются (ноги — серый шум на сапогах).
+- Левая рука — форма верная, цвет красный вместо чёрного.
+- Правая рука и сабля — плохие. Второй seed (`--redo`) не помог: рука снова выросла в целое тело с двумя руками, цвет серо-коричневый, сабля — тонкая игла с белыми пятнами. Причина во входе: плоский чёрный рукав без теней сеть не читает как форму, поэтому смена seed ничего не меняет.
+- Что делать: перерисовать виды рук и сабли на шаге `refine` с промптом про материал и складки (раздел выше), либо оставить эти части оригинальными (режим «только перечисленные части» — планируется, `--only-parts`).
