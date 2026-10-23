@@ -21,7 +21,7 @@ bool optionsFx = true;
 bool optionsMusic = true;
 bool optionsVoice = true;
 int optionsVolFx = 80;
-int optionsVolMusic = 50;
+int optionsVolMusic = 70;
 int optionsVolVoice = 100;
 #define OPTIONS_VOLUME_STEP 10
 // the save when the ship leaves a town (save.c)
