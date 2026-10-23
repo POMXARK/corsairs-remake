@@ -62,7 +62,9 @@ def main():
     if "refine" in steps:
         run(TOOLS / "comfy_view_refine.py", a.game, "--comfy", a.comfy, "--only", *names, *redo)
     if "model" in steps:
-        views = ai / ("views_refined" if "refine" in steps or (ai / "views_refined").exists() else "views")
+        # redrawn views are taken where they exist for these names (a folder of another run does not count)
+        views = ai / ("views_refined" if "refine" in steps or (ai / "views_refined" / f"{names[0]}_front.png").exists()
+                      else "views")
         extra = ["--set", *a.set] if a.set else []
         run(TOOLS / "comfy_model_batch.py", a.game, "--comfy", a.comfy, "--views", views, "--only", *names,
             "--quality", a.quality, "--crop", a.crop, *redo,
