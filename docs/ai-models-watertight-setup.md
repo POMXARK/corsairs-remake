@@ -80,6 +80,7 @@ python tools\\pdm_models_all.py pdm-game hero1 --steps model,optimize --workflow
 | `wtivo_core`/`cppmodules` не найден | Python 3.13 в Comfy Desktop | отдельный Easy-Install (Python 3.12) |
 | `Torch 2.11 is not supported` | Torch-Pack не переключён | `Torch 2.8.0+cu128` |
 | PowerShell читает `3d` как число | — | шаг конвейера называется `model` |
+| `No module named 'rtree'` в pdm_glb_optimize | не стоят зависимости оптимизатора для системного Python 3.14 | `pip install --user trimesh rtree fast-simplification`, затем `--steps optimize` |
 
 ## Если что-то пойдёт не так
 
