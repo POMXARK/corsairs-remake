@@ -36,7 +36,7 @@ from PIL import Image
 TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS))
 sys.path.insert(0, str(TOOLS.parent / "engine" / "demos" / "common"))
-from pdm_model_views import PARTS, find_model, part_objects, read_gm, texture_index, texture_of  # noqa: E402
+from pdm_model_views import PARTS, find_model, part_objects, parts_of, read_gm, texture_index, texture_of  # noqa: E402
 from storm_formats import Mesh, write_gm, write_tx  # noqa: E402
 
 SAMPLE = 3000  # points of each model compared to find the turn
@@ -223,7 +223,7 @@ def convert(game: Path, name: str, glbs: Path, tex_size: int, by_part: bool = Fa
                    if o[1] and ("\\" in o[1] or "/" in o[1])), "")
     # one job per GLB: the whole original, or the objects of a group of bones
     jobs = []
-    for part, bones in (PARTS.items() if by_part else [(None, None)]):
+    for part, bones in (parts_of(ref).items() if by_part else [(None, None)]):
         objs = ref["objects"] if part is None else part_objects(ref, bones)
         glb = glbs / (f"{name}.glb" if part is None else f"{name}_{part}.glb")
         if only is not None and part not in only:

@@ -31,6 +31,9 @@ VIEWS = (("front", 180), ("right", 90), ("back", 0), ("left", 270))  # a charact
 # the bones of the skeleton of hero1 (17 bones, one part of the .gm each) that are made into 3D together
 PARTS = {"head": (8, 9), "torso": (0, 10), "arm_l": (1, 2, 3), "arm_r": (5, 6, 7), "sword": (11,),
          "legs": (12, 13, 14, 15, 16, 17)}
+# the same parts by the index of the object: hero, hero1 and the others of that figure have the same 17 objects with other bones
+PART_OBJECTS = {"head": (0, 1), "torso": (8, 16), "arm_l": (5, 6, 7), "arm_r": (2, 3, 4), "sword": (15,),
+                "legs": (9, 10, 11, 12, 13, 14)}
 FILL = 0.85
 BACKGROUND = (128, 128, 128)
 SUPER = 2  # drawn this many times bigger, then scaled down: smooth edges
@@ -110,6 +113,17 @@ def find_model(game: Path, model: str) -> Path:
 def part_objects(gm, bones):
     """The objects of a skinned model that all sit on the given bones."""
     return [o for o in gm["objects"] if o[5].size and set(o[5].tolist()) <= set(bones)]
+
+
+def parts_of(gm):
+    """{part: bones} of a skinned model: PARTS of the skeleton of hero1, else the bones of the objects PART_OBJECTS."""
+    used = {int(b) for o in gm["objects"] for b in set(o[5].tolist())}
+    if used <= {b for g in PARTS.values() for b in g}:
+        return PARTS
+    if len(gm["objects"]) != 17:
+        sys.exit(f"pdm_model_views: bones {sorted(used)} are in no part of PARTS and the model has no 17 objects")
+    return {part: tuple(sorted({int(b) for i in idx for b in set(gm["objects"][i][5].tolist())}))
+            for part, idx in PART_OBJECTS.items()}
 
 
 def texture_index(game: Path) -> dict:
@@ -201,10 +215,7 @@ def main():
         if a.parts:
             if not gm["skinned"]:
                 sys.exit(f"pdm_model_views: {path.stem} is not a skinned model: no --parts")
-            rest = {int(b) for o in gm["objects"] for b in set(o[5].tolist())} - {b for g in PARTS.values() for b in g}
-            if rest:
-                sys.exit(f"pdm_model_views: bones {sorted(rest)} of {path.stem} are in no part of PARTS (the skeleton of hero1)")
-            for part, bones in PARTS.items():
+            for part, bones in parts_of(gm).items():
                 sub = {**gm, "objects": part_objects(gm, bones)}
                 for view, angle in VIEWS:
                     render(sub, textures, a.yaw + angle, a.size, cache).save(out / f"{path.stem}_{part}_{view}.png")
