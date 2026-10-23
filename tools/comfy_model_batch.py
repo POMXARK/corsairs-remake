@@ -18,12 +18,14 @@ goes on; --redo <name> makes it again with the next seed. Then pdm_glb2gm.py put
 
 usage: comfy_model_batch.py <game dir> [--workflow tools/model3d/image_to_model_api.json]
          [--comfy http://127.0.0.1:8188] [--only <name> ...] [--redo <name> ...] [--faces 20000] [--seed 1]
-         [--quality draft|normal|high|max] [--set Class.input=value ...]
+         [--quality draft|normal|high|max] [--set Class.input=value ...] [--crop 0.05]
 
 --quality changes the settings of the template's nodes that decide the detail: the remesh grid, the smoothing,
 the number of faces, the size of the baked textures, the steps of the samplers (QUALITY below; normal leaves the
 template as it is). --set does the same for one input of every node of a class, e.g. --set RemeshMesh.resolution=1280.
-A run prints what was changed. The game takes the model after pdm_glb_optimize.py (--faces, --tex): a bigger
+--crop cuts the grey off the views first: the character fills the frame (a square round all of its four views,
+one scale for them, the margin is the share of the side), so the network sees the face in more pixels than it
+does in a view where the figure is a third of the width. A run prints what was changed. The game takes the model after pdm_glb_optimize.py (--faces, --tex): a bigger
 GLB is the source of that, not the size of the model in the game.
 """
 import argparse
@@ -205,6 +207,33 @@ def parse_set(items):
     return rules
 
 
+def crop_views(views, names, margin, out, size=1024):
+    """The four views of a model into one square that holds the figure of each of them, resized to size."""
+    import numpy as np
+    from PIL import Image
+    out.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        pics = {v: Image.open(views / f"{name}_{v}.png").convert("RGB") for v in VIEWS.values()
+                if (views / f"{name}_{v}.png").exists()}
+        lo, hi = [10 ** 9, 10 ** 9], [-1, -1]
+        for im in pics.values():
+            a = np.asarray(im).astype(int)
+            mask = np.abs(a - a[0, 0]).sum(axis=2) > 36  # the grey of the corner is the background
+            ys, xs = np.nonzero(mask)
+            if len(xs):
+                lo = [min(lo[0], xs.min()), min(lo[1], ys.min())]
+                hi = [max(hi[0], xs.max()), max(hi[1], ys.max())]
+        side = max(hi[0] - lo[0], hi[1] - lo[1]) * (1 + 2 * margin)
+        cx, cy = (lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2
+        box = (cx - side / 2, cy - side / 2, cx + side / 2, cy + side / 2)
+        for v, im in pics.items():
+            bg = tuple(np.asarray(im)[0, 0])
+            canvas = Image.new("RGB", (int(side) + 1, int(side) + 1), bg)  # the box may leave the picture
+            canvas.paste(im, (-int(box[0]), -int(box[1])))
+            canvas.resize((size, size), Image.LANCZOS).save(out / f"{name}_{v}.png")
+        print(f"comfy_model_batch: {name} cropped to {int(side)} px, {len(pics)} views -> {out}")
+
+
 def main():
     ap = argparse.ArgumentParser(usage=__doc__)
     ap.add_argument("game", type=Path)
@@ -218,6 +247,7 @@ def main():
     ap.add_argument("--seed-input", default="seed")
     ap.add_argument("--faces-input", default="value")
     ap.add_argument("--quality", choices=QUALITY, default="normal")
+    ap.add_argument("--crop", type=float, default=0, metavar="MARGIN", help="e.g. 0.05; 0 leaves the views as they are")
     ap.add_argument("--tag", default="", help="the file is <name>_<tag>.glb: variants of a model side by side")
     ap.add_argument("--set", nargs="*", default=[], metavar="Class.input=value")
     a = ap.parse_args()
@@ -235,6 +265,10 @@ def main():
     out = a.game / "data" / "ai_models" / "glb"
     names = sorted(p.name[:-len("_front.png")] for p in views.glob("*_front.png"))
     names = [n for n in names if not a.only or n in a.only]
+    if a.crop:
+        views_in = views
+        views = out.parent / "views_crop"
+        crop_views(views_in, [n for n in names if not a.only or n in a.only], a.crop, views)
     stem = {n: f"{n}_{a.tag}" if a.tag else n for n in names}
     todo = [n for n in names if n in a.redo or not (out / f"{stem[n]}.glb").exists()]
     print(f"comfy_model_batch: {len(todo)} of {len(names)} models to make")

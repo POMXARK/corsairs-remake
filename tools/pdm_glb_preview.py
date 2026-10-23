@@ -21,6 +21,7 @@ def args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--size", type=int, default=512)
+    ap.add_argument("--shiny", action="store_true", help="keep the metallic and roughness of the file")
     ap.add_argument("files", nargs="+")
     return ap.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
 
@@ -42,6 +43,19 @@ def load(path):
     before = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=path)
     return [o for o in bpy.data.objects if o not in before]
+
+
+def matte():
+    """The network bakes metallic and roughness; the game takes the base colour only, so the preview shows that."""
+    for mat in bpy.data.materials:
+        for n in (mat.node_tree.nodes if mat.use_nodes else []):
+            if n.type == "BSDF_PRINCIPLED":
+                for name, value in (("Metallic", 0.0), ("Roughness", 1.0)):
+                    for sock in n.inputs:
+                        if sock.name == name:
+                            for link in list(sock.links):
+                                mat.node_tree.links.remove(link)
+                            sock.default_value = value
 
 
 def bounds(objs):
@@ -117,6 +131,8 @@ def main():
         clear()
         cam = scene_setup(a.size)
         fit(load(f))
+        if not a.shiny:
+            matte()
         views = [shot(cam, math.radians(y), tmp) for y in (0, 40, 90)]
         columns.append(np.concatenate(views[::-1], axis=0))  # the image rows go from the bottom
         print("pdm_glb_preview:", f)
