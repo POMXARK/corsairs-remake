@@ -88,7 +88,7 @@ python tools/pdm_models_all.py pdm-game hero1 --install                         
 
 ```
 python tools\pdm_comfy_api.py PixelArtistry_01b_Image_to_Watertight_Mesh_2K.json --save 331 --blender "C:\Blender\blender.exe" --out tools\model3d\watertight_api.json
-python tools\pdm_models_all.py ... --crop 0.05 --workflow tools\model3d\watertight_api.json
+python tools\pdm_models_all.py pdm-game hero1 --steps model,optimize --crop 0.05 --workflow tools\model3d\watertight_api.json --redo
 ```
 
 `--save`: 331 для 01 и 01b, 343 для 02 (с запечённым low-poly), 341 для 03. Имена параметров кастомных нод конвертер берёт из `/object_info`. 01b — на 16 ГБ, перед запуском закрыть другие программы. Если в сетке дырки — запустить ещё раз (seed структуры случайный). Работы 03 (своя сетка → текстура Trellis 2) подойдут для старых персонажей: Pixal3D текстуру не красит (чёрная).

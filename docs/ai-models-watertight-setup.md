@@ -62,7 +62,7 @@ Easy-Install ставит последний Torch (у нас 2.11, CUDA 13.0), 
 ```
 curl.exe -L -o tools\\model3d\\PixelArtistry_01b.json https://raw.githubusercontent.com/pixelartistry/PixelArtistry-Watertight-Meshes/HEAD/workflows/PixelArtistry_01b_Image_to_Watertight_Mesh_2K.json
 python tools\\pdm_comfy_api.py tools\\model3d\\PixelArtistry_01b.json --save 331 --blender "C:\\Blender\\blender.exe" --out tools\\model3d\\watertight_api.json
-python tools\\pdm_models_all.py . hero1 --workflow tools\\model3d\\watertight_api.json --crop 0.05 --redo
+python tools\\pdm_models_all.py pdm-game hero1 --steps model,optimize --workflow tools\\model3d\\watertight_api.json --crop 0.05 --redo
 ```
 
 `--save`: 331 для 01/01b, 343 для 02, 341 для 03. Blender нужен чистый, без аддонов (иначе ошибки в консоли): распакованный zip и пустая папка `portable` рядом с `blender.exe`.
