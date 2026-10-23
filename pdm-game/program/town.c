@@ -199,6 +199,13 @@ void Town_MapKeys()
 	MapKey("ChrTurnH", 256);
 	// the mouse up looks up: 4 is INVERSE_CONTROL of menu.c, included after this file
 	Menu_MapKey("ChrCamTurnV", 257, 4);
+	// hold the right button and the mouse orbits the camera around the hero without turning him;
+	// let go and the camera swings back behind; ChrCamTurnH is the orbit angle in that mode.
+	MapKey("ChrCamSpecMode", 2);
+	MapKey("ChrCamTurnH", 256);
+	// middle button / C: first-person look and back
+	MapKey("ChrCamCameraSwitch", 4);
+	MapKey("ChrCamNormalize", 67);
 	MapKey("Town_Talk", 69);
 	// polled by the dialog entity while it is open: arrows pick an answer, Space, Enter or the left
 	// button say it, PageUp/PageDown page a long speech, Escape leaves
