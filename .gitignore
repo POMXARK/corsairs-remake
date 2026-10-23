@@ -15,3 +15,6 @@ __pycache__/
 game/imgui.ini
 # game.sh package / game.ps1 package: the engine with the converted original
 dist/
+# portable ComfyUI (Easy-Install) next to the game: gigabytes of Python and models
+ComfyUI-Easy-Install/
+work_3D/
