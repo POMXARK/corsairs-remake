@@ -12,7 +12,11 @@ again (another --scale, another model) starts from that copy and not from the re
 puts the originals back. The textures are shared: hero1 uses hero_head, hero_hvostik and hero_new_hand of hero
 too, so they change in both models.
 
-usage: pdm_tex_upscale.py <game dir> <model> ... [--scale 4] [--max 1024] [--method esrgan|lanczos]
+All the textures of the game: --all takes every texture that a .gm of resource/models uses (the people, the ships, the
+towns; not the interface, the sea or the lightmaps, whose files are read by pixel). A run that stops goes on from
+where it was: a texture that is already bigger than its original is skipped, --redo does them again.
+
+usage: pdm_tex_upscale.py <game dir> <model> ... [--all] [--redo] [--scale 4] [--max 1024] [--method esrgan|lanczos]
          [--upscaler RealESRGAN_x4plus.pth] [--comfy http://127.0.0.1:8188]
          [--depth 0.4] [--only-tex hero_body ...] [--skip-tex hero_head ...] [--restore]
 """
@@ -80,7 +84,9 @@ def cavities(img: Image.Image, depth: float) -> Image.Image:
 def main():
     ap = argparse.ArgumentParser(usage=__doc__)
     ap.add_argument("game", type=Path)
-    ap.add_argument("models", nargs="+")
+    ap.add_argument("models", nargs="*")
+    ap.add_argument("--all", action="store_true", help="the textures of every model of the game")
+    ap.add_argument("--redo", action="store_true", help="with --all: also the textures that are done")
     ap.add_argument("--scale", type=int, default=4, help="times bigger")
     ap.add_argument("--max", type=int, default=1024, help="the side of a texture is not bigger than this")
     ap.add_argument("--method", choices=("esrgan", "lanczos"), default="esrgan")
@@ -96,8 +102,17 @@ def main():
     orig = a.game / "data" / "ai_models" / "tex_orig"
     work = a.game / "data" / "ai_models" / "tex_work"
     stems = {}  # texture file of the game -> its name
-    for model in a.models:
-        gm = read_gm(find_model(a.game, model))
+    paths = [find_model(a.game, m) for m in a.models]
+    if a.all:
+        paths += sorted((a.game / "resource" / "models").rglob("*.gm"))
+    if not paths:
+        sys.exit("pdm_tex_upscale: name a model or use --all")
+    for model in paths:
+        try:
+            gm = read_gm(model)
+        except Exception as e:  # a model that is not a .gm of ours does not stop the others
+            print(f"pdm_tex_upscale: {model.name}: {e}")
+            continue
         for name in sorted({o[1] for o in gm["objects"] if o[1]}):
             path = texture_of(index, name)
             short = Path(name.replace("\\", "/")).name.lower()
@@ -113,7 +128,7 @@ def main():
     if a.method == "esrgan" and not a.restore:
         from comfy_view_refine import ComfyImage  # noqa: E402
         comfy = ComfyImage(a.comfy)
-    for path, short in stems.items():
+    for n, (path, short) in enumerate(stems.items(), 1):
         saved = orig / path.name
         if a.restore:
             if saved.exists():
@@ -124,6 +139,8 @@ def main():
             orig.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, saved)
         src = read_tx(saved)
+        if a.all and not a.redo and read_tx(path).width > src.width:
+            continue
         k = min(a.scale, a.max // max(src.size))
         size = (src.width * k, src.height * k)
         if k <= 1:
@@ -140,7 +157,7 @@ def main():
         new = new.convert("RGBA")
         new.putalpha(alpha)
         write_tx(new, path)
-        print(f"{path.name}: {src.width} -> {size[0]} px ({a.method})")
+        print(f"[{n}/{len(stems)}] {path.name}: {src.width} -> {size[0]} px ({a.method})", flush=True)
 
 
 if __name__ == "__main__":
