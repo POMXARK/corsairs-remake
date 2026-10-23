@@ -1,0 +1,140 @@
+{
+ "1": {
+  "class_type": "LoadImage",
+  "_meta": {
+   "title": "IMAGE"
+  },
+  "inputs": {
+   "image": "example.png"
+  }
+ },
+ "2": {
+  "class_type": "UNETLoader",
+  "_meta": {
+   "title": "UNET"
+  },
+  "inputs": {
+   "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+   "weight_dtype": "default"
+  }
+ },
+ "3": {
+  "class_type": "CLIPLoader",
+  "_meta": {
+   "title": "CLIP"
+  },
+  "inputs": {
+   "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+   "type": "qwen_image",
+   "device": "default"
+  }
+ },
+ "4": {
+  "class_type": "VAELoader",
+  "_meta": {
+   "title": "VAE"
+  },
+  "inputs": {
+   "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+  }
+ },
+ "5": {
+  "class_type": "QwenImage21Cache",
+  "_meta": {
+   "title": "CACHE"
+  },
+  "inputs": {
+   "model": [
+    "2",
+    0
+   ],
+   "device": "auto",
+   "dtype": "default"
+  }
+ },
+ "6": {
+  "class_type": "TextEncodeQwenImage21",
+  "_meta": {
+   "title": "PROMPT"
+  },
+  "inputs": {
+   "clip": [
+    "3",
+    0
+   ],
+   "vae": [
+    "4",
+    0
+   ],
+   "prompt": "",
+   "negative_prompt": "",
+   "resolution": 0,
+   "images.image_1": [
+    "1",
+    0
+   ]
+  }
+ },
+ "7": {
+  "class_type": "KSampler",
+  "_meta": {
+   "title": "SEED"
+  },
+  "inputs": {
+   "model": [
+    "5",
+    0
+   ],
+   "positive": [
+    "6",
+    0
+   ],
+   "negative": [
+    "6",
+    1
+   ],
+   "latent_image": [
+    "6",
+    2
+   ],
+   "seed": 1,
+   "steps": 25,
+   "cfg": 1,
+   "sampler_name": "euler",
+   "scheduler": "simple",
+   "denoise": 1
+  }
+ },
+ "8": {
+  "class_type": "VAEDecode",
+  "_meta": {
+   "title": "DECODE"
+  },
+  "inputs": {
+   "samples": [
+    "7",
+    0
+   ],
+   "vae": [
+    "4",
+    0
+   ]
+  }
+ },
+ "9": {
+  "class_type": "SaveImageAdvanced",
+  "_meta": {
+   "title": "SAVE"
+  },
+  "inputs": {
+   "images": [
+    "8",
+    0
+   ],
+   "filename_prefix": "pdm_models/refined",
+   "format": "png",
+   "format.bit_depth": "8-bit",
+   "format.input_color_space": "sRGB"
+  }
+ }
+}
