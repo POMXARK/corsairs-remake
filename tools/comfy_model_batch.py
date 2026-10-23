@@ -59,13 +59,26 @@ class Comfy3D(Comfy):
         status = h[pid].get("status", {})
         if status.get("status_str") == "error":
             raise RuntimeError(f"ComfyUI: {json.dumps(status.get('messages', []), ensure_ascii=False)[:800]}")
-        # Save 3D lists its file under a key of its own (3d, result, ...): any file of a 3D format
-        for out in h[pid]["outputs"].values():
-            for files in out.values():
-                for f in files if isinstance(files, list) else ():
-                    if isinstance(f, dict) and str(f.get("filename", "")).lower().endswith(MODEL_EXT):
+        # Save 3D lists its file under a key of its own (3d, result, ...): any file of a 3D format, however deep
+        def find(o):
+            if isinstance(o, dict):
+                if str(o.get("filename", "")).lower().endswith(MODEL_EXT):
+                    return o
+                o = list(o.values())
+            if isinstance(o, list):
+                for v in o:
+                    if (f := find(v)) is not None:
                         return f
-        raise RuntimeError(f"ComfyUI: no 3D file in the outputs of {pid}: is the SAVE node a Save 3D?")
+            elif isinstance(o, str) and o.lower().endswith(MODEL_EXT):
+                sub, _, name = o.replace("\\", "/").rpartition("/")
+                return {"filename": name, "subfolder": sub, "type": "output"}
+            return None
+
+        if (f := find(h[pid]["outputs"])) is not None:
+            return f
+        raise RuntimeError(f"ComfyUI: no 3D file in the outputs of {pid}: is the SAVE node a Save 3D? "
+                           f"outputs: {json.dumps(h[pid]['outputs'], ensure_ascii=False)[:600]}; "
+                           f"messages: {json.dumps(status.get('messages', []), ensure_ascii=False)[-600:]}")
 
     def fetch(self, a, to: Path):
         q = urllib.parse.urlencode({"filename": a["filename"], "subfolder": a.get("subfolder", ""),
