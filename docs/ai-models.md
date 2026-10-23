@@ -74,6 +74,23 @@ python tools/pdm_models_all.py pdm-game hero1 --install                         
 
 Каждый шаг пропускает то, что уже сделано, `--redo` берёт следующий сид. Перерисовка видов требует `tools/model3d/refine_api.json` (`pdm_comfy_refine_graph.py`).
 
+## Водонепроницаемый меш (PixelArtistry)
+
+Почему наш результат хуже, чем в видео https://www.youtube.com/watch?v=dmDrktqyT5o: в шаблоне Comfy-Org сетка получается через `RemeshMesh` (768, solid fill) и сглаживание — детали стираются, руки склеиваются с плащом. Автор берёт ту же модель, но после неё ставит ноды MostAadTech: Quad Reconstruct → **WTiVo** (watertight, разрешение 1536 и 12 млн proxy points; на 16 ГБ — 2048 и 25 млн) → **LODTailor** (облегчение, остаётся watertight) → Fast Merge. Плюс: фон убирает BiRefNet, поле зрения Pixal3D берёт MoGe (а не фиксированные 20°), 20–24 шага вместо 12, текстура 4096, низкополигональная версия печётся через Bake Forger.
+
+Установка (Windows): ComfyUI Easy-Install + ComfyUI-Trellis2 (VisualBruno) и ноды из README https://github.com/pixelartistry/PixelArtistry-Watertight-Meshes (проще всего его `watertightMeshes_win_installer.bat`: прочитайте файл перед запуском). Нужен чистый Blender без аддонов.
+
+Подключение к нашему конвейеру (ComfyUI запущен):
+
+```
+python tools\pdm_comfy_api.py PixelArtistry_01b_Image_to_Watertight_Mesh_2K.json --save 331 --blender "C:\Blender\blender.exe" --out tools\model3d\watertight_api.json
+python tools\pdm_models_all.py ... --crop 0.05 --workflow tools\model3d\watertight_api.json
+```
+
+`--save`: 331 для 01 и 01b, 343 для 02 (с запечённым low-poly), 341 для 03. Имена параметров кастомных нод конвертер берёт из `/object_info`. 01b — на 16 ГБ, перед запуском закрыть другие программы. Если в сетке дырки — запустить ещё раз (seed структуры случайный). Работы 03 (своя сетка → текстура Trellis 2) подойдут для старых персонажей: Pixal3D текстуру не красит (чёрная).
+
+Авторство: PixelArtistry (MIT), MostAadTech (WTiVo, LODTailor, Quad Reconstruct), VisualBruno (ComfyUI-Trellis2), Comfy-Org (шаблон, MIT), Tencent ARC (Pixal3D), Microsoft (TRELLIS.2).
+
 ## Шаг 3. Пакетная генерация
 
 ```bash

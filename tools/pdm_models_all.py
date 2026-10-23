@@ -8,7 +8,7 @@ started again; --redo makes the models again with the next seed. The last step (
 the game in place of the originals (pdm_glb2gm.py --restore brings the originals back), it is not a default.
 
 usage: pdm_models_all.py <game dir> [<model> ...] [--steps views,refine,model,optimize] [--install] [--redo]
-         [--quality normal] [--crop 0.05] [--faces 12000] [--tex 1024] [--comfy URL] [--set Class.input=value ...]
+         [--quality normal] [--crop 0.05] [--faces 12000] [--tex 1024] [--comfy URL] [--workflow API.json] [--set Class.input=value ...]
   <model>: characters/hero1 or hero1; none given: the models that have views already (the views step is skipped)
 """
 import argparse
@@ -38,6 +38,7 @@ def main():
     ap.add_argument("--faces", type=int, default=12000)
     ap.add_argument("--tex", type=int, default=1024)
     ap.add_argument("--comfy", default="http://127.0.0.1:8188")
+    ap.add_argument("--workflow", type=Path, help="the API graph of the model step (default: image_to_model_api.json)")
     ap.add_argument("--set", nargs="*", default=[])
     a = ap.parse_args()
     steps = a.steps.split(",")
@@ -59,7 +60,8 @@ def main():
         views = ai / ("views_refined" if "refine" in steps or (ai / "views_refined").exists() else "views")
         extra = ["--set", *a.set] if a.set else []
         run(TOOLS / "comfy_model_batch.py", a.game, "--comfy", a.comfy, "--views", views, "--only", *names,
-            "--quality", a.quality, "--crop", a.crop, *redo, *extra)
+            "--quality", a.quality, "--crop", a.crop, *redo,
+            *(["--workflow", a.workflow] if a.workflow else []), *extra)
     if "optimize" in steps:
         run(TOOLS / "pdm_glb_optimize.py", a.game, *names, "--faces", a.faces, "--tex", a.tex)
     if a.install:
