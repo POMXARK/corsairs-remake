@@ -297,7 +297,61 @@ def jump_frame(rotations, start, end):
     return next((start + i for i, step in enumerate(steps) if step > limit), None)
 
 
-def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights, rotations, head=None):
+# ours: the walk and the run of the original are keyed at 10 frames a second and played twice as fast; a pose
+# every 50 ms with a straight line between them (up to 160 degrees of a bone in a key of the run) reads as a
+# jerk. smooth_cycles() adds the two cycles again, SMOOTH_UP times denser, along a Catmull-Rom curve
+SMOOTH_UP = 3
+
+
+def catmull(p0, p1, p2, p3, t):
+    return tuple(0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t ** 3)
+                 for a, b, c, d in zip(p0, p1, p2, p3))
+
+
+def smooth_cycle(track, start, n, unit):
+    """The frames start..start+n-1 of a track, a closed cycle, as UP times as many along a spline and the first
+    one again at the end; unit: the samples are quaternions (made the same way round, normalised)."""
+    pts = [track[start + i] for i in range(n)]
+    if unit:
+        for i in range(1, n):
+            if sum(a * b for a, b in zip(pts[i - 1], pts[i])) < 0:
+                pts[i] = tuple(-c for c in pts[i])
+    out = []
+    for i in range(n * SMOOTH_UP + 1):
+        j, t = divmod(i, SMOOTH_UP)
+        a, b, c, d = (pts[(j + o) % n] for o in (-1, 0, 1, 2))
+        if unit and sum(x * y for x, y in zip(b, a)) < 0:
+            a = tuple(-v for v in a)
+        if unit and sum(x * y for x, y in zip(b, d)) < 0:
+            d = tuple(-v for v in d)
+        v = catmull(a, b, c, d, t / SMOOTH_UP)
+        if unit:
+            length = math.sqrt(sum(x * x for x in v)) or 1.0
+            v = tuple(x / length for x in v)
+        out.append(v)
+    return out
+
+
+def smooth_cycles(actions, root_positions, rotations):
+    """Appends the smooth cycles of the walk and the run to the tracks; returns {action: (first new frame, first
+    frame of the original, its length)}."""
+    done = {}
+    for name in ("walk", "run"):
+        src = next((s for s in ACTIONS[name] if s in actions), None)
+        if src is None:
+            continue
+        start, end = sorted(actions[src][:2])
+        n = end - start
+        if n < 4 or end >= len(root_positions):
+            continue
+        done[name] = (len(root_positions), start, n)
+        root_positions.extend(smooth_cycle(root_positions, start, n, False))
+        for bone in rotations:
+            bone.extend(smooth_cycle(bone, start, n, True))
+    return done
+
+
+def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights, rotations, head=None, smooth=None):
     """The Storm actions the Character entity looks for, from the PDM ones (ACTIONS); heights: the
     height of the pelvis per frame, for the steps; head: the bone the engine turns to look at someone."""
     text = f"; converted by tools/pdm_character.py, {FPS:g} frames a second as in the original\n"
@@ -306,7 +360,7 @@ def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights,
         text += f'data = "Head bone index", "{head}"\n'
     found = []
 
-    def section(name, start, end, speed, loop=True, data=(), rate=1.0, events=()):
+    def section(name, start, end, speed, loop=True, data=(), rate=1.0, events=(), steps=None):
         nonlocal text
         reverse = start > end
         start, end = min(start, end, frames - 1), min(max(start, end), frames - 1)
@@ -322,7 +376,7 @@ def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights,
         if speed:
             text += f'data = "Walk speed", "{speed:.3f}"\n'
             # the Character entity plays a step sound (step_<material of the patch>) on these events
-            left, right = step_frames(heights, start, end)
+            left, right = steps or step_frames(heights, start, end)
             text += f'event = "LStep", {left}, always\nevent = "RStep", {right}, always\n'
 
     for name, sources in ACTIONS.items():
@@ -335,6 +389,15 @@ def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights,
             # the speed of a cycle is the speed of the walk it is made of (a run made of the walk walks)
             rate = RUN_RATE if name == "run" else WALK_RATE
             speed = actions[src][2] / 100.0 * k * rate
+            if smooth and name in smooth:
+                # the cycle made denser (smooth_cycles): its frames, the steps of the original at their places
+                base, first, n = smooth[name]
+                left, right = step_frames(heights, min(start, end), max(start, end))
+                steps = tuple(base + round((f - first) % n * SMOOTH_UP) for f in (left, right))
+                start, end, rate = base, base + n * SMOOTH_UP, rate * SMOOTH_UP
+                section(name, start, end, speed, rate=rate, steps=steps)
+                section("back " + name, end, start, -speed, rate=rate, steps=steps)
+                continue
             section(name, start, end, speed, rate=rate)
             # walking back plays the cycle the other way
             section("back " + name, end, start, -speed, rate=rate)
@@ -426,12 +489,14 @@ def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: fl
 
     drift = check_pose(bone_parents, joints, root_positions, rotations, rot, pos, order, k)
     write_gm(meshes, out / "models" / "characters" / f"{gm_name}.gm", skinned=True)
+    cycles = smooth_cycles(read_actions(index_files(res / "WORLDS" / "CHARACTERS")[anim.lower()]),
+                           root_positions, rotations)
     write_an(out / "animation" / f"{name}.an", FPS, bone_parents, joints, root_positions, rotations)
     # anim_types.idf names the files in either case (traktir_man.idf for Traktir_Man.idf)
     anims = index_files(res / "WORLDS" / "CHARACTERS")
-    found = write_ani(out / "animation" / f"{name}.ani", name, read_actions(anims[anim.lower()]), k, frames,
-                      [p[1] for p in root_positions], rotations,
-                      head=order.index(head) if head is not None else None)
+    found = write_ani(out / "animation" / f"{name}.ani", name, read_actions(anims[anim.lower()]), k,
+                      len(root_positions), [p[1] for p in root_positions[:frames]], rotations,
+                      head=order.index(head) if head is not None else None, smooth=cycles)
     missing = []
     for stem in sorted(used):
         src = textures.get(stem)
