@@ -82,6 +82,8 @@ python tools/pdm_models_all.py pdm-game hero1 --install                         
 
 Установка (Windows): ComfyUI Easy-Install + ComfyUI-Trellis2 (VisualBruno) и ноды из README https://github.com/pixelartistry/PixelArtistry-Watertight-Meshes (проще всего его `watertightMeshes_win_installer.bat`: прочитайте файл перед запуском). Нужен чистый Blender без аддонов.
 
+Полный журнал установки на Windows и подводные камни: [ai-models-watertight-setup.md](ai-models-watertight-setup.md).
+
 Подключение к нашему конвейеру (ComfyUI запущен):
 
 ```
