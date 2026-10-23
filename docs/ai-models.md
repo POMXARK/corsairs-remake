@@ -78,6 +78,8 @@ python tools/pdm_models_all.py pdm-game hero1 --install                         
 
 Почему наш результат хуже, чем в видео https://www.youtube.com/watch?v=dmDrktqyT5o: в шаблоне Comfy-Org сетка получается через `RemeshMesh` (768, solid fill) и сглаживание — детали стираются, руки склеиваются с плащом. Автор берёт ту же модель, но после неё ставит ноды MostAadTech: Quad Reconstruct → **WTiVo** (watertight, разрешение 1536 и 12 млн proxy points; на 16 ГБ — 2048 и 25 млн) → **LODTailor** (облегчение, остаётся watertight) → Fast Merge. Плюс: фон убирает BiRefNet, поле зрения Pixal3D берёт MoGe (а не фиксированные 20°), 20–24 шага вместо 12, текстура 4096, низкополигональная версия печётся через Bake Forger.
 
+Подводный камень: WTiVo поставляется только как `cppmodules.cp312-win_amd64.pyd`, то есть нужен **Python 3.12** (и torch 2.8.0 + CUDA 12.8). В Comfy Desktop (venv на Python 3.13) нода не импортируется (`No module named wtivo_core / cppmodules`), `tools/pdm_install_watertight_nodes.ps1` там не поможет. Нужен отдельный ComfyUI Easy-Install; модели из Comfy Desktop подключаются через `extra_model_paths.yaml`.
+
 Установка (Windows): ComfyUI Easy-Install + ComfyUI-Trellis2 (VisualBruno) и ноды из README https://github.com/pixelartistry/PixelArtistry-Watertight-Meshes (проще всего его `watertightMeshes_win_installer.bat`: прочитайте файл перед запуском). Нужен чистый Blender без аддонов.
 
 Подключение к нашему конвейеру (ComfyUI запущен):
