@@ -218,6 +218,7 @@ def main():
     ap.add_argument("--seed-input", default="seed")
     ap.add_argument("--faces-input", default="value")
     ap.add_argument("--quality", choices=QUALITY, default="normal")
+    ap.add_argument("--tag", default="", help="the file is <name>_<tag>.glb: variants of a model side by side")
     ap.add_argument("--set", nargs="*", default=[], metavar="Class.input=value")
     a = ap.parse_args()
     if not a.workflow.exists():
@@ -234,13 +235,15 @@ def main():
     out = a.game / "data" / "ai_models" / "glb"
     names = sorted(p.name[:-len("_front.png")] for p in views.glob("*_front.png"))
     names = [n for n in names if not a.only or n in a.only]
-    todo = [n for n in names if n in a.redo or not (out / f"{n}.glb").exists()]
+    stem = {n: f"{n}_{a.tag}" if a.tag else n for n in names}
+    todo = [n for n in names if n in a.redo or not (out / f"{stem[n]}.glb").exists()]
     print(f"comfy_model_batch: {len(todo)} of {len(names)} models to make")
     comfy = Comfy3D(a.comfy)
     spent = []  # seconds of the models made in this run, for the estimate
     tries = {}
     if (out / "seeds.json").exists():
         tries = json.loads((out / "seeds.json").read_text())
+    tries = {n: tries.get(stem[n], 0) for n in names}
     started = time.time()
     for k, name in enumerate(todo):
         g = copy.deepcopy(graph)
@@ -272,11 +275,12 @@ def main():
         print()
         spent.append(time.time() - t0)
         suffix = Path(f["filename"]).suffix.lower()
-        comfy.fetch(f, out / f"{name}{suffix}")
-        tries[name] = seed - a.seed
-        (out / "seeds.json").write_text(json.dumps(tries, indent=1, sort_keys=True))
+        comfy.fetch(f, out / f"{stem[name]}{suffix}")
+        saved = json.loads((out / "seeds.json").read_text()) if (out / "seeds.json").exists() else {}
+        saved[stem[name]] = seed - a.seed
+        (out / "seeds.json").write_text(json.dumps(saved, indent=1, sort_keys=True))
         left = (time.time() - started) / (k + 1) * (len(todo) - k - 1)
-        print(f"{name}{suffix}: seed {seed}, {left / 60:.0f} min left", flush=True)
+        print(f"{stem[name]}{suffix}: seed {seed}, {left / 60:.0f} min left", flush=True)
 
 
 if __name__ == "__main__":
