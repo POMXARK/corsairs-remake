@@ -188,15 +188,17 @@ void Save_LoadTown()
 	PostEvent("Town_Tick", TOWN_TICK_MS);
 }
 
-// the header of the file the lists show: the island, the town or the sea, the money
+// the header of the file the lists show: the money, the town or the sea, the island; the header holds 31 bytes (a Russian
+// letter is two), the engine cuts the rest, so the island that may not fit comes last
 string Save_Info()
 {
 	string island = savePlace;
 	if (saveFrom == "town") { island = townIsland; }
 	string place = island;
 	if (CheckAttribute(&PdmIslands, island + ".label")) { place = PdmIslands.(island).label; }
-	if (saveFrom == "town") { place = place + ", город"; } else { place = place + ", в море"; }
-	return place + ", " + PlayerCard.money + " золотых";
+	string where = "в море, ";
+	if (saveFrom == "town") { where = "город, "; }
+	return PlayerCard.money + " з., " + where + place;
 }
 
 // ---------- the screens "Загрузить игру" and "Сохранить игру" (screens.c opens them) ----------
