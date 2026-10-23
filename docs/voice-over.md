@@ -281,3 +281,11 @@ rm -r $D && python3 -I tools/pdm_voice_lines.py pdm-game --bind            # у�
 - Chatterbox Multilingual, MIT, 23 языка: [huggingface.co/ResembleAI/chatterbox](https://huggingface.co/ResembleAI/chatterbox/blob/refs%2Fpr%2F48/README.md), ноды [ComfyUI_Fill-ChatterBox](https://github.com/filliptm/ComfyUI_Fill-ChatterBox)
 - ESpeech-TTS-1: [huggingface.co/ESpeech](https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K/blob/main/README.md); некоммерческие русские F5: [attashe/F5-TTS-RU](https://huggingface.co/spaces/attashe/F5-TTS-RU/raw/main/README.md)
 - Обзоры и лицензии: [ocdevel.com](https://ocdevel.com/blog/20250720-tts), [chimitdorzhi.tech](https://chimitdorzhi.tech/en/ii-modeli/napravlenie/sintez-rechi/)
+
+### Стартовые значения из окружения
+
+`run.sh` / `run.ps1` / `game.sh` / `game.ps1` читают `VOLUME_FX`, `VOLUME_MUSIC`, `VOLUME_VOICE` (0–100) и `NPC_VOICE` (0/1): сначала переменная окружения, затем `pdm-game/settings.ini`, затем умолчание 80/50/100/1. Windows: `set VOLUME_FX=60` перед запуском `run.ps1`. Значения со страницы настроек в `settings.ini` не пишутся (скрипты не умеют писать файлы) — они действуют до выхода.
+
+## Запись видео из игры (F9)
+
+В `pdm-game/engine.ini` включено `record_video = 1`. F9 запускает `ffmpeg` (x11grab на Linux, gdigrab на Windows) на окно игры, повторное F9 заканчивает запись; файл `<дата>.mp4` лежит в каталоге Screenshots рядом со снимками F8. Нужен `ffmpeg` в PATH или `ffmpeg_path`. Звук — `record_audio_input`, например `-f pulse -i <sink>.monitor` или `-f dshow -i audio=<устройство>`. Не проверено на Windows.
