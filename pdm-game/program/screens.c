@@ -41,6 +41,7 @@ void Screen_Init()
 	SetEventHandler("Screen_Go", "Screen_Go", 0);
 	SetEventHandler("Screen_Pending", "Screen_Pending", 0);
 	SetEventHandler("Screen_Tour", "Screen_Tour", 0);
+	SetEventHandler("Screen_Credits", "Screen_CreditsStep", 0);
 	SetEventHandler("PdmStory_Interface", "Screen_Launch", 0);
 	MapKey("Screen_Status", SCREEN_KEY);
 }
@@ -126,6 +127,31 @@ void Screen_Text(string node, string text)
 	SendMessage(&GameInterface, "lss", MSG_INTERFACE_SET_FORMATEDTEXT, node, text);
 }
 
+// the credits (ours): the text of credits.ini in CREDITSTEXT goes up by a line from time to time, as the
+// original scrolls it, and starts again after the end
+float screenCreditsAt = 0.0;
+bool screenCreditsRuns = false;
+
+void Screen_CreditsStep()
+{
+	if (screenName != "credits") { screenCreditsRuns = false; return; }
+	screenCreditsAt = screenCreditsAt + 0.002;
+	if (screenCreditsAt > 1.1) { screenCreditsAt = 0.0; }
+	float at = screenCreditsAt;
+	if (at > 1.0) { at = 1.0; }
+	SendMessage(&GameInterface, "lslf", MSG_INTERFACE_MSG_TO_NODE, "CREDITSTEXT", 2, at);
+	PostEvent("Screen_Credits", 100);
+}
+
+void Screen_Credits()
+{
+	Screen_Text("CREDITSTEXT", PdmScreens.credits.credits);
+	screenCreditsAt = 0.0;
+	if (screenCreditsRuns) { return; }
+	screenCreditsRuns = true;
+	PostEvent("Screen_Credits", 100);
+}
+
 // the fields of the original the game knows already: the hero under his face, his status and his ship
 void Screen_Fill()
 {
@@ -143,6 +169,7 @@ void Screen_Fill()
 	}
 	if (findSubStr(screenName, "messagebox", 0) == 0) { Screen_Text("EDITTEXT", screenMessage); return; }
 	if (screenName == "options") { Options_Fill(); return; }
+	if (screenName == "credits") { Screen_Credits(); return; }
 	Screen_TitlePlace();
 	if (screenName == "trade") { Trade_Lists(); }
 	// the name and the money under the face would read as the ones of the save under the cursor
