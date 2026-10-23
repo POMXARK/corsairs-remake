@@ -18,6 +18,13 @@ goes on; --redo <name> makes it again with the next seed. Then pdm_glb2gm.py put
 
 usage: comfy_model_batch.py <game dir> [--workflow tools/model3d/image_to_model_api.json]
          [--comfy http://127.0.0.1:8188] [--only <name> ...] [--redo <name> ...] [--faces 20000] [--seed 1]
+         [--quality draft|normal|high|max] [--set Class.input=value ...]
+
+--quality changes the settings of the template's nodes that decide the detail: the remesh grid, the smoothing,
+the number of faces, the size of the baked textures, the steps of the samplers (QUALITY below; normal leaves the
+template as it is). --set does the same for one input of every node of a class, e.g. --set RemeshMesh.resolution=1280.
+A run prints what was changed. The game takes the model after pdm_glb_optimize.py (--faces, --tex): a bigger
+GLB is the source of that, not the size of the model in the game.
 """
 import argparse
 import base64
@@ -153,6 +160,51 @@ def set_number(node, name, value, title):
     inputs[name] = value
 
 
+# class of the node -> input -> value of every quality; the input is left alone if the graph has no such node
+QUALITY = {
+    "draft": {"RemeshMesh": {"resolution": 512, "smooth_iters": 20}, "DecimateMesh": {"target_face_count": 300000},
+              "BakeTextureFromVoxel": {"texture_size": 1024}, "UnwrapMesh": {"resolution": 1024},
+              "BakeAmbientOcclusion": {"resolution": 512}, "BakeNormalMapFromMesh": {"resolution": 1024}},
+    "normal": {},
+    "high": {"RemeshMesh": {"resolution": 1024, "smooth_iters": 2}, "DecimateMesh": {"target_face_count": 1500000},
+             "BakeTextureFromVoxel": {"texture_size": 4096}, "UnwrapMesh": {"resolution": 4096},
+             "BakeAmbientOcclusion": {"resolution": 2048}, "BakeNormalMapFromMesh": {"resolution": 4096},
+             "KSampler": {"steps": ("min", 20)}},
+    "max": {"RemeshMesh": {"resolution": 1280, "smooth_iters": 0}, "DecimateMesh": {"target_face_count": 2500000},
+            "BakeTextureFromVoxel": {"texture_size": 4096}, "UnwrapMesh": {"resolution": 4096},
+            "BakeAmbientOcclusion": {"resolution": 2048}, "BakeNormalMapFromMesh": {"resolution": 4096},
+            "KSampler": {"steps": ("min", 30)}},
+}
+
+
+def apply_quality(graph, rules):
+    """rules: class -> input -> value, or ("min", value) to raise the input to at least that. Returns the log."""
+    log = []
+    for nid, node in graph.items():
+        for name, value in rules.get(node["class_type"], {}).items():
+            old = node["inputs"].get(name)
+            if old is None or isinstance(old, list):  # no such input, or it comes from another node
+                continue
+            if isinstance(value, tuple):
+                value = max(old, value[1])
+            if old != value:
+                node["inputs"][name] = value
+                log.append(f"{node['class_type']}[{nid}].{name}: {old} -> {value}")
+    return log
+
+
+def parse_set(items):
+    rules = {}
+    for item in items:
+        try:
+            key, value = item.split("=", 1)
+            cls, name = key.split(".", 1)
+            rules.setdefault(cls, {})[name] = json.loads(value)
+        except ValueError:
+            sys.exit(f"comfy_model_batch: --set takes Class.input=value, not {item}")
+    return rules
+
+
 def main():
     ap = argparse.ArgumentParser(usage=__doc__)
     ap.add_argument("game", type=Path)
@@ -165,6 +217,8 @@ def main():
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--seed-input", default="seed")
     ap.add_argument("--faces-input", default="value")
+    ap.add_argument("--quality", choices=QUALITY, default="normal")
+    ap.add_argument("--set", nargs="*", default=[], metavar="Class.input=value")
     a = ap.parse_args()
     if not a.workflow.exists():
         sys.exit(f"comfy_model_batch: no {a.workflow}: export the template as API (docs/ai-models.md, step 3)")
@@ -172,6 +226,10 @@ def main():
     for title in ("IMAGE", "SAVE"):
         if titled(graph, title) is None:
             sys.exit(f"comfy_model_batch: no node titled {title} in the workflow (docs/ai-models.md, step 3)")
+    log = apply_quality(graph, QUALITY[a.quality])
+    log += apply_quality(graph, parse_set(a.set))
+    if log:
+        print("comfy_model_batch: quality " + a.quality + "\n  " + "\n  ".join(log))
     views = a.views or a.game / "data" / "ai_models" / "views"
     out = a.game / "data" / "ai_models" / "glb"
     names = sorted(p.name[:-len("_front.png")] for p in views.glob("*_front.png"))
