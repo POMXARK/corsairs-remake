@@ -28,10 +28,93 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from pdm_glb2gm import read_glb  # noqa: E402
-
 MAX_VERTICES = 65535
+COMPONENTS = {5120: "i1", 5121: "u1", 5122: "<i2", 5123: "<u2", 5125: "<u4", 5126: "<f4"}
+WIDTH = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
+
+
+def read_glb(path: Path):
+    """The triangles of a .glb in its scene: [(positions, normals or None, uvs or None, triangles, image)],
+    the node transforms applied; image is the base colour (a texture, or its factor as one pixel)."""
+    data = path.read_bytes()
+    magic, _, _ = struct.unpack_from("<3I", data)
+    if magic != 0x46546C67:
+        sys.exit(f"pdm_glb_optimize: {path} is not a binary glTF (.glb)")
+    off, doc, blob = 12, None, b""
+    while off < len(data):
+        size, kind = struct.unpack_from("<2I", data, off)
+        chunk = data[off + 8:off + 8 + size]
+        if kind == 0x4E4F534A:
+            doc = json.loads(chunk)
+        elif kind == 0x004E4942:
+            blob = chunk
+        off += 8 + size
+
+    def view(i):
+        v = doc["bufferViews"][i]
+        return blob[v.get("byteOffset", 0):v.get("byteOffset", 0) + v["byteLength"]], v.get("byteStride")
+
+    def accessor(i):
+        a = doc["accessors"][i]
+        raw, stride = view(a["bufferView"])
+        dtype, width = np.dtype(COMPONENTS[a["componentType"]]), WIDTH[a["type"]]
+        start, item = a.get("byteOffset", 0), dtype.itemsize * width
+        stride = stride or item
+        rows = np.frombuffer(raw, np.uint8, a["count"] * stride - (stride - item), start)
+        rows = np.lib.stride_tricks.as_strided(rows, (a["count"], item), (stride, 1))
+        out = np.frombuffer(rows.copy().tobytes(), dtype).reshape(a["count"], width).astype(np.float64)
+        if a.get("normalized") and dtype.kind in "iu":
+            out /= np.iinfo(dtype).max
+        return out
+
+    def image(material):
+        pbr = doc.get("materials", [{}])[material].get("pbrMetallicRoughness", {}) if material is not None else {}
+        tex = pbr.get("baseColorTexture")
+        if tex is not None:
+            src = doc["images"][doc["textures"][tex["index"]]["source"]]
+            if "bufferView" in src:
+                return Image.open(BytesIO(view(src["bufferView"])[0])).convert("RGBA")
+            sys.exit(f"pdm_glb_optimize: {path}: the texture is a file of its own ({src.get('uri')}), save as .glb")
+        factor = pbr.get("baseColorFactor", (0.8, 0.8, 0.8, 1.0))
+        return Image.new("RGBA", (4, 4), tuple(round(c * 255) for c in factor))
+
+    def matrix(node):
+        if "matrix" in node:
+            return np.array(node["matrix"]).reshape(4, 4).T
+        x, y, z, w = node.get("rotation", (0, 0, 0, 1))
+        r = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                      [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                      [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+        m = np.eye(4)
+        m[:3, :3] = r * np.array(node.get("scale", (1, 1, 1)))
+        m[:3, 3] = node.get("translation", (0, 0, 0))
+        return m
+
+    parts = []
+
+    def walk(n, parent):
+        node = doc["nodes"][n]
+        m = parent @ matrix(node)
+        for prim in doc["meshes"][node["mesh"]]["primitives"] if "mesh" in node else ():
+            if prim.get("mode", 4) != 4:
+                continue
+            at = prim["attributes"]
+            pos = accessor(at["POSITION"]) @ m[:3, :3].T + m[:3, 3]
+            normal = accessor(at["NORMAL"]) @ np.linalg.inv(m[:3, :3]) if "NORMAL" in at else None
+            uv = accessor(at["TEXCOORD_0"]) if "TEXCOORD_0" in at else None
+            tris = (accessor(prim["indices"]).astype(np.int64).reshape(-1, 3) if "indices" in prim
+                    else np.arange(len(pos)).reshape(-1, 3))
+            parts.append((pos, normal, uv, tris, image(prim.get("material"))))
+        for c in node.get("children", ()):
+            walk(c, m)
+
+    scene = doc["scenes"][doc.get("scene", 0)] if doc.get("scenes") else {"nodes": range(len(doc["nodes"]))}
+    for n in scene["nodes"]:
+        walk(n, np.eye(4))
+    if not parts:
+        sys.exit(f"pdm_glb_optimize: {path} has no triangles")
+    return parts
+
 
 
 def weld(pos, tris, digits=6):
