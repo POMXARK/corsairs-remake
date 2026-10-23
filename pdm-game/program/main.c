@@ -48,6 +48,7 @@ aref PlayerShipType;
 #include "review.c"
 #include "menu.c"
 #include "map.c"
+#include "trade.c"
 #include "screens.c"
 #include "save.c"
 #include "options.c"

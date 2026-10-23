@@ -115,6 +115,7 @@ void Screen_GameMenu()
 void Screen_Show(string name)
 {
 	screenName = name;
+	if (name == "trade") { Trade_Begin(); }
 	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\" + name + ".ini");
 	Screen_Fill();
 	Trace("PDM screen: " + name);
@@ -143,6 +144,7 @@ void Screen_Fill()
 	if (findSubStr(screenName, "messagebox", 0) == 0) { Screen_Text("EDITTEXT", screenMessage); return; }
 	if (screenName == "options") { Options_Fill(); return; }
 	Screen_TitlePlace();
+	if (screenName == "trade") { Trade_Lists(); }
 	// the name and the money under the face would read as the ones of the save under the cursor
 	if (screenName == "loadgame" || screenName == "savegame") { Save_ScreenFill(); return; }
 	if (!CheckAttribute(PlayerCard, "money")) { return; }
@@ -180,6 +182,7 @@ void Screen_Fill()
 void Screen_Lists()
 {
 	if (screenName == "schest") { Screen_Items(); return; }
+	if (screenName == "trade" && townIsland != "") { return; }
 	if (!CheckAttribute(PdmScreens, screenName + ".list")) { return; }
 	aref columns, all, row;
 	makearef(columns, PdmScreens.(screenName).list);
@@ -310,10 +313,7 @@ int Screen_Cargo()
 	if (!CheckAttribute(PlayerShipCard, "cargo")) { return 0; }
 	aref cargo;
 	makearef(cargo, PlayerShipCard.cargo);
-	int sum = 0;
-	int n = GetAttributesNum(cargo);
-	for (int i = 0; i < n; i++) { sum = sum + sti(GetAttributeValue(GetAttributeN(cargo, i))); }
-	return sum;
+	return Trade_Load();
 }
 
 // the first number of "4,0,0" (the guns of a board, of the stern)
@@ -328,6 +328,7 @@ string Screen_First(string list)
 // the ship of the hero until they have their own, P9)
 string Screen_Value(string node)
 {
+	if (screenName == "trade" && Trade_Value(node) != "") { return Trade_Value(node); }
 	if (node == "S_CAPTAIN") { return PlayerCard.name; }
 	if (node == "S_RANK") { return PlayerCard.rank; }
 	if (node == "S_EXPERIENCE") { return PlayerCard.experience; }
@@ -362,6 +363,7 @@ void Screen_Command()
 		if (node == "LB_NEWGAME") { return; }
 	}
 	if (screenName == "messagebox" && node == "LB_YES" && screenMessageYes == "exit") { ExitProgram(); return; }
+	if (screenName == "trade" && Trade_Click(node)) { return; }
 	if (Screen_Page(node)) { return; }
 	Screen_Click(node);
 }
@@ -455,6 +457,24 @@ string Screen_TourNext(string list)
 	return name;
 }
 
+// the trade in the tour: the second goods bought five times and sold at once (the log tells the money and the hold)
+void Screen_TourTrade(string name)
+{
+	if (name != "trade") { return; }
+	PlayerCard.money = 500;
+	string keys = "LB_TOVARDOWN,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_BUY,LB_LEFT,LB_SELL,LB_TOVARDOWN,LB_ALL,LB_BUY";
+	int at = 0;
+	int t = 300;
+	while (at < strlen(keys))
+	{
+		int end = findSubStr(keys, ",", at);
+		if (end < 0) { end = strlen(keys); }
+		PostEvent("ievnt_command", t, "ss", "click", strcut(keys, at, end - 1));
+		at = end + 1;
+		t = t + 120;
+	}
+}
+
 // SCENE=screens: the pages of the menu, a new game, F1 in the town and its button "Корабль", the other
 // screens over the game with the hero filled in, Escape back to the game
 void Screen_Tour()
@@ -483,7 +503,7 @@ void Screen_Tour()
 	if (screenTourStage == 2)
 	{
 		name = Screen_TourNext(screenTourGame);
-		if (name != "") { Screen_Show(name); PostEvent("Screen_Tour", SCREEN_AUTO_MS); return; }
+		if (name != "") { Screen_Show(name); Screen_TourTrade(name); PostEvent("Screen_Tour", SCREEN_AUTO_MS); return; }
 		screenTourStage = 3;
 		Screen_Escape();
 		PostEvent("Screen_Tour", SCREEN_AUTO_MS);
