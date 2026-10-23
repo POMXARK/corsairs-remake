@@ -332,6 +332,8 @@ LEVEL = 0.4  # metres: floors farther apart in height are different floors
 MIN_AREA = 1e-4  # square metres: slivers smaller than this are dropped
 MERGE = 4  # SNAP: vertices of one level this near are one, a sliver between them goes (ours)
 GRID = 1.0  # metres: the cell of the vertex lookup
+STITCHED = {"patch_city_highrock", "patch_city_sharkisland", "patch_grot"}  # the patches stitch() is used on
+STITCH = 20  # SNAP: two ends of open edges this near are one vertex (ours), 2 cm
 
 
 def area2(poly):
@@ -398,7 +400,54 @@ def plane(tri):
     return lambda x, z: y0 + a * (x - x0) + c * (z - z0)
 
 
-def clean_patch(triangles):
+def stitch(out):
+    """Closes the gaps of a few centimetres between the open edges of the floor (ours).
+
+    Pieces cut apart by obstacles leave vertices 1-2 cm from each other (a wedge 7 m long, its three
+    corners within 2 cm): the neighbours share no edge, an invisible wall across a street. The ends of open
+    edges (one triangle) that are closer than STITCH at one level become one vertex; the triangles that
+    collapse or turn over by it go. Repeated while something joins and the open edges get fewer."""
+    def count(tris):
+        edges = {}
+        for tri in tris:
+            for j in range(3):
+                edges[frozenset((tri[j], tri[j - 1]))] = edges.get(frozenset((tri[j], tri[j - 1])), 0) + 1
+        return edges
+
+    for _ in range(8):
+        edges = count(out)
+        ends = sorted({v for e, n in edges.items() if n == 1 for v in e})
+        cells = {}
+        for v in ends:
+            cells.setdefault((v[0] // STITCH, v[1] // STITCH), []).append(v)
+        parent = {}
+
+        def root(v):
+            while parent.get(v, v) != v:
+                v = parent[v]
+            return v
+
+        for (i, j), vs in cells.items():
+            for v in vs:
+                for q in (q for di in (-1, 0, 1) for dj in (-1, 0, 1) for q in cells.get((i + di, j + dj), ())):
+                    if q < v and (q[0] - v[0]) ** 2 + (q[1] - v[1]) ** 2 <= STITCH * STITCH and abs(q[2] - v[2]) < LEVEL:
+                        a, b = root(q), root(v)
+                        if a != b:
+                            parent[max(a, b)] = min(a, b)
+        if not parent:
+            break
+        fresh = []
+        for tri in out:
+            t = [root(v) for v in tri]
+            if len(set(t)) == 3 and area2([(v[0], v[1]) for v in t]) * SNAP * SNAP > MIN_AREA:
+                fresh.append(t)
+        if sum(n == 1 for n in count(fresh).values()) >= sum(n == 1 for n in edges.values()):
+            break
+        out = fresh
+    return out
+
+
+def clean_patch(triangles, joined=False):
     """Non-overlapping triangles meeting edge to edge, for write_ptc.
 
     - a triangle keeps only the part not covered by the ones before it on the same level: the
@@ -542,6 +591,9 @@ def clean_patch(triangles):
             # counter-clockwise as the outline (ours): snapped to SNAP, a fan of a narrow piece may turn over
             if area2([(v[0], v[1]) for v in tri]) * SNAP * SNAP > MIN_AREA:
                 out.append(list(tri))
+
+    if joined:
+        out = stitch(out)
 
     # one neighbour per edge, on its other side
     edges = {}
@@ -738,7 +790,8 @@ def walk_floor(patch_cff: Path, model_cff: Path, loc):
     triangles = triangles + implicit_floor(patch_cff, triangles, points)
     keep = [(p["pos"][0] * K, p["pos"][2] * K) for p in loc["points"] if p["type"] != 1]
     triangles = cut_obstacles(triangles, blocked_cells(model_cff, triangles, keep))
-    return clean_patch(triangles + point_pads(triangles, loc))
+    # the stitch closes the long gaps of these locations and opens short ones in the others (checked with ptc_seams.py)
+    return clean_patch(triangles + point_pads(triangles, loc), Path(patch_cff).stem.lower() in STITCHED)
 
 
 class World:
