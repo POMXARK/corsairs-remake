@@ -107,6 +107,12 @@ def main():
                 inputs[i["name"]] = [str(src), slot]
                 linked.add(i["name"])
         named = n.get("widgets_values_named")
+        if object_info is None and n["type"] not in SKIP:
+            try:
+                with urllib.request.urlopen(a.comfy + "/object_info", timeout=60) as r:
+                    object_info = json.load(r)
+            except OSError:
+                pass
         if named is None and n.get("widgets_values") and n["type"] not in SKIP:
             if object_info is None:
                 try:
@@ -123,16 +129,16 @@ def main():
                 # the viewer state is a widget of the frontend, /object_info lists it elsewhere: prefix, state, size
                 names = [names[0], "viewport_state", "width", "height"]
             named = dict(zip(names, n["widgets_values"]))
-            # a widget that the saved workflow does not hold (older node version) takes the default of the node
-            for part in ("required",):
-                for k, spec in info["input"].get(part, {}).items():
-                    if k in named or k in linked or spec[0] in ("IMAGE", "MASK", "LATENT", "MODEL") or not (
-                            isinstance(spec[0], list) or spec[0] in WIDGET_TYPES):
-                        continue
-                    opts = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
-                    named[k] = opts["default"] if "default" in opts else spec[0][0] if isinstance(spec[0], list) else ""
-                    print(f"pdm_comfy_api: node {nid} {n['type']}: {k} is not in the workflow, default {named[k]!r}; "
-                          f"widgets {names} <- {n['widgets_values']}", file=sys.stderr)
+        if object_info is not None and n["type"] in object_info and n["type"] not in SKIP:
+            info, named = object_info[n["type"]], dict(named or {})
+            # a widget that the saved workflow does not hold (a newer version of the node) takes the node default
+            for k, spec in info["input"].get("required", {}).items():
+                if k in named or k in linked or not (isinstance(spec[0], list) or spec[0] in WIDGET_TYPES):
+                    continue
+                opts = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
+                named[k] = opts["default"] if "default" in opts else spec[0][0] if isinstance(spec[0], list) else ""
+                print(f"pdm_comfy_api: node {nid} {n['type']}: {k} is not in the workflow, default {named[k]!r}",
+                      file=sys.stderr)
         for k, v in (named or {}).items():
             if k not in NOT_INPUTS and k not in linked:
                 inputs[k] = v
