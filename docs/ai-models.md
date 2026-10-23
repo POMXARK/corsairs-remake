@@ -170,3 +170,18 @@ python tools\pdm_models_all.py pdm-game hero1 --parts --steps optimize,views --i
 - `pdm_model_views.py --parts` рисует `hero1_<часть>_{front,right,back,left}.png` (группы — `PARTS`, раскладка костей hero1);
 - `pdm_glb2gm.py --parts` берёт `hero1_<часть>.glb`, подгоняет к своей части оригинала и вешает только на кости этой части. Проверка на самом себе: сдвиг 0,0 см, 17 костей.
 - Скелет другого персонажа с иной раскладкой костей отвергается явной ошибкой.
+
+## Автопроверка моделей (`pdm_model_check.py`)
+
+Как `pdm_voice_check.py` для озвучки: каждая `data/ai_models/glb/<имя>.glb` рисуется с четырёх сторон (облако точек поверхности с цветом текстуры) и сравнивается с видами, из которых сделана. Модель можно повернуть на четверть оборота, берётся лучший поворот.
+- форма — пересечение силуэтов (IoU), худшая из четырёх сторон; порог `--iou 0.75`. Выросшее лишнее тело, потерянная кисть, слипшийся рукав роняют его (проверка: оригинал hero1 — 0,93, чужая форма — 0,50);
+- цвет — разница среднего цвета модели и вида; порог `--colour 0.18`. Чёрный рукав, ставший красным или коричневым, его повышает.
+
+Результат: `data/ai_models/report.tsv`, `redo.txt` (имена для `comfy_model_batch.py --redo`, следующий seed) и `listen.txt` (после `--max-tries` — на глаз).
+
+```
+python tools/pdm_model_check.py pdm-game
+python tools/comfy_model_batch.py pdm-game ... --redo (Get-Content pdm-game\data\ai_models\redo.txt)
+```
+
+Подсказка модели: сети Pixal3D/TRELLIS.2 принимают только картинку, текст не читают. Текстом управляется шаг `refine` (Qwen-Image edit, `comfy_view_refine.py --prompt "..."`): он перерисовывает виды до генерации. Для плоского чёрного бархата в промпт добавляют материал и складки («black velvet sleeve with soft folds and visible shading»), иначе сеть не видит формы.
