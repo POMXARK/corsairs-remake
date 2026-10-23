@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 SKIP = {"Note", "MarkdownNote", "Preview3DAdvanced", "MaskPreview"}
-NOT_INPUTS = {"control_after_generate", "fixed", "upload", "viewport_state", "width", "height"}
+NOT_INPUTS = {"control_after_generate", "fixed", "upload"}
 CROPS = {338: "IMAGE", 341: "IMAGE_LEFT", 342: "IMAGE_BACK", 345: "IMAGE_RIGHT"}  # ImageCropV2 of the sheet
 SEED_NODE, SAVE_NODE, SHEET_NODE = 3, 372, 364
 
