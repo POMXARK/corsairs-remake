@@ -117,7 +117,22 @@ def main():
                              f"answer ({e}): start ComfyUI with the node packs of PixelArtistry")
             if n["type"] not in object_info:
                 sys.exit(f"pdm_comfy_api: ComfyUI does not know the node {n['type']} (the node pack is not installed)")
-            named = dict(zip(widget_names(object_info[n["type"]]), n["widgets_values"]))
+            info = object_info[n["type"]]
+            names = widget_names(info)
+            if n["type"] == "Save3DAdvanced":
+                # the viewer state is a widget of the frontend, /object_info lists it elsewhere: prefix, state, size
+                names = [names[0], "viewport_state", "width", "height"]
+            named = dict(zip(names, n["widgets_values"]))
+            # a widget that the saved workflow does not hold (older node version) takes the default of the node
+            for part in ("required",):
+                for k, spec in info["input"].get(part, {}).items():
+                    if k in named or k in linked or spec[0] in ("IMAGE", "MASK", "LATENT", "MODEL") or not (
+                            isinstance(spec[0], list) or spec[0] in WIDGET_TYPES):
+                        continue
+                    opts = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
+                    named[k] = opts["default"] if "default" in opts else spec[0][0] if isinstance(spec[0], list) else ""
+                    print(f"pdm_comfy_api: node {nid} {n['type']}: {k} is not in the workflow, default {named[k]!r}; "
+                          f"widgets {names} <- {n['widgets_values']}", file=sys.stderr)
         for k, v in (named or {}).items():
             if k not in NOT_INPUTS and k not in linked:
                 inputs[k] = v
