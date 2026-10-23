@@ -20,8 +20,12 @@ usage: comfy_model_batch.py <game dir> [--workflow tools/model3d/image_to_model_
          [--comfy http://127.0.0.1:8188] [--only <name> ...] [--redo <name> ...] [--faces 20000] [--seed 1]
 """
 import argparse
+import base64
 import copy
 import json
+import os
+import socket
+import struct
 import sys
 import time
 import urllib.parse
@@ -59,6 +63,79 @@ class Comfy3D(Comfy):
                                     "type": a.get("type", "output")})
         to.parent.mkdir(parents=True, exist_ok=True)
         to.write_bytes(urllib.request.urlopen(f"{self.url}/view?{q}", timeout=600).read())
+
+
+class Progress:
+    """The events of ComfyUI over its websocket (standard library only): which node runs, which step it is on.
+    Without a connection the run goes on silently, the way it did before."""
+
+    def __init__(self, url, client):
+        self.sock = None
+        self.node, self.step, self.steps, self.done = None, 0, 0, set()
+        try:
+            u = urllib.parse.urlparse(url)
+            self.sock = socket.create_connection((u.hostname, u.port or 80), timeout=2)
+            key = base64.b64encode(os.urandom(16)).decode()
+            self.sock.sendall((f"GET /ws?clientId={client} HTTP/1.1\r\nHost: {u.netloc}\r\nUpgrade: websocket\r\n"
+                               f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+            head = b""
+            while b"\r\n\r\n" not in head:
+                head += self.sock.recv(1)
+            if b" 101 " not in head.split(b"\r\n")[0]:
+                raise OSError("no websocket")
+        except OSError:
+            self.sock = None
+
+    def _read(self, n):
+        buf = b""
+        while len(buf) < n:
+            chunk = self.sock.recv(n - len(buf))
+            if not chunk:
+                raise OSError("closed")
+            buf += chunk
+        return buf
+
+    def _frame(self):
+        b1, b2 = self._read(2)
+        size = b2 & 0x7F
+        if size == 126:
+            size = struct.unpack(">H", self._read(2))[0]
+        elif size == 127:
+            size = struct.unpack(">Q", self._read(8))[0]
+        data = self._read(size)
+        if b1 & 0x0F == 9:  # ping: a pong must be masked
+            mask = os.urandom(4)
+            self.sock.sendall(bytes([0x8A, 0x80 | len(data)]) + mask + bytes(c ^ mask[i % 4] for i, c in enumerate(data)))
+        return b1 & 0x0F, data
+
+    def poll(self, wait):
+        """Reads the events for `wait` seconds."""
+        if self.sock is None:
+            time.sleep(wait)
+            return
+        end = time.time() + wait
+        while (left := end - time.time()) > 0:
+            self.sock.settimeout(left)
+            try:
+                op, data = self._frame()
+            except (socket.timeout, TimeoutError):
+                return
+            except OSError:
+                self.sock = None
+                time.sleep(max(end - time.time(), 0))
+                return
+            if op != 1:
+                continue
+            m = json.loads(data)
+            d = m.get("data", {})
+            if m.get("type") == "executing" and d.get("node"):
+                self.node, self.step, self.steps = d["node"], 0, 0
+                self.done.add(d["node"])
+            elif m.get("type") == "progress":
+                self.node, self.step, self.steps = d.get("node", self.node), d["value"], d["max"]
+                self.done.add(self.node)
+            elif m.get("type") == "execution_cached":
+                self.done.update(d.get("nodes", []))
 
 
 def titled(graph, title):
@@ -102,6 +179,7 @@ def main():
     todo = [n for n in names if n in a.redo or not (out / f"{n}.glb").exists()]
     print(f"comfy_model_batch: {len(todo)} of {len(names)} models to make")
     comfy = Comfy3D(a.comfy)
+    spent = []  # seconds of the models made in this run, for the estimate
     tries = {}
     if (out / "seeds.json").exists():
         tries = json.loads((out / "seeds.json").read_text())
@@ -122,9 +200,19 @@ def main():
             set_number(node, a.seed_input, seed, "SEED")
         if (node := titled(g, "FACES")) is not None:
             set_number(node, a.faces_input, a.faces, "FACES")
+        progress = Progress(a.comfy, "pdm-voice")
         pid = comfy.queue(g)
+        t0 = time.time()
         while (f := comfy.result(pid)) is None:
-            time.sleep(POLL)
+            progress.poll(POLL)
+            node = g.get(str(progress.node), {})
+            title = node.get("_meta", {}).get("title") or node.get("class_type", "...")
+            step = f" {progress.step}/{progress.steps}" if progress.steps else ""
+            eta = f", about {max(sum(spent) / len(spent) - (time.time() - t0), 0) / 60:.0f} min left" if spent else ""
+            print(f"\r{name}: node {len(progress.done)}/{len(g)} {title}{step}, {(time.time() - t0) / 60:.1f} min{eta}"
+                  .ljust(100), end="", flush=True)
+        print()
+        spent.append(time.time() - t0)
         suffix = Path(f["filename"]).suffix.lower()
         comfy.fetch(f, out / f"{name}{suffix}")
         tries[name] = seed - a.seed
