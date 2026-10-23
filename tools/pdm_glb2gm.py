@@ -14,7 +14,10 @@ The original .gm is kept in data/ai_models/orig/ once and is what every run fits
 whatever was written before; --restore puts it back. A model with locators (a ship part with its ropes
 and sails, a location) is left alone: they belong to the old geometry.
 
-usage: pdm_glb2gm.py <game dir> <name> [<name> ...] [--glb data/ai_models/glb] [--tex 1024] [--restore]
+--parts takes the groups of pdm_model_views.py --parts: <name>_<part>.glb of every part, each fitted to its own part of
+the original and bound to the bones of that part only; the parts become one model.
+
+usage: pdm_glb2gm.py <game dir> <name> [<name> ...] [--glb data/ai_models/glb] [--tex 1024] [--restore] [--parts]
   <name>: the stem the views and the GLB have (hero1), the model is found under resource/models
 """
 import argparse
@@ -32,7 +35,7 @@ from PIL import Image
 TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS))
 sys.path.insert(0, str(TOOLS.parent / "engine" / "demos" / "common"))
-from pdm_model_views import find_model, read_gm, texture_index, texture_of  # noqa: E402
+from pdm_model_views import PARTS, find_model, part_objects, read_gm, texture_index, texture_of  # noqa: E402
 from storm_formats import Mesh, write_gm, write_tx  # noqa: E402
 
 SAMPLE = 3000  # points of each model compared to find the turn
@@ -160,19 +163,8 @@ def sample(points, n):
     return points[np.linspace(0, len(points) - 1, min(n, len(points))).astype(np.int64)]
 
 
-def convert(game: Path, name: str, glb: Path, tex_size: int):
-    model = find_model(game, name)
-    rel = model.relative_to(game / "resource" / "models")
-    orig = game / "data" / "ai_models" / "orig" / rel
-    ref = read_gm(orig if orig.exists() else model)
-    if ref["labels"]:
-        return f"{rel}: has locators (ropes, sails, places), left alone"
-    if not orig.exists():
-        orig.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(model, orig)
-    ref_pos = np.concatenate([o[2] for o in ref["objects"]])
-    ref_bone = np.concatenate([o[5] for o in ref["objects"]])
-
+def build(glb: Path, stem_base: str, ref_pos, ref_bone, skinned, tex_dir, prefix, tex_size):
+    """The meshes of a GLB fitted to the points (and bones) of the original it replaces."""
     flip = np.array((1.0, 1.0, -1.0))
     # the normals before z is negated: a mirror turns the faces inside out
     parts = [(p * flip, (vertex_normals(p, t) if n is None else n) * flip, uv, t, im)
@@ -188,19 +180,14 @@ def convert(game: Path, name: str, glb: Path, tex_size: int):
             best = (err, yaw, k, shift)
     err, yaw, k, shift = best
 
-    textures = texture_index(game)
-    first = next((texture_of(textures, o[1]) for o in ref["objects"] if texture_of(textures, o[1])), None)
-    tex_dir = first.parent if first else game / "resource" / "textures" / "characters"
-    prefix = next((o[1].replace("/", "\\").rsplit("\\", 1)[0] + "\\" for o in ref["objects"]
-                   if o[1] and ("\\" in o[1] or "/" in o[1])), "")
     meshes, total = [], 0
     for i, (pos, normal, uv, tris, image) in enumerate(parts):
         pos = pos @ turn(yaw).T * k + shift
         normal = normal @ turn(yaw).T
         normal /= np.maximum(np.linalg.norm(normal, axis=1, keepdims=True), 1e-12)
         uv = np.zeros((len(pos), 2)) if uv is None else uv
-        bones = ref_bone[nearest(pos, ref_pos)[0]] if ref["skinned"] else np.zeros(len(pos), np.int64)
-        stem = f"ai_{name}" + (f"_{i}" if len(parts) > 1 else "")
+        bones = ref_bone[nearest(pos, ref_pos)[0]] if skinned else np.zeros(len(pos), np.int64)
+        stem = stem_base + (f"_{i}" if len(parts) > 1 else "")
         side = 1 << max(2, min(int(math.log2(max(image.size))), int(math.log2(tex_size))))
         write_tx(image.resize((side, side), Image.LANCZOS), tex_dir / f"{stem}.tga.tx")
         m = Mesh(stem, f"{prefix}{stem}.tga")
@@ -212,13 +199,48 @@ def convert(game: Path, name: str, glb: Path, tex_size: int):
         if len(pos) > 65536:
             sys.exit(f"pdm_glb2gm: {glb}: {len(pos)} vertices, a .gm object holds 65536: lower --faces")
         meshes.append(m)
+    return meshes, total, yaw, k, err
+
+
+def convert(game: Path, name: str, glbs: Path, tex_size: int, by_part: bool = False):
+    model = find_model(game, name)
+    rel = model.relative_to(game / "resource" / "models")
+    orig = game / "data" / "ai_models" / "orig" / rel
+    ref = read_gm(orig if orig.exists() else model)
+    if ref["labels"]:
+        return f"{rel}: has locators (ropes, sails, places), left alone"
+    if by_part and not ref["skinned"]:
+        return f"{rel}: not a skinned model, no --parts"
+    if not orig.exists():
+        orig.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(model, orig)
+
+    textures = texture_index(game)
+    first = next((texture_of(textures, o[1]) for o in ref["objects"] if texture_of(textures, o[1])), None)
+    tex_dir = first.parent if first else game / "resource" / "textures" / "characters"
+    prefix = next((o[1].replace("/", "\\").rsplit("\\", 1)[0] + "\\" for o in ref["objects"]
+                   if o[1] and ("\\" in o[1] or "/" in o[1])), "")
+    # one job per GLB: the whole original, or the objects of a group of bones
+    jobs = []
+    for part, bones in (PARTS.items() if by_part else [(None, None)]):
+        objs = ref["objects"] if part is None else part_objects(ref, bones)
+        glb = glbs / (f"{name}.glb" if part is None else f"{name}_{part}.glb")
+        if not glb.exists():
+            sys.exit(f"pdm_glb2gm: no {glb} (comfy_model_batch.py)")
+        jobs.append((glb, f"ai_{name}" + ("" if part is None else f"_{part}"),
+                     np.concatenate([o[2] for o in objs]), np.concatenate([o[5] for o in objs])))
+    meshes, total, notes = [], 0, []
+    for glb, stem, ref_pos, ref_bone in jobs:
+        ms, n, yaw, k, err = build(glb, stem, ref_pos, ref_bone, ref["skinned"], tex_dir, prefix, tex_size)
+        meshes += ms
+        total += n
+        notes.append(f"{stem}: turned {yaw}, scaled {k:.3f}, off by {err * 100:.1f} cm")
     if ref["skinned"] and total > 65536:
-        sys.exit(f"pdm_glb2gm: {glb}: {total} vertices, a skinned .gm holds 65536: lower --faces")
+        sys.exit(f"pdm_glb2gm: {name}: {total} vertices, a skinned .gm holds 65536: lower --faces")
     write_gm(meshes, model, skinned=ref["skinned"], bsp=ref["bsp"])
     faces = sum(len(m.triangles) for m in meshes)
-    return (f"{rel}: {faces} faces (was {sum(len(o[6]) for o in ref['objects'])}), turned {yaw}, "
-            f"scaled {k:.3f}, off the original by {err * 100:.1f} cm on average"
-            + (f", {len(set(ref_bone.tolist()))} bones" if ref["skinned"] else ""))
+    return (f"{rel}: {faces} faces (was {sum(len(o[6]) for o in ref['objects'])}); " + "; ".join(notes)
+            + (f"; {len(set(np.concatenate([o[5] for o in ref['objects']]).tolist()))} bones" if ref["skinned"] else ""))
 
 
 def main():
@@ -228,6 +250,7 @@ def main():
     ap.add_argument("--glb", type=Path)
     ap.add_argument("--tex", type=int, default=1024)
     ap.add_argument("--restore", action="store_true")
+    ap.add_argument("--parts", action="store_true", help="<name>_<part>.glb of every group of pdm_model_views.PARTS")
     a = ap.parse_args()
     glbs = a.glb or a.game / "data" / "ai_models" / "glb"
     for name in a.names:
@@ -239,10 +262,9 @@ def main():
                 shutil.copy2(orig, model)
                 print(f"{rel}: the original is back")
             continue
-        glb = glbs / f"{name}.glb"
-        if not glb.exists():
-            sys.exit(f"pdm_glb2gm: no {glb} (comfy_model_batch.py)")
-        print(convert(a.game, name, glb, a.tex), flush=True)
+        if not a.parts and not (glbs / f"{name}.glb").exists():
+            sys.exit(f"pdm_glb2gm: no {glbs / (name + '.glb')} (comfy_model_batch.py)")
+        print(convert(a.game, name, glbs, a.tex, a.parts), flush=True)
 
 
 if __name__ == "__main__":

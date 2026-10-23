@@ -32,6 +32,7 @@ def main():
     ap.add_argument("models", nargs="*")
     ap.add_argument("--steps", default=",".join(STEPS))
     ap.add_argument("--install", action="store_true")
+    ap.add_argument("--parts", action="store_true", help="a character part by part (pdm_model_views.PARTS)")
     ap.add_argument("--redo", action="store_true")
     ap.add_argument("--quality", default="normal")
     ap.add_argument("--crop", type=float, default=0.05)
@@ -47,8 +48,12 @@ def main():
             sys.exit(f"pdm_models_all: no step {s} (views, refine, model, optimize)")
     ai = a.game / "data" / "ai_models"
     if "views" in steps and a.models:  # without names the views that are there are taken
-        run(TOOLS / "pdm_model_views.py", a.game, *a.models)
-    names = [m.split("/")[-1] for m in a.models] or sorted(
+        run(TOOLS / "pdm_model_views.py", a.game, *a.models, *(["--parts"] if a.parts else []))
+    models = [m.split("/")[-1] for m in a.models]
+    if a.parts:
+        sys.path.insert(0, str(TOOLS))
+        from pdm_model_views import PARTS  # noqa: E402
+    names = [f"{m}_{part}" for m in models for part in PARTS] if a.parts else models or sorted(
         p.name[:-len("_front.png")] for p in (ai / "views").glob("*_front.png"))
     if not names:
         sys.exit(f"pdm_models_all: no views in {ai / 'views'}")
@@ -65,7 +70,8 @@ def main():
     if "optimize" in steps:
         run(TOOLS / "pdm_glb_optimize.py", a.game, *names, "--faces", a.faces, "--tex", a.tex)
     if a.install:
-        run(TOOLS / "pdm_glb2gm.py", a.game, *names, "--glb", ai / "glb_opt", "--tex", a.tex)
+        run(TOOLS / "pdm_glb2gm.py", a.game, *(models if a.parts else names), "--glb", ai / "glb_opt", "--tex", a.tex,
+            *(["--parts"] if a.parts else []))
     print("\npdm_models_all: done")
 
 

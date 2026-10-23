@@ -7,7 +7,11 @@ the model turned around its vertical axis by --yaw first. Each view is a square 
 FILL of it, centred, on a flat grey the background removal of the workflow takes away. A character
 is drawn in the pose it is bound in, the one pdm_glb2gm.py binds the new model to the bones in.
 
-usage: pdm_model_views.py <game dir> <model> [<model> ...] [--out data/ai_models/views] [--size 1024] [--yaw 0]
+--parts draws a skinned character part by part (PARTS: head, torso, arms, sword, legs of the skeleton of hero1) into
+<model>_<part>_front.png ...: each group is made into 3D on its own, so a hand cannot grow into the coat or the blade
+into the hand, and pdm_glb2gm.py --parts binds every group to its own bones only.
+
+usage: pdm_model_views.py <game dir> <model> [<model> ...] [--out data/ai_models/views] [--size 1024] [--yaw 0] [--parts]
   <model>: a path under resource/models without .gm (characters/hero1), or a name found there (hero1)
 """
 import argparse
@@ -24,6 +28,9 @@ sys.path.insert(0, str(TOOLS.parent / "engine" / "demos" / "common"))
 from storm_formats import read_tx  # noqa: E402
 
 VIEWS = (("front", 180), ("right", 90), ("back", 0), ("left", 270))  # a character faces -z
+# the bones of the skeleton of hero1 (17 bones, one part of the .gm each) that are made into 3D together
+PARTS = {"head": (8, 9), "torso": (0, 10), "arm_l": (1, 2, 3), "arm_r": (5, 6, 7), "sword": (11,),
+         "legs": (12, 13, 14, 15, 16, 17)}
 FILL = 0.85
 BACKGROUND = (128, 128, 128)
 SUPER = 2  # drawn this many times bigger, then scaled down: smooth edges
@@ -98,6 +105,11 @@ def find_model(game: Path, model: str) -> Path:
     if not found:
         sys.exit(f"pdm_model_views: no {model}.gm under {models}")
     return found[0]
+
+
+def part_objects(gm, bones):
+    """The objects of a skinned model that all sit on the given bones."""
+    return [o for o in gm["objects"] if o[5].size and set(o[5].tolist()) <= set(bones)]
 
 
 def texture_index(game: Path) -> dict:
@@ -177,6 +189,7 @@ def main():
     ap.add_argument("--out", type=Path)
     ap.add_argument("--size", type=int, default=1024)
     ap.add_argument("--yaw", type=float, default=0.0, help="degrees: turns the model so that its face is the front")
+    ap.add_argument("--parts", action="store_true", help="a skinned character part by part (PARTS)")
     a = ap.parse_args()
     out = a.out or a.game / "data" / "ai_models" / "views"
     out.mkdir(parents=True, exist_ok=True)
@@ -185,6 +198,18 @@ def main():
         path = find_model(a.game, model)
         gm = read_gm(path)
         missing = sorted({o[1] for o in gm["objects"] if o[1] and not texture_of(textures, o[1])})
+        if a.parts:
+            if not gm["skinned"]:
+                sys.exit(f"pdm_model_views: {path.stem} is not a skinned model: no --parts")
+            rest = {int(b) for o in gm["objects"] for b in set(o[5].tolist())} - {b for g in PARTS.values() for b in g}
+            if rest:
+                sys.exit(f"pdm_model_views: bones {sorted(rest)} of {path.stem} are in no part of PARTS (the skeleton of hero1)")
+            for part, bones in PARTS.items():
+                sub = {**gm, "objects": part_objects(gm, bones)}
+                for view, angle in VIEWS:
+                    render(sub, textures, a.yaw + angle, a.size, cache).save(out / f"{path.stem}_{part}_{view}.png")
+                print(f"{path.stem}_{part}: {sum(len(o[6]) for o in sub['objects'])} triangles -> {out}")
+            continue
         for view, angle in VIEWS:
             render(gm, textures, a.yaw + angle, a.size, cache).save(out / f"{path.stem}_{view}.png")
         note = f", no texture {' '.join(missing)}" if missing else ""
