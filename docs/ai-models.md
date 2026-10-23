@@ -89,7 +89,7 @@ ComfyUI может работать на другой машине (`--listen`, 
 Меш нейросети плотный (50–500 тыс. треугольников), а UV разбросаны по мелким островам. `pdm_glb_optimize.py` режет его до игрового, сохраняя текстуру:
 
 ```bash
-pip3 install --user trimesh fast-simplification    # один раз; запускать без -I, иначе пакеты из --user не видны
+pip3 install --user trimesh rtree fast-simplification    # один раз; запускать без -I, иначе пакеты из --user не видны
 python3 tools/pdm_glb_optimize.py pdm-game hero1 --faces 12000 --tex 1024
 python3 -I tools/pdm_glb2gm.py pdm-game hero1 --glb pdm-game/data/ai_models/glb_opt --tex 1024
 # hero1[0]: faces 81920 -> 3000, vertices 41532 -> 1502, surface off by 0.04 % (max 0.34 %) of the diagonal, colour off by 1.2/255, texture 1024x1024
