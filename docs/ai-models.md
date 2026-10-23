@@ -64,6 +64,16 @@ python3 -I tools/pdm_model_views.py pdm-game hero1 characters/girl1 --size 1024
 
 Если вход сида или граней называется иначе, задайте его через `--seed-input` / `--faces-input`. Узел с единственным числовым входом получит число и так.
 
+## Всё одной командой
+
+```bash
+python tools/pdm_models_all.py pdm-game hero1 officer1 --quality normal          # виды → перерисовка → 3D → облегчение
+python tools/pdm_models_all.py pdm-game --steps refine,3d,optimize --redo        # заново для всех, у которых уже есть виды
+python tools/pdm_models_all.py pdm-game hero1 --install                          # и поставить в игру (--restore в pdm_glb2gm.py вернёт оригинал)
+```
+
+Каждый шаг пропускает то, что уже сделано, `--redo` берёт следующий сид. Перерисовка видов требует `tools/model3d/refine_api.json` (`pdm_comfy_refine_graph.py`).
+
 ## Шаг 3. Пакетная генерация
 
 ```bash
