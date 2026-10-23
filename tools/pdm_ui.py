@@ -97,6 +97,17 @@ def face_key(name):
     return "".join(c for c in name.lower() if c.isalnum())
 
 
+def has_cyrillic(path):
+    """Whether the TrueType file draws Russian letters: a glyph it lacks is the empty box of .notdef, the same
+    for every missing character (a SeaWolf of a western copy gave squares in the titles)."""
+    try:
+        font = ImageFont.truetype(str(path), 40)
+    except OSError:
+        return False
+    box = bytes(font.getmask("\U0010ffff"))
+    return all(bytes(font.getmask(c)) != box for c in "АБВЖМЯабвеюя")
+
+
 def find_faces(dirs):
     """{family (+ italic): TrueType file} of the fonts in the folders: "SeaWolf_L" -> seawolfl."""
     faces = {}
@@ -211,7 +222,11 @@ class Converter:
             k = face_key(face)
             found = self.installed.get(k) or next(
                 (self.installed[f] for f in sorted(self.installed, key=len) if f.startswith(k)), None)
-            if found is None:
+            if found is not None and not has_cyrillic(found):
+                self.skipped.append(f"font {face}: {found.name} has no Cyrillic, "
+                                    f"{FREE_FONTS.get(face.lower(), FREE_FONT).stem} stands in")
+                found = None
+            elif found is None:
                 self.skipped.append(f"font {face}: not installed, {FREE_FONTS.get(face.lower(), FREE_FONT).stem} "
                                     "stands in")
             self.ttfs[face] = (found, True) if found else (FREE_FONTS.get(face.lower(), FREE_FONT), False)
