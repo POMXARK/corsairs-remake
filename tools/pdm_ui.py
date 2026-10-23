@@ -1,4 +1,4 @@
-"""Converts the screens of the original Sea Dogs interface (RESOURCE/INI/menu.ini, town.ini, ...)
+r"""Converts the screens of the original Sea Dogs interface (RESOURCE/INI/menu.ini, town.ini, ...)
 into XINTERFACE screens of Storm Engine.
 
 Usage: pdm_ui.py <Sea Dogs install dir with RESOURCE> <game dir>

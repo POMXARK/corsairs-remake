@@ -180,6 +180,8 @@ python3 -I tools/comfy_voice_batch.py pdm-game --comfy http://192.168.1.10:8188 
 
 ## Шаг 4б. CosyVoice3 без ComfyUI
 
+Подробная установка на Windows с ошибками и подводными камнями — [voice-cosyvoice-windows.md](voice-cosyvoice-windows.md).
+
 На машине с видеокартой (Linux или Windows, Python 3.10):
 
 ```bash

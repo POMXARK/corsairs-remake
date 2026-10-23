@@ -14,6 +14,8 @@ if (-not (Test-Path "$Demos/common/demo.ps1")) { throw 'engine/ is empty: git su
 
 $Pdm = if ($env:PDM) { $env:PDM } else { Join-Path $Root '../Корсары' }
 if (-not (Test-Path "$Pdm/RESOURCE")) { throw "no original at ${Pdm}: set `$env:PDM to the folder of the installed game" }
+# a missing file is no match (Select-String stops the script on it under $ErrorActionPreference = 'Stop')
+function Test-Pattern([string]$Pattern, [string]$Path) { (Test-Path $Path) -and [bool](Select-String -Quiet -Pattern $Pattern -Path $Path) }
 function Get-Env([string]$Name, [string]$Default) { $v = [Environment]::GetEnvironmentVariable($Name); if ($v) { $v } else { $Default } }
 
 if ((Get-Env 'RECONVERT' '0') -eq '1')
@@ -54,18 +56,18 @@ if (-not (Test-Path "$Demo/resource/particles/explosion.xps"))
 # the screens of the interface, the dialog window and the voices; again for screens made before the fog of
 # the map or the font of the notes of the toolbar
 $MainMap = "$Demo/resource/ini/interfaces/mainmap.ini"
-if (-not ((Test-Path $MainMap) -and ((Get-Content -Raw $MainMap) -match 'fogStamp') -and (Select-String -Quiet -Pattern 'LB_WINDOWED_OFF' -Path "$Demo/resource/ini/interfaces/options.ini" -ErrorAction SilentlyContinue) -and (Select-String -Quiet -Pattern 'PDM_HUD_18' -Path "$Demo/resource/ini/fonts.ini" -ErrorAction SilentlyContinue) -and (Test-Path "$Demo/program/data/pdm_screens.c") -and (Test-Path "$Demo/program/data/pdm_voices.c")))
+if (-not ((Test-Path $MainMap) -and ((Get-Content -Raw $MainMap) -match 'fogStamp') -and (Test-Pattern 'LB_WINDOWED_OFF' "$Demo/resource/ini/interfaces/options.ini") -and (Test-Pattern 'PDM_HUD_18' "$Demo/resource/ini/fonts.ini") -and (Test-Path "$Demo/program/data/pdm_screens.c") -and (Test-Path "$Demo/program/data/pdm_voices.c")))
 {
     Invoke-Python "$Tools/pdm_ui.py" $Pdm $Demo
 }
 # the towns and interiors, their patches and the characters with animation (several minutes)
 if (-not (Test-Path "$Demo/program/data/pdm_world.c")) { Invoke-Python "$Tools/pdm_world.py" $Pdm $Demo }
 # the cabin of the boarding and the fighters with the blade drawn, after the characters
-if (-not (Select-String -Quiet -Pattern 'PdmBoarding.hud' -Path "$Demo/program/data/pdm_boarding.c" -ErrorAction SilentlyContinue)) { Invoke-Python "$Tools/pdm_boarding.py" $Pdm $Demo }
+if (-not (Test-Pattern 'PdmBoarding.hud' "$Demo/program/data/pdm_boarding.c")) { Invoke-Python "$Tools/pdm_boarding.py" $Pdm $Demo }
 # the islands, where the ship appears at each and their forts
-if (-not (Select-String -Quiet -Pattern '"fort"' -Path "$Demo/data/islands/Highrock.json" -ErrorAction SilentlyContinue)) { Invoke-Python "$Tools/pdm_island.py" $Pdm "$Demo/resource" all --data "$Demo/data" }
+if (-not (Test-Pattern '"fort"' "$Demo/data/islands/Highrock.json")) { Invoke-Python "$Tools/pdm_island.py" $Pdm "$Demo/resource" all --data "$Demo/data" }
 # the toolbar of the sea (the pictures with the class, the panel of the charges) and its notes
-if (-not (Select-String -Quiet -Pattern 'info_rows' -Path "$Demo/program/data/pdm_hud.c" -ErrorAction SilentlyContinue)) { Invoke-Python "$Tools/pdm_hud.py" $Pdm $Demo }
+if (-not (Test-Pattern 'info_rows' "$Demo/program/data/pdm_hud.c")) { Invoke-Python "$Tools/pdm_hud.py" $Pdm $Demo }
 # the music, the sounds and their aliases
 if (-not (Test-Path "$Demo/program/data/pdm_sound.c")) { Invoke-Python "$Tools/pdm_sound.py" $Pdm $Demo }
 Invoke-Python "$Tools/pdm_data2c.py" "$Demo/data" "$Demo/program"

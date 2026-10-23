@@ -17,7 +17,14 @@ Runs in the environment of the CosyVoice repository (git clone --recursive FunAu
 requirements.txt), with the weights in <repo>/pretrained_models/Fun-CosyVoice3-0.5B.
 
 usage: cosyvoice_batch.py <game dir> --repo <CosyVoice dir> [--model <weights dir>] [--only <dialog or speaker>]
-         [--limit N] [--redo data/voice/redo.txt] [--instruct] [--seed 1]
+         [--limit N] [--redo data/voice/redo.txt] [--instruct] [--seed 1] [--shard K/N] [--fp16]
+
+--fp16 (ours): the model computes in half precision, usually faster on a modern GPU; listen to a sample first
+(--limit 10) and compare the rtf of the log with the full precision run.
+
+--shard K/N (ours): this process voices every N-th speech starting from K (K = 0..N-1), so N processes run side by
+side on one GPU (each ~4 GB of video memory, ~6 GB of RAM). A shard skips a file that appeared meanwhile and does
+not bind at the end: after all the shards are done, run pdm_voice_lines.py <game dir> --bind once.
 """
 import argparse
 import json
@@ -55,6 +62,8 @@ def main():
     ap.add_argument("--redo", type=Path)
     ap.add_argument("--instruct", action="store_true")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--fp16", action="store_true")
+    ap.add_argument("--shard", help="K/N: this process takes every N-th speech starting from K")
     a = ap.parse_args()
 
     voice = a.game / "data" / "voice"
@@ -73,6 +82,11 @@ def main():
 
     todo = [r for r in lines if not (sounds / r["out"]).exists()
             and (not a.only or a.only.lower() in (r["dialog"].lower(), r["speaker"].lower()))]
+    if a.shard:
+        k, n = (int(x) for x in a.shard.split("/"))
+        if not 0 <= k < n:
+            ap.error(f"--shard {a.shard}: K counts from 0, so N shards are 0/{n} .. {n - 1}/{n}")
+        todo = todo[k::n]
     if a.limit:
         todo = todo[:a.limit]
     print(f"cosyvoice_batch: {len(todo)} speeches to voice, {sum(len(r['chunks']) for r in todo)} chunks")
@@ -84,11 +98,13 @@ def main():
     import torch
     import torchaudio
     from cosyvoice.cli.cosyvoice import AutoModel
-    tts = AutoModel(model_dir=str(a.model or a.repo / "pretrained_models" / "Fun-CosyVoice3-0.5B"))
+    tts = AutoModel(model_dir=str(a.model or a.repo / "pretrained_models" / "Fun-CosyVoice3-0.5B"), fp16=a.fp16)
 
     tmp = Path(tempfile.mkdtemp(prefix="pdm_cosy_"))
     t0 = time.time()
     for done, r in enumerate(todo, 1):
+        if (sounds / r["out"]).exists():
+            continue
         ref = str(sounds / r["ref"])
         parts = []
         for i, chunk in enumerate(r["chunks"]):
@@ -109,7 +125,8 @@ def main():
             p.unlink()
         left = (time.time() - t0) / done * (len(todo) - done)
         print(f"{done}/{len(todo)} {r['out']}  ~{left / 60:.0f} min left", flush=True)
-    subprocess.run([sys.executable, "-I", str(TOOLS / "pdm_voice_lines.py"), str(a.game), "--bind"], check=True)
+    if not a.shard:
+        subprocess.run([sys.executable, "-I", str(TOOLS / "pdm_voice_lines.py"), str(a.game), "--bind"], check=True)
 
 
 if __name__ == "__main__":
