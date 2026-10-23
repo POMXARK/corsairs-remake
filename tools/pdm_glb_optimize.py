@@ -16,7 +16,8 @@ A GLB with several meshes is cut mesh by mesh, every one with its own share of -
 usage: pdm_glb_optimize.py <game dir> <name> [<name> ...] [--glb data/ai_models/glb] [--out data/ai_models/glb_opt]
                            [--faces 12000] [--tex 1024]
   then: pdm_glb2gm.py <game dir> <name> --glb <game dir>/data/ai_models/glb_opt
-Needs numpy, Pillow, scipy, trimesh and fast-simplification (pip install --user trimesh fast-simplification).
+Needs numpy, Pillow, scipy, trimesh, rtree (the nearest triangle of trimesh.proximity) and fast-simplification
+(pip install --user trimesh rtree fast-simplification).
 """
 import argparse
 import json
