@@ -29,6 +29,11 @@ bool optionsAutosave = true;
 
 void Options_Init()
 {
+	// the volume the launch asks for (VOLUME_FX ... or settings.ini, run.sh)
+	optionsVolFx = StartVolFx;
+	optionsVolMusic = StartVolMusic;
+	optionsVolVoice = StartVolVoice;
+	optionsVoice = StartNpcVoice != 0;
 	SetEventHandler("Options_Reopen", "Options_Reopen", 0);
 }
 

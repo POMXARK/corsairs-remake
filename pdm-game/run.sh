@@ -19,6 +19,8 @@
 # SCENE=story runs the self-test of the story machine (every action of the original) and quits.
 # The window (docs/build.md): FULLSCREEN=1 the full screen, FULLSCREEN=0 a window with a frame, SCREEN=1920x1080 its size;
 # by default engine.ini (a window of 1280x720). The engine options --fullscreen, --windowed, --size WxH do the same.
+# VOLUME_FX, VOLUME_MUSIC, VOLUME_VOICE (0..100) and NPC_VOICE=0|1 set the sound of the page "Настройки" at the start, as
+# settings.ini does (the variable wins).
 # SOUND_FX_ONLY=1 mutes the music and the ambience of the locations, to hear the steps and the effects.
 set -euo pipefail
 ENGINE="$(realpath "$1")"
@@ -78,6 +80,12 @@ echo "string StartScene = \"${SCENE:-menu}\";" > "$DIR/program/data/start.c"
 echo "string StartTown = \"${TOWN:-City_GrandaAvilia}\";" >> "$DIR/program/data/start.c"
 echo "int TownAuto = ${TOWN_AUTO:-0};" >> "$DIR/program/data/start.c"
 echo "int SoundFxOnly = ${SOUND_FX_ONLY:-0};" >> "$DIR/program/data/start.c"
+# the volume and the voices of the characters: the variable, else settings.ini, else the default (0..100)
+setting() { local v="${!1:-}"; [ -n "$v" ] || v=$(sed -n "s/^$2[[:space:]]*=[[:space:]]*//p" "$DIR/settings.ini" 2>/dev/null | head -1); v="${v//[^0-9]/}"; echo "${v:-$3}"; }
+echo "int StartVolFx = $(setting VOLUME_FX volume_fx 80);" >> "$DIR/program/data/start.c"
+echo "int StartVolMusic = $(setting VOLUME_MUSIC volume_music 50);" >> "$DIR/program/data/start.c"
+echo "int StartVolVoice = $(setting VOLUME_VOICE volume_voice 100);" >> "$DIR/program/data/start.c"
+echo "int StartNpcVoice = $(setting NPC_VOICE npc_voice 1);" >> "$DIR/program/data/start.c"
 ln -sfn "$(dirname "$ENGINE")/resource/techniques" "$DIR/resource/techniques"
 
 # the window over engine.ini

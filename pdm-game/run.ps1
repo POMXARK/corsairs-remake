@@ -1,6 +1,6 @@
 ﻿# Windows version of run.sh: converts the installed original (PDM 1.061) on the first run and starts
 # the engine in pdm-game/. The variables are those of run.sh: $env:PDM, RECONVERT, SCENE, TOWN,
-# TOWN_AUTO, SOUND_FX_ONLY,
+# TOWN_AUTO, SOUND_FX_ONLY, VOLUME_FX, VOLUME_MUSIC, VOLUME_VOICE (0..100), NPC_VOICE (0|1; settings.ini too),
 # FULLSCREEN (1 the full screen, 0 a window with a frame) and SCREEN (1920x1080).
 # Usage: run.ps1 [path to engine.exe] [engine options]
 #   without the engine path engine/build/default/Debug/engine.exe is taken (build.bat in the game root)
@@ -17,6 +17,14 @@ if (-not (Test-Path "$Pdm/RESOURCE")) { throw "no original at ${Pdm}: set `$env:
 # a missing file is no match (Select-String stops the script on it under $ErrorActionPreference = 'Stop')
 function Test-Pattern([string]$Pattern, [string]$Path) { (Test-Path $Path) -and [bool](Select-String -Quiet -Pattern $Pattern -Path $Path) }
 function Get-Env([string]$Name, [string]$Default) { $v = [Environment]::GetEnvironmentVariable($Name); if ($v) { $v } else { $Default } }
+# the volume and the voices of the characters: the variable, else settings.ini, else the default (0..100)
+function Get-Setting([string]$Name, [string]$Key, [string]$Default)
+{
+    $v = Get-Env $Name ''
+    if (-not $v -and (Test-Path "$Demo/settings.ini")) { $m = Select-String -Path "$Demo/settings.ini" -Pattern "^$Key\s*=\s*(\d+)" | Select-Object -First 1; if ($m) { $v = $m.Matches[0].Groups[1].Value } }
+    $v = $v -replace '[^0-9]', ''
+    if ($v) { $v } else { $Default }
+}
 
 if ((Get-Env 'RECONVERT' '0') -eq '1')
 {
@@ -78,6 +86,10 @@ Invoke-Python "$Tools/pdm_logic2c.py" "$Demo/data" "$Demo/program"
     "string StartTown = `"$(Get-Env 'TOWN' 'City_GrandaAvilia')`";"
     "int TownAuto = $(Get-Env 'TOWN_AUTO' '0');"
     "int SoundFxOnly = $(Get-Env 'SOUND_FX_ONLY' '0');"
+    "int StartVolFx = $(Get-Setting 'VOLUME_FX' 'volume_fx' '80');"
+    "int StartVolMusic = $(Get-Setting 'VOLUME_MUSIC' 'volume_music' '50');"
+    "int StartVolVoice = $(Get-Setting 'VOLUME_VOICE' 'volume_voice' '100');"
+    "int StartNpcVoice = $(Get-Setting 'NPC_VOICE' 'npc_voice' '1');"
 ) | Set-Content -Encoding ascii "$Demo/program/data/start.c"
 
 # the window over engine.ini, as run.sh

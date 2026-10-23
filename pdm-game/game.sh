@@ -81,7 +81,7 @@ package() {
     rm -rf "$DIST/game/resource/techniques"
     ln -s ../../bin/resource/techniques "$DIST/game/resource/techniques"
     # the scene the game starts with: the main menu
-    printf 'string StartScene = "menu";\nstring StartTown = "City_GrandaAvilia";\nint TownAuto = 0;\nint SoundFxOnly = 0;\n' \
+    printf 'string StartScene = "menu";\nstring StartTown = "City_GrandaAvilia";\nint TownAuto = 0;\nint SoundFxOnly = 0;\nint StartVolFx = 80;\nint StartVolMusic = 50;\nint StartVolVoice = 100;\nint StartNpcVoice = 1;\n' \
         > "$DIST/game/program/data/start.c"
     cat > "$DIST/play.sh" <<'EOF'
 #!/bin/bash
