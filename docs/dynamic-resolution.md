@@ -286,10 +286,10 @@ it (1280x720), put side by side in `C:\temp\shots\burst\pre-vs-post.png`:
 
 ### 9.5 What stays open
 
-- The traces marked TEMP in `s_device.cpp` must go before the commit: the dump of `d3dpp`, the
-  lines of the two Reset attempts and of `TestCooperativeLevel`, `TEMP resize` in
-  `ResizeBackBuffer` (`s_device.cpp:2795`) and `TEMP restore` in `RestoreRender` (`s_device.cpp:2658`).
-  The retry itself stays, with a comment that is not marked TEMP.
+- The traces marked TEMP in `s_device.cpp` (the dump of `d3dpp`, the lines of the two Reset attempts
+  and of `TestCooperativeLevel`, `TEMP resize` in `ResizeBackBuffer`, `TEMP restore` in
+  `RestoreRender`) and the TEMP markers of the diagnosis of section 10 went away before the commit;
+  the retry itself stays, with a comment that is not marked TEMP.
 - `engine.ini` of `tools\smoke-test` and of `demos\menu-control` is rewritten by `SetScreen` at the
   end of a run (`WriteEngineIniKey`, `s_device.cpp:2864`), both files must read `screen_x = 800`,
   `screen_y = 600` before the commit, as in the tree before the fix.
@@ -298,3 +298,72 @@ it (1280x720), put side by side in `C:\temp\shots\burst\pre-vs-post.png`:
   window to the whole display, and its size cannot go over the edges.
 - Whether a bordered window (`window_borders = 1`) leaves its title bar outside the desktop after
   the centering stays untested; the demos run with the borders of SDL only.
+
+## 10. The crash of the resize inside a live scene (the resolved state)
+
+The crash of §5 (`0xC0000005`, exit `-1073741819`) came back once the resize itself started to
+succeed, in `pdm-game` runs that change the size on the page «Настройки» over a loaded scene:
+
+```
+# from pdm-game/, the autotest of the options page over a town (TOWN_AUTO = OPTIONSAUTO_ID = 14)
+. C:\corsairs-remake\pdm-game\local.ps1
+$env:SCENE = 'town';  $env:TOWN = 'City_HighRock';  $env:TOWN_AUTO = '14';  $env:SCREEN = '1366x768'
+& C:\corsairs-remake\pdm-game\run.ps1 C:\corsairs-remake\engine\build\default\Debug\engine.exe
+```
+
+No key presses: `pdm-game\program\main.c` calls `Opt_AutoStart()` for `TownAuto == OPTIONSAUTO_ID`
+(`main.c:21`), and `pdm-game\program\options.c:192` drives the resolution of the page over the game.
+The whole `0xC0000005` was two owners of state that a device Reset leaves dead.
+
+**10.1 The handler of a model whose geometry never loaded.** The town run dies in
+`MODELR::LostRender()` (`model.cpp`) with `this` valid and `root == nullptr`: a `modelr` entity of a
+model the loader refused keeps `root` null (`model.cpp:MSG_MODEL_LOAD_GEO`), in the run
+`system.log` shows the loader line `resource\models\ships\pink\pink.gm: can't open geometry file`
+and `SHIP::Mount: failed to load model 'ships\pink\pink'` before the resize. `root->ReleaseGeometry()`
+then enters `NODER::ReleaseGeometry` (`node.cpp`) with a null `this` and faults on the first member
+read. `MODELR::LostRender()` and `MODELR::RestoreRender()` guard `root` with `if (root)` — the same
+guard `MSG_MODEL_RELEASE` and `MSG_MODEL_RESTORE` make for the same entity (`modelr.h:97` declares
+both stage handlers). Fixed in `engine\src\libs\model\src\model.cpp`, committed here.
+
+**10.2 The handles of a D3DX effect cached across the Reset.** After 10.1 the town run still dies,
+and with `STORM_LOG_FLUSH=1` (`diagnostics\src\logging.cpp:36`, the switch that makes every message
+reach the file at once) the tail of `system.log` pins the fault: the last line is the marker before
+the block of constants of the `windleaf` effect of `MODELR::Realize` (`model.cpp`), so the
+instruction that faults is inside that block, `eff->SetMatrix(hWVP, &m)`, and `crash_stack.txt`
+puts `exception_addr` into `d3d9.dll`. The owner of the stale state is the cache of `D3DXHANDLE`s
+resolved once and kept across the Reset: `DX9RENDER::RestoreRender()` calls
+`DX9RENDER::RecompileEffects()` (`s_device.cpp:2765`), which does `effects_.release()`
+(`effects.cpp:Effects::release` — `fx->Release()` for every effect, `effects_.clear()`) and compiles
+every `.fx` again, while `DX9RENDER::GetEffectPointer()` (`s_device.cpp:4175`) hands the NEW object
+out. A handle taken before the Reset points into the freed effect object. The rule the committed
+code already follows: `Grass::RestoreRender()` (`grass.cpp:726`) calls
+`CreateVertexDeclaration()` (1032–1060) again, which re-takes `fx_` and re-resolves `hgVP_`. The
+`windleaf` handles of `model.cpp` follow the same rule — the nine handles moved to file scope and
+nulled in `MODELR::RestoreRender()`, resolved again on the next frame.
+
+**10.3 What the runs show now.** All three scenarios exit `0`, `error.log` is `0` bytes and there is
+no `crash_stack.txt`; `system.log` reaches the resize and keeps drawing after it:
+
+```
+Render: back buffer 1600x900
+Render: the screen 1600x900
+Interface: the window is 1600x900 instead of 1366x768, the screens are laid out again
+Using PC_SCREEN parameters
+```
+
+- `SCENE=menu-newgame TOWN_AUTO=14 SCREEN=1366x768` (the page «Настройки» over the new game):
+  `compile.log` shows `PDM options: the screen 1600x900, full screen 0`, then the four lines above,
+  exit 0.
+- `SCENE=town TOWN=City_HighRock TOWN_AUTO=14` (the location that crashed): exit 0, and after the
+  resize lines the town geometry and the vegetation geometry (3 objects, 115472 triangles of
+  `resource\models\locations\city_highrock_veg.gm`, the model with `useWind`) draw again.
+- `SCENE=sea TOWN_AUTO=14`: exit 0, same lines (this is the scenario of §5).
+
+**10.4 What stays open.** The fix of 10.2 sits in the wind feature of the working tree
+(`src\techniques\windleaf.fx`, `demos\wind-vegetation`, `MSG_MODEL_SET_WIND` in
+`shared_headers\include\shared\messages.h`), which is in progress and not part of this commit; the
+committed tree has no `windleaf` effect at all, so it cannot show this crash. The rule itself —
+handles of a recompiled effect must be re-resolved in the `restore_render` handler — is written into
+`docs/ru/07-debugging.md`. Whether an entity that caches effect handles of its own (`Grass` does it
+through `CreateVertexDeclaration`, `BmFont` keeps `fx_` from `InitShader`) draws the same after
+every resize in every location was not checked frame by frame.
