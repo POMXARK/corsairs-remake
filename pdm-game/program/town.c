@@ -28,6 +28,10 @@
 #define MSG_CAMERA_SETTARGET 30500
 #define MSG_CAMERA_FOLLOW 30510
 #define MSG_CAMERA_TOPOS 30512
+// the pitch of the follow camera (location_camera.cpp:397 reads one float into lAx and locks it,
+// where the default ax of 0.4 looks steeply down) and the distance of the orbit
+#define MSG_CAMERA_MOVE 30513
+#define MSG_CAMERA_SET_RADIUS 30521
 
 #define TOWN_MAX_NPC 32
 #define TOWN_TICK_MS 200
@@ -82,7 +86,18 @@ string townAutoWant = "";
 bool townAutoDone = false;
 bool townAutoTalking = false;
 int townAutoWait = 0;
-int townAutoPicks = 0;
+	int townAutoPicks = 0;
+	// the step of the wind check (TOWN_AUTO=20): the hero walks to the right of the city, through the
+	// vegetation, and stands at each spot
+	int townWindStep = 0;
+	// the phase of one spot of the wind check: 0 the hero walks to it, 1 the camera turns to his right
+	// (90 degrees), 2 the camera follows him on
+	int townWindPhase = 0;
+	// TOWN_AUTO=30: the character check. the hero walks to the points of type 3 in the town's own
+	// point list, where class characters stand, and the level follow camera frames him with the
+	// NPC he reached: the frames of this plan are compared with the original game's shading
+	int townCharStep = 0;
+	int townCharPhase = 0;
 // the link of the door the autotest is sent to: a door it passes on the way is not taken
 string townAutoLink = "";
 // the one the autotest talks to stands at townAutoGoX/Z; the hero walks to a spot townAutoK steps of
@@ -179,6 +194,7 @@ void Town_Handlers()
 	SetEventHandler("Town_AutoQuit", "Town_AutoQuit", 0);
 	SetEventHandler("Town_AutoTalk", "Town_AutoTalk", 0);
 	SetEventHandler("Town_AutoPick", "Town_AutoPick", 0);
+	SetEventHandler("Town_WindWalk", "Town_WindWalk", 0);
 	SetEventHandler("Control Activation", "Town_Control", 0);
 	SetEventHandler("DialogEvent", "Town_DialogEvent", 0);
 	SetEventHandler("DialogCancel", "Town_DialogLeave", 0);
@@ -265,6 +281,8 @@ void Town_Load(string loc, string from)
 	{
 		Trace("PDM town: model " + data.model + " not loaded");
 	}
+	// the vegetation on its own model: the crowns sway in the wind (WindLeaf technique)
+	SendMessage(&TownLocation, "lssl", MSG_LOCATION_ADD_MODEL, data.model + "_veg", "WindLeaf", 10);
 	if (!SendMessage(&TownLocation, "ls", MSG_LOCATION_SET_CHRS_PATCH, data.patch))
 	{
 		Trace("PDM town: patch " + data.patch + " not loaded");
@@ -296,7 +314,9 @@ void Town_Load(string loc, string from)
 	townGen++;
 	PostEvent("Town_Wander", TOWN_WANDER_MS, "l", townGen);
 	// the autotest of saving (save.c) has no walk of its own
-	if (TownAuto && TownAuto != SAVEFILE_AUTO) { PostEvent("Town_AutoGo", 3000); }
+	if (TownAuto == 20) { PostEvent("Town_WindWalk", 3000); }
+	else if (TownAuto == 30) { PostEvent("Town_CharWalk", 3000); }
+	else if (TownAuto && TownAuto != SAVEFILE_AUTO) { PostEvent("Town_AutoGo", 3000); }
 	Trace("PDM town: in " + loc + " from " + from + ", " + townNpcCount + " characters");
 }
 
@@ -596,14 +616,36 @@ void Town_ExitGo()
 	Town_Go(data.(at).link);
 }
 
-// the menu of the land (hud.c): a place of the town the hero is not in, the sea from a town of an island
+// a door of type 4 with this link stands in the location the hero is in now (the rule: the door of
+// a location is the marker of type 4). The original game opens the menu of the land from the reload
+// list of the loaded location itself (landinterface.c:520, Locations[FindLoadedLocation()]), so a
+// place with no door in this location, a tavern in a town without a tavern, is never offered
+bool Town_HasDoor(string link)
+{
+	aref data;
+	makearef(data, PdmLocations.(townHere));
+	int n = sti(data.points);
+	string at;
+	for (int i = 0; i < n; i++)
+	{
+		at = "p" + i;
+		if (sti(data.(at).type) == 4 && data.(at).link == link) { return true; }
+	}
+	return false;
+}
+
+// the menu of the land (hud.c): a place of the town the hero is not in, the sea from a town of an
+// island; a place is offered only when its door is in the location the hero stands in
 bool Town_CanGo(string link)
 {
 	if (link == "sea") { return townIsland != ""; }
 	if (link == "street") { return townHere != townStreet; }
 	if (!CheckAttribute(&PdmLocations, townStreet + ".interiors." + link)) { return false; }
 	string to = PdmLocations.(townStreet).interiors.(link);
-	return to != townHere && CheckAttribute(&PdmLocations, to);
+	if (to == townHere || !CheckAttribute(&PdmLocations, to)) { return false; }
+	// Town_Go opens doors of the street from anywhere, the hero may be inside an interior now
+	if (townHere == townStreet) { return Town_HasDoor(link); }
+	return Town_HasDoor("street");
 }
 
 // "sl" the place, the generation of the location: the command of the menu of the land, from anywhere
@@ -893,13 +935,18 @@ void Town_AutoPlan()
 	// 4: out to sea and back to the pier (Sea_ToPort), then into the tavern; 5: the same, the ship
 	// sails into the port by the harbour (sea.c Sea_AtHarbour)
 	// 6: out to sea, over the world map to the next island and into its port (map.c)
-	// 10: through the menu of the land (Tab, hud.c) from the pier to every place of the town, each one from
-	// another, then from the tavern to the sea
+	// 10: through the menu of the land (Tab, hud.c) from the pier to every place of the town: inside
+	// a place its menu offers only the street and the sea, so each one is left by the street, the way
+	// the original builds the menu from the reload list of the loaded location (landinterface.c:520);
+	// at the end the tavern and the sea from it
 	if (TownAuto == 10)
 	{
 		Town_PlanAdd("hud", "store", "");
+		Town_PlanAdd("hud", "street", "");
 		Town_PlanAdd("hud", "townhall", "");
+		Town_PlanAdd("hud", "street", "");
 		Town_PlanAdd("hud", "tavern", "");
+		Town_PlanAdd("hud", "street", "");
 		Town_PlanAdd("hud", "shipyard", "");
 		Town_PlanAdd("hud", "street", "");
 		Town_PlanAdd("hud", "tavern", "");
@@ -1156,4 +1203,194 @@ void Town_AutoPick()
 void Town_AutoQuit()
 {
 	ExitProgram();
+}
+
+// wind check (TOWN_AUTO=20): the hero walks the streets and the western yard of the town over its
+// own walking points (the points of type 3 of City_HighRock in data/pdm_world.c: p19, p20, p21, p22,
+// p23), and at every spot the camera looks first to his right and then to his left, four metres
+// aside at his eye height (MSG_CAMERA_TOPOS of location_camera.cpp:case MSG_CAMERA_TOPOS stands the
+// camera at the given point and keeps it looking at the character; MSG_CHARACTER_GETPOS of
+// character.cpp and MSG_CHARACTER_GETAY of it give the real place and facing of the hero, so the
+// side points are computed from him, not from a literal spot; character.cpp uses (sin(ay),0,cos(ay))
+// as the way he walks and (cos(ay),0,-sin(ay)) as his right hand). MSG_CAMERA_MOVE puts the pitch at
+// the eye level instead of the steep default of ax = 0.4, MSG_CAMERA_SET_RADIUS keeps five metres.
+// The last leg walks the hero to the marker of the town tavern (the point of type 4 with the link
+// "tavern", the marker stands just outside the box of the door that town.c:Town_ExitAt reads): the
+// tick of the location notices him in the box (TOWN_EXIT_REACH of the body reach covers the gap of
+// the wall) and Town_ExitGo goes through it, so the tavern interior becomes the location of the run
+// and the frames show the place the hero moved into. The crowns of the vegetation sway in the wind
+// (WindLeaf).
+void Town_WindWalk()
+{
+	float x, z, hx, hy, hz, ay, r;
+	int legMs = 15000;
+	aref data;
+	int n, i, found;
+	string at, link;
+	// the stops of the route are the walking points of the town that stand next to the clumps of the
+	// vegetation of this town, found in the model itself: the histogram of the crown vertices of
+	// city_highrock_veg.gm (one vertex buffer, stride 36, the crowns 0.34 .. 4.61 m high) cut in 2 m
+	// cells puts tree3_leaves.tga and tree2_leaves.tga around x -22 .. -18 with z 24 .. 34, around
+	// x -22 with z -18 .. -16 and around x 20 .. 22 with z 16 .. 18. The stops below are the points of
+	// type 3 of City_HighRock in data/pdm_world.c that sit nearest to those clumps, and legMs covers
+	// the way to the stop along the patch of the location
+	if (townWindStep == 0) { x = -9.258; z = 19.389; legMs = 15000; }
+	else if (townWindStep == 1) { x = -17.857; z = 30.376; legMs = 20000; }
+	else if (townWindStep == 2) { x = -18.832; z = 18.968; legMs = 20000; }
+	else if (townWindStep == 3) { x = -20.369; z = -16.739; legMs = 40000; }
+	else if (townWindStep == 4) { x = 17.958; z = -21.641; legMs = 40000; }
+	else if (townWindStep == 5) { x = 20.100; z = 14.722; legMs = 40000; }
+	else if (townWindStep == 6)
+	{
+		// the marker just outside the door (the point of type 4 with the link of the tavern) is a
+		// node of the AI patch, while the box of the door itself is cut off from the patch by the
+		// wall: the hero stands at the marker and Town_ExitAt still counts him in the box, because
+		// the reach of the body is added to the box (TOWN_EXIT_REACH of town.c, used in it)
+		makearef(data, PdmLocations.(townHere));
+		n = sti(data.points);
+		found = 0;
+		for (i = 0; i < n; i++)
+		{
+			at = "p" + i;
+			if (found || sti(data.(at).type) != 4) { continue; }
+			if (data.(at).link != "tavern") { continue; }
+			x = stf(data.(at).x);
+			z = stf(data.(at).z);
+			found = 1;
+		}
+		if (!found)
+		{
+			// no tavern marker of this town: the marker of any door its menu can go to
+			for (i = 0; i < n; i++)
+			{
+				at = "p" + i;
+				if (found || sti(data.(at).type) != 4) { continue; }
+				link = data.(at).link;
+				if (!Town_CanGo(link)) { continue; }
+				x = stf(data.(at).x);
+				z = stf(data.(at).z);
+				found = 1;
+			}
+		}
+		if (!found)
+		{
+			Trace("PDM town: wind check found no door to go through, it stops here");
+			PostEvent("Town_AutoQuit", 3000);
+			return;
+		}
+		legMs = 20000;
+	}
+	else if (townWindStep == 7)
+	{
+		// the hero stands in the box of the door: the tick of the location has noticed it (townInExit
+		// is the number of that box), go through the door and quit when the new place is loaded
+		Trace("PDM town: wind check goes through the door of the location");
+		PostEvent("Town_ExitGo", 1000, "l", townGen);
+		PostEvent("Town_AutoQuit", 15000);
+		return;
+	}
+	else
+	{
+		Trace("PDM town: wind check done");
+		PostEvent("Town_AutoQuit", 1000);
+		return;
+	}
+	// phase 0: the hero walks to the spot and stands there
+	if (townWindPhase == 0)
+	{
+		Trace("PDM town: wind check walks to " + x + ", " + z);
+		SendMessage(&TownHero, "lsfff", MSG_NPCHARACTER_SETTASK, "Goto point", x, 0.115, z);
+		townWindPhase = 1;
+		PostEvent("Town_WindWalk", legMs);
+		return;
+	}
+	// the place and the facing of the hero, read from him at every look
+	SendMessage(&TownHero, "leee", MSG_CHARACTER_GETPOS, &hx, &hy, &hz);
+	SendMessage(&TownHero, "le", MSG_CHARACTER_GETAY, &ay);
+	// the crowns of the vegetation of this town reach 4.6 m high and the clumps are 4 m wide, so the
+	// look camera stands nine metres aside: closer than that it gets inside the crown and the frame
+	// becomes a magnified fragment of the leaf texture instead of the tree
+	r = 9.0;
+	// phase 1: the camera looks to the right hand of the hero, it stands at his left hand and keeps
+	// looking at him, so the view goes along his right-hand vector
+	if (townWindPhase == 1)
+	{
+		Trace("PDM town: wind check looks to the right at " + x + ", " + z);
+		SendMessage(&TownCamera, "lfffl", MSG_CAMERA_TOPOS, hx - cos(ay) * r, hy + 1.7, hz + sin(ay) * r, 1);
+		townWindPhase = 2;
+		PostEvent("Town_WindWalk", 5000);
+		return;
+	}
+	// phase 3: the same spot, the camera looks to the other side, along his left hand
+	if (townWindPhase == 3)
+	{
+		Trace("PDM town: wind check looks to the left at " + x + ", " + z);
+		SendMessage(&TownCamera, "lfffl", MSG_CAMERA_TOPOS, hx + cos(ay) * r, hy + 1.7, hz - sin(ay) * r, 1);
+		townWindPhase = 4;
+		PostEvent("Town_WindWalk", 5000);
+		return;
+	}
+	// phase 2 and 4: the camera goes back to the hero and follows him on, at the eye level and five
+	// metres behind (MSG_CAMERA_MOVE of location_camera.cpp sets the pitch it locks, MSG_CAMERA_SET
+	// RADIUS the distance of the orbit)
+	SendMessage(&TownCamera, "l", MSG_CAMERA_FOLLOW);
+	SendMessage(&TownCamera, "lf", MSG_CAMERA_MOVE, 0.12);
+	SendMessage(&TownCamera, "lf", MSG_CAMERA_SET_RADIUS, 5.0);
+	if (townWindPhase == 2)
+	{
+		townWindPhase = 3;
+		PostEvent("Town_WindWalk", 3000);
+		return;
+	}
+	townWindPhase = 0;
+	townWindStep++;
+	PostEvent("Town_WindWalk", 1500);
+}
+
+// TOWN_AUTO=30: the character check. The stops are the points of type 3 in the town's own point
+// list, taken one by one in order: class characters are placed by Town_PlaceCharacters on exactly
+// these points, so walking the hero to the stop brings him face to face with a standing NPC. The
+// camera keeps the follow mode, a level pitch (MSG_CAMERA_MOVE of location_camera.cpp) and a short
+// orbit, so the hero's back and the NPC's front fill the frame like in the original game's shots
+void Town_CharWalk()
+{
+	aref data;
+	makearef(data, PdmLocations.(townHere));
+	int n = sti(data.points);
+	int i, found, want;
+	float x, z;
+	string at;
+	if (townCharPhase == 0)
+	{
+		found = 0; want = 0;
+		// find the townCharStep-th point of type 3
+		for (i = 0; i < n; i++)
+		{
+			at = "p" + i;
+			if (sti(data.(at).type) != 3) { continue; }
+			if (want == townCharStep) { found = 1; x = stf(data.(at).x); z = stf(data.(at).z); break; }
+			want++;
+		}
+		if (!found)
+		{
+			Trace("PDM town: char check has no more standing points, done");
+			PostEvent("Town_AutoQuit", 2000);
+			return;
+		}
+		Trace("PDM town: char check " + townCharStep + " walks to the standing point at " + x + ", " + z);
+		// the floor height of the town patch, as the wind check's legs use it
+		SendMessage(&TownHero, "lsfff", MSG_NPCHARACTER_SETTASK, "Goto point", x, 0.115, z);
+		townCharPhase = 1;
+		PostEvent("Town_CharWalk", 12000);
+		return;
+	}
+	// phase 1: the hero stands at the point; the camera returns to the follow mode with a level
+	// pitch and a short orbit (MSG_CAMERA_MOVE and MSG_CAMERA_SET_RADIUS of location_camera.cpp)
+	Trace("PDM town: char shot " + townCharStep + " taken");
+	SendMessage(&TownCamera, "l", MSG_CAMERA_FOLLOW);
+SendMessage(&TownCamera, "lf", MSG_CAMERA_MOVE, 0.10);
+SendMessage(&TownCamera, "lf", MSG_CAMERA_SET_RADIUS, 2.5);
+	townCharPhase = 0;
+	townCharStep++;
+	PostEvent("Town_CharWalk", 3000);
 }
