@@ -425,6 +425,10 @@ count × {
 
 Скрипт (`program/hud.c`) ставит их в `BATTLE_INTERFACE` (картинка корабля, полосы, меню команд по Tab) и в `ILogAndActions` (значок действия справа сверху, на море — «На землю» у гавани, на суше — выход, в котором стоит герой).
 
+### Пиктограммы исчез when the atlas is gone (`pdm_hud.py`, `run.ps1`)
+
+Atlases in `resource/textures/battle_interface/pdm` are not in git: `resource/` is in `.gitignore` of `pdm-game`, and `tools/pdm_hud.py` writes them only to the disk. The engine binds the picture grid from names in `CommandTextures` (`battle_command.cpp:BICommandList::Init` → `TextureCreate`) and draws the icons through `BIImageRender` (`battle_man_sign.cpp:BIManSign::Draw` → `m_pCommandList->Draw()`); if the atlas file is not on the disk, the texture is not created, no icon is drawn — while the note of the menu stays, because the engine writes it from the font (`battle_command.cpp:BICommandList::Draw` by `m_pRS->ExtPrint`) and only the icons disappear without a complaint. Before the fix, the gate in `run.ps1` checked only the pattern `info_rows` in the tracked file `pdm_hud.c`, and when untracked atlases were erased (git clean, a fresh checkout on another machine), the converter was not relaunched and the whole HUD lost every grid picture: the land- and sea-menu icons, the ships, the navigator. Now the gate also requires the file `resource/textures/battle_interface/pdm/commands.tga.tx` on the disk; without it `pdm_hud.py` rebuilds all atlases from the original `TEXTURES/toolbar` (`RESOURCE` of the installed game, the path from `$env:PDM`, `local.ps1`). The test of the land menu with the icons: the autotest `TOWN_AUTO=10` of `City_HighRock` (the table in test-commands.md).
+
 ### Навигатор
 
 Навигатор моря оригинала — `NAVIGATOR.dll` (строки DLL: `toolbar\compas-new.tf`, `obrooch4.tf`, `baba.tf`, `baba_niz.tf`, `wind.tf`, `guns_status.tf`, `guns_info.tf`, `object_land.tf`, `enemy_select.tf`, `selection2.tf`):
