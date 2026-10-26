@@ -188,3 +188,119 @@ void Options_Reopen()
 	// screen, the next launch opens it
 	if (CheckAttribute(&Render, "restart") && sti(Render.restart) != 0) { Screen_Text("LB_RESOLUTION", optionsSize + " (после перезапуска)"); }
 }
+
+// ---------- TOWN_AUTO=14 with SCENE=sea: the resolution of the page over the game ----------
+// The same click "Применить" makes, without a mouse: it asks the render for the new window (Render.SetScreen
+// of DX9RENDER::RunStart, which resizes the window and the back buffer and keeps it in engine.ini) and then
+// asks the interface what its window is. The render answers with the new size (Render.screen_x of
+// DX9RENDER::ResizeBackBuffer), the interface with the one it had at the launch: XINTERFACE::LoadIni reads
+// the window and builds the matrices matp, matv and the attributes ScreenWidth, ScreenLeft, ScreenTop once,
+// in XINTERFACE::SetDevice from XINTERFACE::Init, and nothing runs it again after the resize. So the traces
+// of every resize show the window changed and the interface not, which is why the menus and the panels of
+// the interface keep to the old size of the window (docs findings in docs/dynamic-resolution.md).
+
+// the window of the interface in the units of its screens, as the engine set it once
+int optionsAutoStep = 0;
+int optionsAutoInterface = 0;
+#define OPTIONS_AUTO_STEP_MS 900
+
+int Opt_AutoWidth()
+{
+	int w = 0;
+	if (CheckAttribute(&GameInterface, "ScreenWidth")) { w = sti(GameInterface.ScreenWidth); }
+	return w;
+}
+
+// DX9RENDER::SetScreen sets it when the device could not take the window: engine.ini holds the size for the next launch
+int Opt_AutoRestart()
+{
+	if (CheckAttribute(&Render, "restart")) { return sti(Render.restart); }
+	return 0;
+}
+
+void Opt_AutoStart()
+{
+	// the handler has to exist before the first PostEvent of the step (as save.c does for its steps)
+	SetEventHandler("Opt_AutoStep", "Opt_AutoStep", 0);
+	Trace("PDM options: autotest, the window " + Options_Current() + ", the interface of " + Opt_AutoWidth() + ", restart " + Opt_AutoRestart());
+	optionsAutoInterface = Opt_AutoWidth();
+	PostEvent("Opt_AutoStep", OPTIONS_AUTO_STEP_MS);
+}
+
+// the click of the page as the mouse sends it (the same message screens.c gets on a click)
+void Opt_AutoClick(string node)
+{
+	Trace("PDM options: autotest, " + screenName + " " + node);
+	PostEvent("ievnt_command", 0, "ss", "click", node);
+}
+
+// the next size of OPTIONS_SIZES, always another than the window now
+void Opt_AutoApply()
+{
+	optionsKeep = false;
+	optionsSize = Options_Next(Options_Current());
+	Opt_AutoClick("LB_APPLY");
+}
+
+// steps 3 and 5 look at the window the render has and the window the interface was laid out for
+void Opt_AutoStep()
+{
+	int step = optionsAutoStep;
+	optionsAutoStep++;
+	if (step == 3 || step == 5)
+	{
+		Trace("PDM options: autotest, the window " + Options_Current() + ", the interface of " + Opt_AutoWidth() + ", restart " + Opt_AutoRestart());
+	}
+	if (step < 5) { PostEvent("Opt_AutoStep", OPTIONS_AUTO_STEP_MS); }
+	if (step == 0) { Screen_GameMenu(); return; }
+	if (step == 1) { Opt_AutoClick("LB_OPTIONS"); return; }
+	if (step == 2 || step == 4) { Opt_AutoApply(); return; }
+	Trace("PDM options: autotest done, the interface of " + optionsAutoInterface + " units stayed while the window moved to " + Options_Current());
+	ExitProgram();
+}
+
+// ---------- TOWN_AUTO=15 with SCENE=sea: the page is CLOSED after the resolution change ----------
+// What the player does in a live game: the world renders under the page, the resolution changes, "Выход"
+// closes the page (Screen_Click of screens.c makes Screen_Go and Screen_Close, which thaws EXECUTE) and the
+// world must keep drawing in the new window. The frames after the close are the evidence of what the scene
+// still shows once the device has changed its back buffer (docs/dynamic-resolution.md).
+
+int closeAutoStep = 0;
+#define CLOSE_AUTO_STEP_MS 900
+
+void Opt_CloseStart()
+{
+	// the handler has to exist before the first PostEvent of the step (as save.c does for its steps)
+	SetEventHandler("Opt_CloseStep", "Opt_CloseStep", 0);
+	Trace("PDM close: autotest, the window " + Options_Current());
+	PostEvent("Opt_CloseStep", CLOSE_AUTO_STEP_MS);
+}
+
+// the click of the page as the mouse sends it (the same message screens.c gets on a click)
+void Opt_CloseClick(string node)
+{
+	Trace("PDM close: autotest, " + screenName + " " + node);
+	PostEvent("ievnt_command", 0, "ss", "click", node);
+}
+
+// steps 5..8 render the world with the page closed, so the frames of the run are the frames of the scene
+void Opt_CloseStep()
+{
+	int step = closeAutoStep;
+	closeAutoStep++;
+	if (step == 5 || step == 8 || step == 12)
+	{
+		Trace("PDM close: autotest, the window " + Options_Current() + ", the page of " + screenName);
+	}
+	if (step < 12) { PostEvent("Opt_CloseStep", CLOSE_AUTO_STEP_MS); } // steps 9..12 keep the world rendering alone
+	if (step == 0) { Screen_GameMenu(); return; }
+	if (step == 1) { Opt_CloseClick("LB_OPTIONS"); return; }
+	if (step == 2) { Opt_AutoApply(); return; }
+	if (step == 3) { Opt_CloseClick("LB_EXIT"); return; } // Screen_Go closes the page over the live scene
+	// steps 4..11 do nothing but keep the frames of the world rendering with the page closed
+	if (step >= 12)
+	{
+		Trace("PDM close: autotest done, the world renders in the window of " + Options_Current() + " with the page closed");
+		ExitProgram();
+	}
+}

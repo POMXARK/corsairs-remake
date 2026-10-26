@@ -16,6 +16,12 @@
 #define SAVEFILE_AUTO_MS 1000
 #define SAVEFILE_AUTO 12
 #define SAVEFILE_SCREENS_AUTO 13
+// the resolution of the page «Настройки» over the game (options.c). OPTIONSAUTO_, not OPTIONS_AUTO:
+// the compiler does not tell the case of names, OPTIONS_AUTO would be taken inside Options_Auto...
+#define OPTIONSAUTO_ID 14
+// the same page in a live scene, but it also CLOSES after the resolution change, so the world keeps
+// rendering in the new window for a while (docs/dynamic-resolution.md, the picture after the close)
+#define OPTCLOSE_ID 15
 
 object Render;
 object Scene;
@@ -62,14 +68,23 @@ void MapKey(string controlName, int keyCode)
 void Main()
 {
 	PdmData_Init();
+	Trace("PDM main: pdm_data.c done");
 	PdmLogic_Init();
+	Trace("PDM main: pdm_logic.c done");
 	PdmWorld_Init();
+	Trace("PDM main: pdm_world.c done");
 	PdmVoices_Init();
+	Trace("PDM main: pdm_voices.c done");
 	PdmVoiceLines_Init();
+	Trace("PDM main: pdm_voice_lines.c done");
 	PdmScreens_Init();
+	Trace("PDM main: pdm_screens.c done");
 	PdmSound_Init();
+	Trace("PDM main: pdm_sound.c done");
 	PdmHud_Init();
+	Trace("PDM main: pdm_hud.c done");
 	PdmBoarding_Init();
+	Trace("PDM main: pdm_boarding.c done");
 	makearef(PlayerCard, PdmCharacters.Nicolas_Sharp);
 	// an attribute name in .(...) has to be a variable
 	string shipKey = PlayerCard.ship_key;
@@ -90,7 +105,9 @@ void Main()
 	}
 	if (StartScene == "menu" || StartScene == "menu-newgame" || StartScene == "screens")
 	{
-		Menu_Start();
+		if (TownAuto == OPTIONSAUTO_ID) { Opt_AutoStart(); } // the options page of the main menu changes the screen
+		if (TownAuto == OPTCLOSE_ID) { Opt_CloseStart(); } // the same, over a live scene and closed at the end
+	Menu_Start();
 		return;
 	}
 	Pdm_NewGame();
@@ -100,6 +117,7 @@ void Main()
 	else { Sea_Start(PlayerCard.address.island); }
 	if (TownAuto == SAVEFILE_AUTO) { Save_AutoStart(); }
 	if (TownAuto == SAVEFILE_SCREENS_AUTO) { Save_ScreensStart(); }
+	if (TownAuto == OPTIONSAUTO_ID) { Opt_AutoStart(); }
 }
 
 // what every scene stands on: the keys and the handlers of the game, the scene and the sound; a loaded game

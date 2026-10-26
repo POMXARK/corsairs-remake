@@ -367,3 +367,46 @@ handles of a recompiled effect must be re-resolved in the `restore_render` handl
 `docs/ru/07-debugging.md`. Whether an entity that caches effect handles of its own (`Grass` does it
 through `CreateVertexDeclaration`, `BmFont` keeps `fx_` from `InitShader`) draws the same after
 every resize in every location was not checked frame by frame.
+
+## 11. The world drawn in clip units after the resize (the resolved state)
+
+After the crashes were fixed, the full game showed the wrong picture once the size was changed
+without a restart: near objects filled the screen, everything further away was cut away and only the
+flat sky-blue of the background remained — the reported "draw distance" and "clipping" symptom
+(`C:\Users\User\Documents\My Games\Sea Dogs\Screenshots\2026-10-26_11-49-44.mp4`).
+
+**11.1 What is stale.** `d3d9->Reset` puts the three transforms of the device — WORLD, VIEW and
+PROJECTION — back to identity. `DX9RENDER::RestoreRender()` (`s_device.cpp`) restores the render
+targets, the vertex/index buffers of the registry, the sampler and stage states and the lights
+(`SetCommonStates()`), but no transform. Two of the three are set on every frame anyway: VIEW by the
+camera (`DX9RENDER::SetCamera`, `s_device.cpp:2085` two-argument and `s_device.cpp:2135` look-at)
+and WORLD by every module that draws. The third, the projection, is asked for rarely:
+`LocationCamera::Init()` sets it once per location (`location_camera.cpp:104`), a script message
+sets it (`location_camera.cpp:414` `MSG_CAMERA_SET_PERSPECTIVE`), a dynamic fog event re-sets it
+(`location_camera.cpp:669` `ProcessDynamicFov`), the sea cameras set it every frame
+(`ship_camera.cpp:183`, `deck_camera.cpp:284`, `free_camera.cpp:97`). A land location with its static
+camera does none of these on an ordinary frame, so after the resize the device keeps the identity
+projection.
+
+The proof of the run (`SCENE=menu-newgame` / `SCENE=town`, probes around `DX9RENDER::ResetDevice`
+removed after): `GetTransform(D3DTS_PROJECTION)` reads `1.3361179 2.3764803 1.000025 1` before the
+Reset and `1 1 1 0` after it, and no `SetPerspective` line follows the resize. With an identity
+projection the coordinates of the world ARE the coordinates of clip: the objects one unit around the
+camera fill the screen and everything beyond one unit is clipped away — which is what the frames show.
+
+**11.2 The fix.** `DX9RENDER::RestoreRender()` (`s_device.cpp`) makes the projection again right
+after the states are restored: `SetPerspectiveMatrix(Fov, -1.0f)`. `DX9RENDER::SetPerspective`
+(`s_device.cpp:2185`) cannot be called a second time — it multiplies the angle by `FovMultiplier`
+and stores the product into `Fov` (`s_device.cpp:2213`), so calling it on the kept `Fov` would
+multiply the multiplier twice; the body without that line is the new private
+`DX9RENDER::SetPerspectiveMatrix` (declared in `engine\src\libs\renderer\src\s_device.h`). The
+aspect ratio is passed as the default `-1.0f`, which makes the helper take it from the new
+`screen_size` (`s_device.cpp:2194`) rather than from the old window. The field of view itself is kept
+by the renderer (`float Fov`, `s_device.h:471`) and needs no help from the modules.
+
+**11.3 What the runs show.** The scenarios of §10 exit `0`, `error.log` is `0` bytes, and the frames
+before and after the resize (captured with `storm-capture-crop`, cropped to the game area) show the
+town of `City_HighRock` drawn the same way after the resize as before it — the ground, the houses and
+the vegetation at their normal size, no blue field, no magnified hero; the interface is laid out for
+the new window, as §9 already showed. The same rule is written into
+`engine\docs\ru\07-debugging.md` next to the other Reset-after-resize pitfalls.
