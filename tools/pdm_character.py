@@ -10,6 +10,11 @@ its pivot does not move (the error is zero for 2/3 of the characters; some have 
 as a bottle thrown about in a hand, kept at their mean place). The root is the part that gives the
 tree of the least error, the pelvis.
 
+One character without a reconversion: run it with the model and animation file names. All the
+NPCs and the hero at once, their models, animations and textures in one pool pass (the entry
+"all" instead of the model name), so characters can be regenerated apart from the world:
+  python tools/pdm_character.py "<PDM>" <out-resource> all
+
 Storm moves only the root bone, the others turn around their joints, which is exactly such a
 hierarchy: joint = the pivot in the parent's frame, rotation = R_parent^T * R_part per frame.
 
@@ -512,18 +517,60 @@ def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: fl
             f"actions {' '.join(a.replace(' ', '_') for a in found)}{note}")
 
 
+def convert_all(res: Path, out: Path, textures=None, scale=DEFAULT_SCALE, workers=4):
+    """Every character model of anim_types.idf, its .an and its textures, in parallel.
+
+    Lives here so the world script keeps only a one-line delegate: models and textures
+    of NPCs and the hero can be regenerated without the world conversion, via the CLI
+    below with MODEL == --all. Returns [(stem, class, line-or-None)] in the idf order:
+    LINE is None when the model has no animation file, the static entries stay in the
+    script with an empty model name. TEXTURES defaults to RESOURCE/TEXTURES."""
+    if textures is None:
+        textures = index_files(res / "TEXTURES")
+    chars = index_files(res / "MODELS" / "CHARACTERS")
+    anims = index_files(res / "WORLDS" / "CHARACTERS")
+    jobs, order = [], []
+    for obj in parse_idf(res / "WORLDS" / "anim_types.idf")["objects"]:
+        f = dict(obj)
+        name, cls, anim = f.get("name", "0"), f.get("class", "0"), f.get("anim_file", "null")
+        stem = Path(name).stem.lower()
+        if name == "0" or stem not in chars:
+            continue
+        if anim == "null" or anim.lower() not in anims:
+            order.append((stem, cls, None))
+            continue
+        jobs.append((res, out, name, anim, stem, scale, textures))
+        order.append((stem, cls, True))
+    lines = []
+    if jobs:
+        from multiprocessing import Pool
+        with Pool(min(workers, len(jobs))) as pool:
+            lines = pool.starmap(convert, jobs)
+    report, li = [], 0
+    for stem, cls, _ in order:
+        line = lines[li] if _ else None
+        if line:
+            li += 1
+        report.append((stem, cls, line))
+    return report
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("pdm")
     ap.add_argument("out")
     ap.add_argument("model")
-    ap.add_argument("anim")
+    ap.add_argument("anim", nargs="?", default=None)
     ap.add_argument("--name")
     ap.add_argument("--scale", type=float, default=DEFAULT_SCALE)
     ap.add_argument("--blade", choices=("belt", "hand"), default="belt")
     a = ap.parse_args()
     res = Path(a.pdm)
     res = res / "RESOURCE" if (res / "RESOURCE").is_dir() else res
+    if a.model.lower() == "all":
+        for stem, cls, line in convert_all(res, Path(a.out), None, a.scale):
+            print(line if line else f"{stem}: no animation file, class {cls}")
+        return
     print(convert(res, Path(a.out), a.model, a.anim, a.name, a.scale, blade=a.blade))
 
 

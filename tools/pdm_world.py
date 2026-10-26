@@ -845,11 +845,15 @@ class World:
             print(f"  {stem}: {seams} triangles split at T-junctions")
         if tiles:
             print(f"  {stem}: {len(tiles)} textures laid once, kept off their edges")
-        meshes, props = pdm_props3d.build(meshes, self.picture, self.generated, Mesh)
+        meshes, veg, props = pdm_props3d.build(meshes, self.picture, self.generated, Mesh)
         if any(props.values()):
             print(f"  {stem}: {props['trees']} trees and {props['signs']} signs modelled")
         meshes = merge_by_texture(meshes, stem)
         write_gm(meshes, self.out / "models" / "locations" / f"{stem}.gm", bsp=True)
+        # the vegetation gets its own .gm: the engine renders it with the wind technique (WindLeaf)
+        if veg:
+            veg = merge_by_texture(veg, stem + "_veg")
+            write_gm(veg, self.out / "models" / "locations" / f"{stem}_veg.gm", bsp=True)
         self.done_models[stem] = len(meshes)
         return stem
 
@@ -891,20 +895,13 @@ class World:
         return f"{key}: {model}, patch {patch}, {len(loc['points'])} points"
 
     def characters(self):
-        """Every model of anim_types.idf with its class (the point type it stands on)."""
-        chars = index_files(self.res / "MODELS" / "CHARACTERS")
-        anims = index_files(self.res / "WORLDS" / "CHARACTERS")
+        """Every model of anim_types.idf with its class (the point type it stands on).
+        The whole conversion of models and textures lives in pdm_character.convert_all();
+        this only turns its report into the PdmCharModels lines of the generated script."""
         report = []
-        for obj in parse_idf(self.res / "WORLDS" / "anim_types.idf")["objects"]:
-            f = dict(obj)
-            name, cls, anim = f.get("name", "0"), f.get("class", "0"), f.get("anim_file", "null")
-            stem = Path(name).stem.lower()
-            if name == "0" or stem not in chars:
-                continue
-            converted = anim != "null" and anim.lower() in anims
+        for stem, cls, line in pdm_character.convert_all(self.res, self.out, self.textures, K):
+            converted = line is not None and "static" not in line
             if converted:
-                line = pdm_character.convert(self.res, self.out, name, anim, stem, K, self.textures)
-                converted = "static" not in line
                 report.append(line)
             at = f"PdmCharModels.{stem}"
             self.lines.append(f'\t{at}.class = {cls}; {at}.model = "{stem if converted else ""}";')

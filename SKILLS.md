@@ -52,6 +52,26 @@ not a procedure with its own commands.
   which materials and textures it expects (`tree3`, `tree2`, `pdm_bark.tga`, `leaves.tga` in the
   city vegetation of High Rock), and to check that the conversion produced the expected geometry.
 
+## Recipe: reproducing the original game's smooth character shading in the converted port
+
+- Files: `tools\cff2gm.py`, `tools\pdm_character.py`, `engine\demos\common\storm_formats.py`,
+  `engine\src\techniques\animation.fx`, `engine\src\libs\renderer\src\s_device.cpp`,
+  `engine\src\libs\lighter\src\lighter.cpp`, `engine\src\libs\location\src\lights.cpp`,
+  `docs\cff-converted-characters.md` (the full investigation and the evidence table).
+- Method: the CFF stores no normals and its 3 trailing vertex bytes are **padding, not colour**
+  (byte dumps show them uniform over 0..255 with no near-grey triples — baking them painted the
+  models in rainbow hues; keep the neutral `0xFF808080` of `storm_formats.py` instead). The CFF is
+  a triangle soup, so smooth shading needs welding: `cff2gm.py:cff_to_meshes` welds identical
+  quantized positions **for normal averaging only** (`compute_normals` over `weldpos`), while
+  faces keep the raw per-corner order (welding the indices too explodes the mesh into shards).
+  `pdm_character.py:convert_all` owns the character pass (`all` mode, 4-worker pool);
+  `pdm_world.py` delegates. Verify by byte scans (neutral stamps, smooth-vs-flat face dots) plus
+  the town-scenario frames through `storm-capture-crop`.
+- Purpose: reproduce the original game's soft, facet-free character look — the original renderer
+  welded averaged normals and lit one warm key light at draw time; the port moves both facts into
+  the converter (welded normals, neutral colour) for the engine's Gouraud + `modulate2x` live-lit
+  character path.
+
 ## Recipe: what the camera actually accepts
 
 - Files: `engine\src\libs\location\src\location_camera.cpp`, `engine\src\libs\shared_headers\include\shared\messages.h`.

@@ -6,7 +6,9 @@ Usage:
 
 The CFF format stores positions and UVs as int16 quantized into a per-file bounding box,
 with per-vertex RGB color (0..127). This tool dequantizes positions/UVs, computes smooth
-vertex normals from face cross-products, and writes a standard Storm RDF .gm file.
+vertex normals from face cross-products, carries the per-vertex RGB into the .gm vertex
+colors (the CFF 0..127 half-range is what the engine's MODULATE2X diffuse expects, so the
+bytes pass through as is), and writes a standard Storm RDF .gm file.
 """
 import math
 import struct
@@ -89,20 +91,32 @@ def _parse_meshes_at(data: bytes, off: int, lod_count: int, vert_size: int):
             if r.off + needed > len(data):
                 return None, False
 
+            # batch the vertex and face arrays in struct.unpack_from chunks: one C call per
+            # chunk when vertices are plain 10-byte records, one call per vertex otherwise
+            # (the colour bytes interleave the records, so stride decides)
             vertices = []
-            for _ in range(vertex_count):
-                x, y, z = r.i16(), r.i16(), r.i16()
-                u, v = r.i16(), r.i16()
-                r.skip(vert_size - 10)  # color bytes (2 or 3)
-                vertices.append((x, y, z, u, v))
+            if vert_size == 10:
+                for start in range(0, vertex_count, 4096):
+                    take = min(4096, vertex_count - start)
+                    vals = struct.unpack_from("<" + "5h" * take, data, r.off + start * 10)
+                    for i in range(take):
+                        o = i * 5
+                        vertices.append((vals[o], vals[o + 1], vals[o + 2], vals[o + 3], vals[o + 4], b""))
+            else:
+                for i in range(vertex_count):
+                    o = r.off + i * vert_size
+                    x, y, z, u, v = struct.unpack_from("<5h", data, o)
+                    vertices.append((x, y, z, u, v, data[o + 10:o + vert_size]))
+            r.skip(vertex_count * vert_size)
 
+            face_size = 6 if vertex_count > 256 else 3
+            face_fmt = "3H" if vertex_count > 256 else "3B"
             faces = []
-            for _ in range(face_count):
-                if vertex_count > 256:
-                    a, b, c = r.u16(), r.u16(), r.u16()
-                else:
-                    a, b, c = r.u8(), r.u8(), r.u8()
-                faces.append((a, b, c))
+            for start in range(0, face_count, 4096):
+                take = min(4096, face_count - start)
+                vals = struct.unpack_from("<" + face_fmt * take, data, r.off + start * face_size)
+                faces += [tuple(vals[i * 3:i * 3 + 3]) for i in range(take)]
+            r.skip(face_count * face_size)
 
             # frame 0 places the part: translation 3f, rotation 3f (radians), frame number
             frame0 = None
@@ -247,45 +261,65 @@ def cff_to_meshes(cff_path: Path, place=None, texture=lambda name: name):
         if uv_delim == 0.0:
             uv_delim = 1.0
 
-        # Dequantize positions and UVs
+        # Dequantize positions and UVs; the CFF RGB (0..127) goes into the .gm colour as is:
+        # 0..127 is the same half-range MODULATE2X expects (0x80 = neutral), old 12B vertices
+        # carry only 2 colour bytes and get the neutral grey instead
         positions = []
         uvs = []
-        for x, y, z, u, v in mdata["vertices"]:
+        posweld = []
+        weldpos = []
+        seen = {}
+        for x, y, z, u, v, rgb in mdata["vertices"]:
             px = origin[0] + x * scale[0] / 32767.0
             py = origin[1] + y * scale[1] / 32767.0
             pz = origin[2] + z * scale[2] / 32767.0
             positions.append((px, py, pz))
             uvs.append((u / uv_delim, v / uv_delim))
+            k = (x, y, z)
+            if k not in seen:
+                seen[k] = len(weldpos)
+                weldpos.append((px, py, pz))
+            posweld.append(seen[k])
 
         # animated parts (characters, cut-scenes) are stored in local space, frame 0 puts them in place
         if mdata["frame0"]:
             tx, ty, tz, rx, ry, rz = mdata["frame0"]
             m3 = frame_matrix(rx, ry, rz)
-            positions = [tuple(m3[i][0] * p[0] + m3[i][1] * p[1] + m3[i][2] * p[2] + t
-                               for i, t in enumerate((tx, ty, tz))) for p in positions]
+            xf = lambda p: tuple(m3[i][0] * p[0] + m3[i][1] * p[1] + m3[i][2] * p[2] + t
+                                 for i, t in enumerate((tx, ty, tz)))
+            positions = [xf(p) for p in positions]
+            weldpos = [xf(p) for p in weldpos]
 
         if place:
             positions = [place(p) for p in positions]
+            weldpos = [place(p) for p in weldpos]
 
         # CFF mostly keeps the D3D winding (clockwise seen from outside), so the faces go as they are.
         # Reversing it turned every model inside out (the far side of the PDM brig's hull showed through
         # the near one). But mirrored halves are often stored with the winding of the original: the
         # brig's left bow half faces inwards and the original engine, drawing without culling, hid it.
         # So every face also gets a back copy with the opposite normal (a hole in the brig's bow)
-        faces = list(mdata["faces"])
+        faces = [tuple(f) for f in mdata["faces"]]
 
-        # Compute smooth normals
-        normals = compute_normals(positions, faces)
-
+        # Compute smooth normals: one averaged normal per shared vertex, as the original
+        # engine shaded these normal-less meshes (the soft look on the frames of the original game).
+        # The weld is only for the averaging: the vertex array keeps one record per face corner
+        # because UVs differ per corner, so faces still index the raw corner order.
+        weldnorm = compute_normals(weldpos, [tuple(posweld[i] for i in f) for f in faces])
+        normals = [weldnorm[w] for w in posweld]
         # Use actual CFF mesh name (e.g. "hull", "mast1")
         name = mdata["name"] if mdata["name"] else f"mesh_{mi}"
+        # the 3 bytes after the 5 u16 of a 13-byte CFF vertex are padding, not colour:
+        # the dumps of RESOURCE/MODELS/CHARACTERS/*.cff show them uniform over 0..255 with
+        # no near-grey triples; baking them would paint the mesh in random hues, so the
+        # vertex colour of the .gm stays at the neutral 0xFF808080 of storm_formats.py
         m = Mesh(name, tex_name)
         for pos, normal, uv in zip(positions, normals, uvs):
             m.vertex(pos, normal, uv)
-        m.triangles += [tuple(f) for f in faces]
+        m.triangles += faces
         back = len(m.vertices)
         for pos, normal, uv in zip(positions, normals, uvs):
-            m.vertex(pos, tuple(-v for v in normal), uv)
+            m.vertex(pos, tuple(-c for c in normal), uv)
         m.triangles += [(back + a, back + c, back + b) for a, b, c in faces]
 
         meshes.append(m)
