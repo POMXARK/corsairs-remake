@@ -322,7 +322,7 @@ void Town_Load(string loc, string from)
 	// the autotest of saving (save.c) has no walk of its own
 	if (TownAuto == 20) { PostEvent("Town_WindWalk", 3000); }
 	else if (TownAuto == 30) { PostEvent("Town_CharWalk", 3000); }
-	else if (TownAuto == 40) { PostEvent("TownFace_Start", 3000); }
+	else if (TownAuto == 40 || TownAuto == 41) { PostEvent("TownFace_Start", 3000); }
 	else if (TownAuto && TownAuto != SAVEFILE_AUTO) { PostEvent("Town_AutoGo", 3000); }
 	Trace("PDM town: in " + loc + " from " + from + ", " + townNpcCount + " characters");
 }

@@ -40,6 +40,7 @@ from pathlib import Path
 TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS))
 import cff2gm  # noqa: E402
+import pdm_eyes  # noqa: E402
 from cff2gm import write_gm  # noqa: E402
 from pdm2storm import convert_texture, parse_idf  # noqa: E402
 from pdm_ship import index_files  # noqa: E402
@@ -471,6 +472,8 @@ def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: fl
     drawn = drawn_blades([m.texture for m in meshes], parents)
     # the head: the first part painted with a head or a face (doc-Head, hub-spa-face); a chicken has none
     head = next((part for part, m in enumerate(meshes) if "head" in m.texture.lower() or "face" in m.texture.lower()), None)
+    if head is not None:  # a grid of vertices over the eyes, so the engine can blink them (tools/pdm_eyes.py)
+        pdm_eyes.add_eye_vertices(meshes[head])
     hidden = drawn
     gm_name = name
     if blade == "hand":
@@ -494,6 +497,7 @@ def convert(res: Path, out: Path, model: str, anim: str, name: str = None, k: fl
 
     drift = check_pose(bone_parents, joints, root_positions, rotations, rot, pos, order, k)
     write_gm(meshes, out / "models" / "characters" / f"{gm_name}.gm", skinned=True)
+    pdm_eyes.write_ini(out)
     cycles = smooth_cycles(read_actions(index_files(res / "WORLDS" / "CHARACTERS")[anim.lower()]),
                            root_positions, rotations)
     write_an(out / "animation" / f"{name}.an", FPS, bone_parents, joints, root_positions, rotations)
