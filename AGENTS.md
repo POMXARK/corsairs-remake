@@ -8,6 +8,18 @@
    - Before dot-sourcing `demo.ps1`, explicitly set absolute path to `$DefaultEngine`.
    - Always verify files via `if (Test-Path $Path)` before running `Select-String`.
    - Save all .ps1 files strictly in ASCII encoding.
+   - LAUNCHER AND AUTO-RUN SYNTAX (ps1, bat), see the `powershell-launcher-scripts` skill
+     (`.claude\skills\powershell-launcher-scripts\SKILL.md`) for the full guide: the only entry point is `pdm-game\game.bat`, it delegates to
+     `pdm-game\game.ps1`; every demo/autotest starts from that menu (rule 12). Run a script
+     ONLY as `powershell -NoProfile -ExecutionPolicy Bypass -File <abs path>.ps1 [args]` —
+     never inline its text into `-Command`, never `cmd /c powershell -Command "..."`.
+     Never use `-Command` for scripts that are not pure ASCII: the file form reads UTF-8
+     by BOM, the `-Command` form depends on the console codepage and mangles Cyrillic.
+     A .bat wrapper is `chcp 852 >nul`, CRLF, ASCII; a .ps1 is UTF-8 WITH BOM (PowerShell
+     5.1 reads no-BOM files through the console codepage and breaks Cyrillic strings);
+     a .ps1 named `logs` is reached as `logs.ps1` (bare `logs` = the `ls` alias);
+     no `&&` (that is cmd's), the `;` ends statements; never assign to automatic
+     variables (`$home`, `$input`, `$true`…).
 5. SKILLS INDEX: before a research step read `SKILLS.md` at this root; it names for every task the
    file that carries the instructions, the method it prescribes and the purpose it serves. Add a row
    there the same turn a new skill or recipe is written, delete the row when it stops applying.
