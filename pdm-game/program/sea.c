@@ -83,8 +83,8 @@ bool seaActive = false;
 // M opens the world map (ours: the original opens it by sailing off the island)
 #define SEA_MAP_KEY 77
 #define SEA_AUTO_MAP_MS 3000
-// coming from the map the ship appears this far out from its place at the harbour, sailing in (ours)
-#define SEA_ARRIVE_OFFSET 400.0
+// one px of the map is 50 m of the sea: the scale from the original (WDM_MAP_TO_SEA_SCALE, worldmap_globals.c)
+#define SEA_MAP_TO_SEA_SCALE 50.0
 // TOWN_AUTO=5 and 6: the ship sails in at about 2 m/s, minutes of sea; the autotest runs the time faster (ours)
 #define SEA_AUTO_TIME_SCALE 6.0
 // R at sea runs the time x1, x3, x6 in turn, kept from island to island (ours: the islands are km apart)
@@ -93,8 +93,17 @@ bool seaActive = false;
 float seaTimeScale = 1.0;
 bool seaFromMap = false;
 bool seaAutoMapDone = false;
+bool seaAutoSailDone = false;
 // SCENE=battle (battle.c): Sea_AddShip gives the ships to SEA_AI, an enemy comes after the hero
 bool seaBattle = false;
+// "Плыть к" outside of battle (ours): the NPC ship the button teleports to, made for TOWN_AUTO=14
+// of the same data card the battle enemy is made of (PdmCharacters, as BATTLE_ENEMY in battle.c)
+#define SEA_NPC_KEY "Umberto__Lump_"
+#define SEA_NPC_DISTANCE 150.0
+// the hero is put this far abeam of the NPC, like BATTLE_SAIL_TO in battle.c
+#define SEA_SAIL_TO 30.0
+// its index in SeaShips, -1 when there is no NPC ship on this sea
+int seaNpc = -1;
 // the island Sea_Start was given, for a save (seaIsland is "" where the island has no harbour)
 string seaAt = "";
 // a loaded game (save.c) puts the ship where it was saved, not at the port
@@ -103,7 +112,64 @@ float seaLoadX = 0.0;
 float seaLoadZ = 0.0;
 float seaLoadAy = 0.0;
 
-// The hero on his ship at the harbour of an island (a key of PdmIslands); the camera flies round it
+// the NPC ship for "Плыть к" outside of battle (ours): same data card as the battle enemy is made
+// of (PdmCharacters), on the line of sight of the hero at SEA_NPC_DISTANCE m, bow to him (as Battle_AddEnemy
+// in battle.c puts the enemy)
+int Sea_NpcSpawn(float x, float z, float ay)
+{
+	// an attribute name in .(...) has to be a variable, as battle.c notes
+	string npcKey = SEA_NPC_KEY;
+	aref card;
+	makearef(card, PdmCharacters.(npcKey));
+	string shipKey = card.ship_key;
+	string typeKey = PdmShips.(shipKey).type_key;
+	seaNpc = Sea_AddShip(card, typeKey, x + sin(ay) * SEA_NPC_DISTANCE, z + cos(ay) * SEA_NPC_DISTANCE, ay + BATTLE_PI);
+	SeaShips[seaNpc].Ship.Name = PdmShips.(shipKey).name;
+	SeaShips[seaNpc].Ship.SP = 100;
+	SeaShipTypes[seaNpc].SP = 100;
+	Trace("PDM: sea, NPC ship " + card.id + " on " + PdmShips.(shipKey).name + " (" + typeKey + ")");
+	return seaNpc;
+}
+
+// "Плыть к" outside of battle is possible while the NPC ship is on the sea
+bool Sea_CanSailTo()
+{
+	return !seaBattle && seaNpc >= 0;
+}
+
+// "Плыть к" outside of battle (ours, the math of battle.c:Battle_SailTo): the hero is teleported
+// abeam of the NPC ship at SEA_SAIL_TO m, on the side he is at now, heading as the NPC
+void Sea_SailTo()
+{
+	if (!Sea_CanSailTo()) { return; }
+	float ex = stf(SeaShips[seaNpc].ship.pos.x);
+	float ez = stf(SeaShips[seaNpc].ship.pos.z);
+	float ay = stf(SeaShips[seaNpc].ship.ang.y);
+	// the starboard of the NPC is (cos ay, -sin ay); the hero stays on his side of it
+	// the same ship teleport as battle.c:Battle_SailTo sends to the hero's entity
+	// the NPC keeps its head in the teleport, the hero gets the same one
+	// so that the ships do not overlap and the button can be pressed again
+	// the hero sails on afterwards as the player steers him
+	// the NPC does not answer: the hero may press the button again from any side
+
+	float rx = cos(ay);
+	float rz = -sin(ay);
+	float side = SEA_SAIL_TO;
+	if ((stf(SeaShips[seaHero].ship.pos.x) - ex) * rx + (stf(SeaShips[seaHero].ship.pos.z) - ez) * rz < 0.0) { side = -side; }
+	SendMessage(&SeaShips[seaHero], "lfff", MSG_SHIP_TELEPORT, ex + rx * side, ez + rz * side, ay);
+	Hud_Log(PdmHud.note.sail_to + " " + SeaShips[seaNpc].Ship.Name);
+	Trace("PDM: sea, sail to " + SeaShips[seaNpc].id + ", " + side + " m abeam");
+}
+
+// TOWN_AUTO=14: the frame after the jump the ships write their places again (battle.c:Battle_SailToCheck's pattern)
+void Sea_SailToCheck()
+{
+	if (seaNpc < 0) { return; }
+	Trace("PDM: sea, sail to done, hero " + stf(SeaShips[seaHero].ship.pos.x) + " " + stf(SeaShips[seaHero].ship.pos.z) + ", NPC " + stf(SeaShips[seaNpc].ship.pos.x) + " " + stf(SeaShips[seaNpc].ship.pos.z));
+	// the button works and the ships moved: the run ends by going back to the world map
+	Sea_ToMap();
+}
+
 // until the player takes the mouse, the run needs no input.
 void Sea_Start(string islandKey)
 {
@@ -130,7 +196,6 @@ void Sea_Start(string islandKey)
 		seaPortDistance = Sea_HarbourDistance(x, z);
 		float offset = 0.0;
 		if (TownAuto == 5) { offset = SEA_AUTO_OFFSET; }
-		if (seaFromMap) { offset = SEA_ARRIVE_OFFSET; }
 		if (offset > 0.0 && seaPortDistance > 0.0)
 		{
 			float k = 1.0 + offset / seaPortDistance;
@@ -158,15 +223,23 @@ void Sea_Start(string islandKey)
 	Sea_CreateCamera(hero);
 	Hud_Start();
 	if (seaBattle) { Battle_AddEnemy(x, z, ay); }
+	if (TownAuto == 14) { Sea_NpcSpawn(x, z, ay); }
 	SetEventHandler("Sea_Tick", "Sea_Tick", 0);
 	SetEventHandler("Sea_ToPort", "Sea_ToPort", 0);
 	SetEventHandler("Sea_ToMap", "Sea_ToMap", 0);
+	// "Плыть к" at sea (ours, as battle.c registers Battle_SailTo at 166): the Tab's press posts Sea_SailTo
+	// (hud.c:Hud_LaunchCommand), the autotest posts it too, never simulated keys
+	SetEventHandler("Sea_SailTo", "Sea_SailTo", 0);
+	SetEventHandler("Sea_SailToCheck", "Sea_SailToCheck", 0);
 	PostEvent("Sea_Tick", SEA_TICK_MS);
 	seaActive = true;
 	seaFromMap = false;
 	// TOWN_AUTO=4: the autotest sails out and comes back by itself; 6: out to the world map once
 	if (TownAuto == 4) { PostEvent("Sea_ToPort", SEA_AUTO_PORT_MS); }
 	if (TownAuto == 6 && !seaAutoMapDone) { seaAutoMapDone = true; PostEvent("Sea_ToMap", SEA_AUTO_MAP_MS); }
+	// TOWN_AUTO=14: the button "Плыть к" pressed once, as the battle's TOWN_AUTO=9 presses Battle_SailTo
+	// (the event stands for the Tab's press, never simulated keys, as the interface autotests do)
+	if (TownAuto == 14 && !seaAutoSailDone) { seaAutoSailDone = true; PostEvent("Sea_SailTo", 0); PostEvent("Sea_SailToCheck", 500); }
 	if (TownAuto == 5 || TownAuto == 6) { seaTimeScale = SEA_AUTO_TIME_SCALE; }
 	SetTimeScale(seaTimeScale);
 	Trace("PDM: sea loaded");
@@ -204,9 +277,17 @@ string Sea_PortTown()
 }
 
 // from the world map (map.c) to the sea at an island, the ship sailing in to its harbour
-void Sea_Arrive(string islandKey)
+void Sea_Arrive(string islandKey, float atMapX, float atMapY, float ay)
 {
 	seaFromMap = true;
+	// to the sea: the transform of the original (worldmap_reload.c: WdmAddPlayerGroup, and worldmap.c: wdmCreateMap for the
+	// reverse way): the flag of an island and its harbour are the same anchor, the ship appears at sea
+	// from the point of the map in the same meters away from the harbour as it was from the flag in px times 50,
+	// with its course from the map
+	seaLoadPos = true;
+	seaLoadX = stf(PdmIslands.(islandKey).harbour_x) + (atMapX - Map_IslandX(islandKey)) * SEA_MAP_TO_SEA_SCALE;
+	seaLoadZ = stf(PdmIslands.(islandKey).harbour_z) + (atMapY - Map_IslandY(islandKey)) * SEA_MAP_TO_SEA_SCALE;
+	seaLoadAy = ay;
 	Sea_Start(islandKey);
 }
 
@@ -214,9 +295,25 @@ void Sea_ToMap()
 {
 	if (!seaActive) { return; }
 	string island = seaIsland;
+	// the place and the course of the hero's ship at sea, taken before the release (the entity writes ship.pos and ship.ang each frame)
+	float mx = 0.0;
+	float my = 0.0;
+	float ay = 0.0;
+	if (island != "" && CheckAttribute(&PdmIslands, island + ".map_cell"))
+	{
+		mx = Map_IslandX(island);
+		my = Map_IslandY(island);
+		if (seaHero >= 0 && CheckAttribute(&SeaShips[seaHero], "ship.pos.x") && CheckAttribute(&PdmIslands, island + ".harbour_x"))
+		{
+			// back to the map: map = flag + (sea - harbour) / 50 (worldmap.c: wdmCreateMap, the same transform the other way)
+			mx = mx + (stf(SeaShips[seaHero].ship.pos.x) - stf(PdmIslands.(island).harbour_x)) / SEA_MAP_TO_SEA_SCALE;
+			my = my + (stf(SeaShips[seaHero].ship.pos.z) - stf(PdmIslands.(island).harbour_z)) / SEA_MAP_TO_SEA_SCALE;
+			ay = stf(SeaShips[seaHero].ship.ang.y);
+		}
+	}
 	Sea_Release();
 	Trace("PDM: sea, to the world map from " + island);
-	Map_Start(island);
+	Map_Start(island, mx, my, ay);
 }
 
 // deletes what Sea_Start made, so that the next voyage starts afresh
@@ -239,6 +336,7 @@ void Sea_Release()
 	for (int i = 0; i < seaShipCount; i++) { DeleteClass(&SeaShips[i]); }
 	seaShipCount = 0;
 	seaHero = -1;
+	seaNpc = -1;
 	DeleteClass(&Flag);
 	DeleteClass(&VantL);
 	DeleteClass(&Vant);

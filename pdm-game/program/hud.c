@@ -733,7 +733,8 @@ void Hud_PossibleCommands()
 {
 	int chr = GetEventData();
 	BattleInterface.Commands.board.enable = Board_Can();
-	BattleInterface.Commands.sail_to.enable = Battle_CanSailTo();
+	// "Плыть к" at sea (ours): the battle one is Battle_CanSailTo, the sea one is Sea_CanSailTo
+	if (seaBattle) { BattleInterface.Commands.sail_to.enable = Battle_CanSailTo(); } else { BattleInterface.Commands.sail_to.enable = Sea_CanSailTo(); }
 	BattleInterface.Commands.land.enable = Hud_CanLand();
 	BattleInterface.Commands.sea_map.enable = hudMapFree;
 	BattleInterface.Commands.skip_time.enable = 1;
@@ -763,7 +764,8 @@ void Hud_LaunchCommand()
 	if (name == "land") { PostEvent("Sea_ToPort", 0); }
 	if (name == "sea_map") { PostEvent("Sea_ToMap", 0); }
 	if (name == "board") { PostEvent("Board_Start", 0); }
-	if (name == "sail_to") { PostEvent("Battle_SailTo", 0); }
+	// "Плыть к" at sea (ours): the Tab's press runs the sea's teleport outside of battle
+	if (name == "sail_to") { if (seaBattle) { PostEvent("Battle_SailTo", 0); } else { PostEvent("Sea_SailTo", 0); } }
 	if (name == "skip_time") { Sea_NextTimeScale(); }
 }
 

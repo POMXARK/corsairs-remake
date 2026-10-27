@@ -1,8 +1,8 @@
-﻿# The original Sea Dogs (PDM 1.061) on Storm Engine, Windows: the menu of game.sh. Builds the engine
+# The original Sea Dogs (PDM 1.061) on Storm Engine, Windows: the menu of game.sh. Builds the engine
 # (build.ps1 of the game root), converts the installed original and starts the game (run.ps1).
 # Usage: game.ps1                       the menu
 #        game.ps1 build Debug|Release
-#        game.ps1 run [Debug|Release] [menu|sea|battle|town|review|quest|story]
+#        game.ps1 run [Debug|Release] [menu|sea|sailto|battle|town|review|quest|story]
 #        game.ps1 convert | package | logs | keys | check
 # Paths are set in pdm-game/local.ps1 (not in git), e.g.  $env:PDM = 'D:\Games\Корсары'
 param([string]$Command = 'menu', [string]$Config = 'Debug', [string]$Scene = 'menu')
@@ -24,6 +24,7 @@ function Invoke-Run([string]$Cfg, [string]$Name)
     switch ($Name)
     {
         'quest' { $env:SCENE = 'town'; $env:TOWN = 'City_HighRock'; $env:TOWN_AUTO = '3' }
+        'sailto' { $env:SCENE = 'sea'; $env:TOWN = 'City_GrandaAvilia'; $env:TOWN_AUTO = '14' }
         'town' { $env:SCENE = 'town'; $env:TOWN = 'City_HighRock' }
         default { $env:SCENE = $Name }
     }
@@ -103,7 +104,7 @@ function Show-Menu
   3) Море                         8) Сконвертировать оригинал заново
   4) Смотр флота                  9) Собрать пакет для игры (dist\)
   5) Квест Хайрока (автотест)     c) Проверить окружение
-  b) Морской бой   k) Управление   l) Логи   q) Выход
+  b) Морской бой   s) Плыть к NPC (автотест)   k) Управление   l) Логи   q) Выход
 "@
         $choice = Read-Host '>'
         try
@@ -116,6 +117,7 @@ function Show-Menu
                 '4' { Invoke-Run $cfg 'review' }
                 '5' { Invoke-Run $cfg 'quest' }
                 'b' { Invoke-Run $cfg 'battle' }
+                's' { Invoke-Run $cfg 'sailto' }
                 '6' { Invoke-Build $cfg }
                 '7' { $cfg = if ($cfg -eq 'Debug') { 'Release' } else { 'Debug' } }
                 '8' { Invoke-Convert }

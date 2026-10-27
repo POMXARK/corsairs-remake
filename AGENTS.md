@@ -32,3 +32,7 @@
     `Trace` moments of the scenario, cropped to the game area, compared before and after. Never
     conclude from the log alone. Captures stay in `C:\temp\shots`, never in the repository.
 11. GAME LAUNCH: Run from `pdm-game/` using `.\game.ps1 run Debug menu`.
+12. LAUNCHER RULE: every demonstration and every automated test must be launchable from the
+   `pdm-game\game.bat` menu: add its scene name to `game.ps1` (the `Invoke-Run` switch and the
+   menu list) the same turn the test is written, so `game.bat` (which delegates to `game.ps1`)
+   offers it as a menu item; no test may stay startable only by hand-set environment variables.
