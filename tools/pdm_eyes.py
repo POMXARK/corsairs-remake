@@ -22,29 +22,52 @@ ROWS = (-0.6, -0.3, -0.1, 0.0, 0.1, 0.3, 0.6)
 COLS = (-0.8, -0.4, 0.0, 0.4, 0.8)
 
 
+# the ramp of the engine on the edge of a window (texels): the cells of it show the rows between the lid and the
+# skin, so the thinner it is the smaller the streak; the hero has a dense mesh and keeps the soft one
+RAMP = 0.15
+REACH = 6.0  # texels beyond the grid up to which the cuts are kept free of T-junctions
+RAMPS = {"hero_head": 3.0}
+
+
+def ramp(name):
+    return RAMPS.get(name, RAMP)
+
+
 def key(texture):
     """The name of a head texture as a section of eyes.ini and a key of eyes.json: hero_head, pirat_shopper_head."""
     return Path(str(texture).replace("\\", "/")).name.lower().split(".")[0].replace(" ", "_")
 
 
+# the eye of the hero was set by hand on his dense mesh (window 40..80 x 129..143, skin row 145)
+HERO = {"hero_head": [{"cx": 60.0, "cy": 136.0, "rx": 11.0, "ry": 3.0, "skin": 145.0}]}
+
+
 def load():
-    return json.loads((TOOLS / "eyes.json").read_text())
+    return {**json.loads((TOOLS / "eyes.json").read_text()), **HERO}
 
 
 def window(e):
     """x0, x1, y0, y1, skin of an eye (cx, cy, rx, ry): the lids meet on the middle row, a skin row below shows on them."""
     hx, hy = e["rx"] + 9.0, e["ry"] + 4.0
-    return e["cx"] - hx, e["cx"] + hx, e["cy"] - hy, e["cy"] + hy, e["cy"] + hy + 2.0
+    return e["cx"] - hx, e["cx"] + hx, e["cy"] - hy, e["cy"] + hy, e.get("skin", e["cy"] + hy + 2.0)
 
 
-def lines(e):
+def lines(e, r):
     """Grid lines (texels) through the window of an eye: x, y. The outermost lie beyond the ramp of the engine
-    (3 texels, weight 0), the ones next to the window soften it."""
+    (RAMP texels, weight 0), the one between them softens it."""
     x0, x1, y0, y1, _ = window(e)
     cx, mid, hx, hy = 0.5 * (x0 + x1), 0.5 * (y0 + y1), 0.5 * (x1 - x0), 0.5 * (y1 - y0)
-    xs = [x0 - 3.5, x0 - 1.5, x0] + [cx + c * hx for c in COLS] + [x1, x1 + 1.5, x1 + 3.5]
-    ys = [y0 - 3.5, y0 - 1.5, y0] + [mid + r * hy for r in ROWS] + [y1, y1 + 1.5, y1 + 3.5]
+    xs = [x0 - r - 0.05, x0 - r * 0.5, x0] + [cx + c * hx for c in COLS] + [x1, x1 + r * 0.5, x1 + r + 0.05]
+    ys = [y0 - r - 0.05, y0 - r * 0.5, y0] + [mid + c * hy for c in ROWS] + [y1, y1 + r * 0.5, y1 + r + 0.05]
     return sorted(set(round(v, 3) for v in xs)), sorted(set(round(v, 3) for v in ys))
+
+
+def _crossing(mesh, tri, axis, at):
+    """The edges (as sorted vertex pairs) of a triangle that the line uv[axis] = at crosses."""
+    ds = [mesh.vertices[i][2][axis] * TEX - at for i in tri]
+    ds = [0.0 if abs(v) < 1e-6 else v for v in ds]
+    return [(min(tri[k], tri[(k + 1) % 3]), max(tri[k], tri[(k + 1) % 3]))
+            for k in range(3) if ds[k] * ds[(k + 1) % 3] < 0.0]
 
 
 def _cut(mesh, cache, tri, axis, at):
@@ -90,6 +113,36 @@ def _cut(mesh, cache, tri, axis, at):
     return out
 
 
+def _cut_line(mesh, cache, box, axis, at):
+    """Cuts every triangle that the line crosses inside the box, and the triangles that share a cut edge with them
+    (the cut edge is cut on both sides, otherwise a T-junction leaves a hole of a pixel)."""
+    other = 1 - axis
+    cut = set()  # edges the line is to cut
+    for tri in mesh.triangles:
+        for a, b in _crossing(mesh, tri, axis, at):
+            p = [mesh.vertices[a][2], mesh.vertices[b][2]]
+            lo, hi = min(q[other] for q in p) * TEX, max(q[other] for q in p) * TEX
+            if lo <= box[2 * other + 1] and hi >= box[2 * other]:
+                cut.add((a, b))
+    near = (box[2 * other] - REACH, box[2 * other + 1] + REACH)  # further from the eye a T-junction is let be
+    grown = True
+    while grown:
+        grown = False
+        for tri in mesh.triangles:
+            edges = _crossing(mesh, tri, axis, at)
+            if any(max(mesh.vertices[v][2][other] for v in e) * TEX < near[0] or
+                   min(mesh.vertices[v][2][other] for v in e) * TEX > near[1] for e in edges):
+                continue
+            if any(e in cut for e in edges) and not all(e in cut for e in edges):
+                cut.update(edges)
+                grown = True
+    out = []
+    for tri in mesh.triangles:
+        edges = _crossing(mesh, tri, axis, at)
+        out += _cut(mesh, cache, tri, axis, at) if edges and edges[0] in cut else [tri]
+    mesh.triangles = out
+
+
 def add_eye_vertices(mesh):
     """Cuts the triangles over the window of every eye of this head texture by a grid of lines, so every piece lies in
     one cell and the engine moves the UV of the corners of the cells; returns the number of vertices added."""
@@ -98,21 +151,12 @@ def add_eye_vertices(mesh):
         return 0
     before = len(mesh.vertices)
     for e in eyes:
-        xs, ys = lines(e)
+        xs, ys = lines(e, ramp(key(mesh.texture)))
         cache = {}
         box = (xs[0], xs[-1], ys[0], ys[-1])
         for axis, values in ((0, xs), (1, ys)):
             for at in values:
-                out = []
-                for tri in mesh.triangles:
-                    uv = [mesh.vertices[i][2] for i in tri]
-                    lo, hi = min(p[axis] for p in uv) * TEX, max(p[axis] for p in uv) * TEX
-                    other = 1 - axis
-                    olo, ohi = min(p[other] for p in uv) * TEX, max(p[other] for p in uv) * TEX
-                    b = box
-                    in_box = olo <= b[2 * other + 1] and ohi >= b[2 * other] and lo <= b[2 * axis + 1] and hi >= b[2 * axis]
-                    out += _cut(mesh, cache, tri, axis, at) if in_box else [tri]
-                mesh.triangles = out
+                _cut_line(mesh, cache, box, axis, at)
     return len(mesh.vertices) - before
 
 
@@ -122,7 +166,7 @@ def write_ini(out):
     lines = ["; the eye windows of the heads, texels of a 256x256 texture; written by tools/pdm_eyes.py from tools/eyes.json",
              "; read by Character::UpdateEyeBlink (location/src/character.cpp)"]
     for name, eyes in sorted(load().items()):
-        lines += ["", f"[{name}]", f"mirror = {1 if len(eyes) == 1 else 0}"]
+        lines += ["", f"[{name}]", f"mirror = {1 if len(eyes) == 1 else 0}", f"ramp = {ramp(name):g}"]
         for e in eyes:
             lines.append("eye = " + ", ".join(f"{v:.1f}" for v in window(e)))
     path = Path(out) / "ini" / "eyes.ini"

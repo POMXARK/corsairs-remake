@@ -55,8 +55,23 @@ def measure(im, p):
         if len(xs) > 20:
             rx, ry = (xs.max() - xs.min() + 1) / 2, (ys.max() - ys.min() + 1) / 2
             px, py = X0 + (xs.max() + xs.min()) / 2, Y0 + (ys.max() + ys.min()) / 2
-    return {"cx": round(float(px), 1), "cy": round(float(py), 1),
-            "rx": round(float(np.clip(rx, 8, 16)), 1), "ry": round(float(np.clip(ry, 3, 6)), 1)}
+    rx, ry = float(np.clip(rx, 8, 16)), float(np.clip(ry, 3, 6))
+    return {"cx": round(float(px), 1), "cy": round(float(py), 1), "rx": round(rx, 1), "ry": round(ry, 1),
+            "skin": skin_row(im, px, py + ry + 4.0, rx + 9.0)}
+
+
+def skin_row(im, cx, below, hx):
+    """The row of the lids when the eye is shut: the plainest one under the window (the least change along the row
+    and between the rows around it), not a lash line or a shadow."""
+    g = cv2.GaussianBlur(cv2.cvtColor(im, cv2.COLOR_RGB2GRAY), (0, 0), 0.7).astype(float)
+    x0, x1 = int(max(cx - hx, 0)), int(min(cx + hx, 256))
+    best, row = None, below + 2.0
+    for r in range(int(below) + 1, min(int(below) + 10, 253)):
+        band = g[r - 1:r + 2, x0:x1]
+        score = band.std(axis=1).sum() + 2.0 * np.abs(np.diff(g[r - 1:r + 2, x0:x1].mean(axis=1))).sum()
+        if best is None or score < best:
+            best, row = score, float(r)
+    return row
 
 
 def main():
