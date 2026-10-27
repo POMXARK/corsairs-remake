@@ -68,9 +68,10 @@ fi
 # again for a map made before its fog
 grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'LB_VOICEON_OFF' "$DIR/resource/ini/interfaces/options.ini" && grep -qs 'PDM_HUD_18' "$DIR/resource/ini/fonts.ini" && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
 # the towns and interiors (WORLDS/locations/*.loc), their patches and the characters with animation
-# eyes.ini comes with the eye grid of the heads (the blink): a world converted before it is made again, and the boarding after it
+# eyes.ini comes with the eye grid of the heads (the blink): the characters of an older world are converted again alone (pdm_character.py all), and the boarding after them
 WORLD_NEW=0
-[ -f "$DIR/program/data/pdm_world.c" ] && [ -f "$DIR/resource/ini/eyes.ini" ] || { WORLD_NEW=1; python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"; }
+if [ ! -f "$DIR/program/data/pdm_world.c" ]; then WORLD_NEW=1; python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"
+elif [ ! -f "$DIR/resource/ini/eyes.ini" ]; then WORLD_NEW=1; python3 -I "$TOOLS/pdm_character.py" "$PDM" "$DIR/resource" all; fi
 # the cabin of the boarding, the fighters with the blade drawn and the plates of the bars, after the characters (it
 # writes their .ani again); again for the data written before the plates
 if [ "$WORLD_NEW" = 1 ] || ! grep -qs "PdmBoarding.hud" "$DIR/program/data/pdm_boarding.c"; then python3 -I "$TOOLS/pdm_boarding.py" "$PDM" "$DIR"; fi
