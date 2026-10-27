@@ -141,11 +141,15 @@ if (-not ((Test-Pattern 'info_rows' "$Demo/program/data/pdm_hud.c") -and (Test-P
 if (-not (Test-Path "$Demo/program/data/pdm_sound.c")) { Invoke-Python "$Tools/pdm_sound.py" $Pdm $Demo }
 Invoke-Python "$Tools/pdm_data2c.py" "$Demo/data" "$Demo/program"
 Invoke-Python "$Tools/pdm_logic2c.py" "$Demo/data" "$Demo/program"
+# the neural voice-over of the speeches: binds the files that exist, none is fine
+if (-not (Test-Path "$Demo/program/data/pdm_voice_lines.c")) { Invoke-Python "$Tools/pdm_voice_lines.py" $Demo }
 # the scene to start with, as run.sh
 @(
     "string StartScene = `"$(Get-Env 'SCENE' 'menu')`";"
     "string StartTown = `"$(Get-Env 'TOWN' 'City_GrandaAvilia')`";"
     "int TownAuto = $(Get-Env 'TOWN_AUTO' '0');"
+    "string TalkNpc = `"$(Get-Env 'TALK_NPC' '')`";"
+    "int TalkAngle = $(Get-Env 'TALK_ANGLE' '0');"
     "int SoundFxOnly = $(Get-Env 'SOUND_FX_ONLY' '0');"
     "int StartVolFx = $(Get-Setting 'VOLUME_FX' 'volume_fx' '80');"
     "int StartVolMusic = $(Get-Setting 'VOLUME_MUSIC' 'volume_music' '70');"
