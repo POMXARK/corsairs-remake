@@ -123,9 +123,11 @@ if ($Selected)
 }
 else
 {
-    if (-not (Test-Path "$Demo/program/data/pdm_world.c")) { Invoke-Python "$Tools/pdm_world.py" $Pdm $Demo }
+    # eyes.ini comes with the eye grid of the heads (the blink): a world converted before it is made again, and the boarding after it
+    $worldNew = -not ((Test-Path "$Demo/program/data/pdm_world.c") -and (Test-Path "$Demo/resource/ini/eyes.ini"))
+    if ($worldNew) { Invoke-Python "$Tools/pdm_world.py" $Pdm $Demo }
     # the cabin of the boarding and the fighters with the blade drawn, after the characters
-    if (-not (Test-Pattern 'PdmBoarding.hud' "$Demo/program/data/pdm_boarding.c")) { Invoke-Python "$Tools/pdm_boarding.py" $Pdm $Demo }
+    if ($worldNew -or -not (Test-Pattern 'PdmBoarding.hud' "$Demo/program/data/pdm_boarding.c")) { Invoke-Python "$Tools/pdm_boarding.py" $Pdm $Demo }
 }
 # the islands, where the ship appears at each and their forts
 if ($Selected)

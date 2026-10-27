@@ -68,10 +68,12 @@ fi
 # again for a map made before its fog
 grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'LB_VOICEON_OFF' "$DIR/resource/ini/interfaces/options.ini" && grep -qs 'PDM_HUD_18' "$DIR/resource/ini/fonts.ini" && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
 # the towns and interiors (WORLDS/locations/*.loc), their patches and the characters with animation
-[ -f "$DIR/program/data/pdm_world.c" ] || python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"
+# eyes.ini comes with the eye grid of the heads (the blink): a world converted before it is made again, and the boarding after it
+WORLD_NEW=0
+[ -f "$DIR/program/data/pdm_world.c" ] && [ -f "$DIR/resource/ini/eyes.ini" ] || { WORLD_NEW=1; python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"; }
 # the cabin of the boarding, the fighters with the blade drawn and the plates of the bars, after the characters (it
 # writes their .ani again); again for the data written before the plates
-grep -qs "PdmBoarding.hud" "$DIR/program/data/pdm_boarding.c" || python3 -I "$TOOLS/pdm_boarding.py" "$PDM" "$DIR"
+[ "$WORLD_NEW" = 1 ] || grep -qs "PdmBoarding.hud" "$DIR/program/data/pdm_boarding.c" || python3 -I "$TOOLS/pdm_boarding.py" "$PDM" "$DIR"
 # the movies of the original (the intro of "Новая игра"): the scenes of DESC/*.ani, their models, textures and sounds
 grep -qs "PdmCut.intro" "$DIR/program/data/pdm_cutscenes.c" || python3 -I "$TOOLS/pdm_cutscene.py" "$PDM" "$DIR"
 # the islands (DESC/<Island>.def, WORLDS/islands_x.idf), where the ship appears at each, their names and forts
