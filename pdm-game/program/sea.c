@@ -53,6 +53,8 @@ int seaShipCount = 0;
 float seaSpeedScale = 1.0;
 
 float fogHeight = 150.0;
+// the sky of weather\skies\ that Sea_CreateWorld puts up; the movies change it
+string seaSkyDir = "day";
 #define SEA_TICK_MS 40
 // gusts (ours): the wind of the weather swings by these shares of its speed and radians of its angle
 // over the periods in s, incommensurate so the gusts do not repeat; the sail entity reads the
@@ -619,7 +621,7 @@ void Sea_CreateWorld()
 	LayerAddObject(EXECUTE, &Sky, 2);
 	LayerAddObject(REALIZE, &Sky, 3);
 	LayerAddObject(SEA_REFLECTION, &Sky, 1);
-	Sky.Dir.d0 = "weather\skies\day\";
+	Sky.Dir.d0 = "weather\skies\" + seaSkyDir + "\";
 	Sky.Dir = "12";
 	Sky.Color = argb(0, 255, 255, 255);
 	Sky.isDone = "";

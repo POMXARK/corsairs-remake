@@ -16,7 +16,7 @@
 # SCENE=sea TOWN_AUTO=12 saves at sea, lands, loads, lands again, saves in the town, loads and quits;
 # SCENE=sea TOWN_AUTO=13 saves from the menu over the game, loads that file from the list, deletes it, sets the
 # window to 1600x900 in the options and back, and quits;
-# SCENE=story runs the self-test of the story machine (every action of the original) and quits.
+# SCENE=cutscene plays the intro movie and quits, SCENE=cutscene-<movie> one movie of DESC (bunt, death, scene8...); SCENE=story runs the self-test of the story machine (every action of the original) and quits.
 # The window (docs/build.md): FULLSCREEN=1 the full screen, FULLSCREEN=0 a window with a frame, SCREEN=1920x1080 its size;
 # by default engine.ini (a window of 1280x720). The engine options --fullscreen, --windowed, --size WxH do the same.
 # VOLUME_FX, VOLUME_MUSIC, VOLUME_VOICE (0..100) and NPC_VOICE=0|1 set the sound of the page "Настройки" at the start, as
@@ -57,6 +57,10 @@ if [ ! -f "$DIR/resource/particles/explosion.xps" ]; then
     python3 -I "$DEMOS/battle/make_battle.py" "$DIR/resource"
     hulls
 fi
+# the guns of the movies (the flash of a shot, the hit on a hull) from the blocks of the particles demo
+[ -f "$DIR/resource/textures/weather/skies/haze/sky_up.tga.tx" ] || python3 -I "$TOOLS/make_haze_sky.py" "$DIR/resource"
+[ -f "$DIR/resource/textures/effects/fire.tx" ] || python3 -I "$TOOLS/pdm_effects.py" "$PDM" "$DIR/resource"
+[ -f "$DIR/resource/particles/shothit.xps" ] || python3 -I "$TOOLS/make_cannon_fx.py" "$DIR/resource"
 # the screens of the interface (INI/menu.ini, the world map of INI/map.ini), their pictures, texts and fonts, the dialog window and the voices;
 # again for a map made before its fog
 grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'LB_VOICEON_OFF' "$DIR/resource/ini/interfaces/options.ini" && grep -qs 'PDM_HUD_18' "$DIR/resource/ini/fonts.ini" && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
@@ -65,6 +69,8 @@ grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'LB_V
 # the cabin of the boarding, the fighters with the blade drawn and the plates of the bars, after the characters (it
 # writes their .ani again); again for the data written before the plates
 grep -qs "PdmBoarding.hud" "$DIR/program/data/pdm_boarding.c" || python3 -I "$TOOLS/pdm_boarding.py" "$PDM" "$DIR"
+# the movies of the original (the intro of "Новая игра"): the scenes of DESC/*.ani, their models, textures and sounds
+grep -qs "PdmCut.intro" "$DIR/program/data/pdm_cutscenes.c" || python3 -I "$TOOLS/pdm_cutscene.py" "$PDM" "$DIR"
 # the islands (DESC/<Island>.def, WORLDS/islands_x.idf), where the ship appears at each, their names and forts
 grep -qs '"fort"' "$DIR/data/islands/Highrock.json" || python3 -I "$TOOLS/pdm_island.py" "$PDM" "$DIR/resource" all --data "$DIR/data"
 # the toolbar of the sea (the commands, the pictures of the ships with flags, the bars) and its notes

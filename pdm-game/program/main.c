@@ -42,6 +42,7 @@ aref PlayerShipType;
 #include "data\pdm_sound.c"
 #include "data\pdm_hud.c"
 #include "data\pdm_boarding.c"
+#include "data\pdm_cutscenes.c"
 #include "sound.c"
 #include "story.c"
 // before sea.c and town.c: they use its defines
@@ -54,6 +55,7 @@ aref PlayerShipType;
 #include "town.c"
 #include "boarding.c"
 #include "review.c"
+#include "cutscene.c"
 #include "menu.c"
 #include "map.c"
 #include "trade.c"
@@ -86,6 +88,7 @@ void Main()
 	PdmHud_Init();
 	Trace("PDM main: pdm_hud.c done");
 	PdmBoarding_Init();
+	PdmCut_Init();
 	Trace("PDM main: pdm_boarding.c done");
 	makearef(PlayerCard, PdmCharacters.Nicolas_Sharp);
 	// an attribute name in .(...) has to be a variable
@@ -112,6 +115,9 @@ void Main()
 	Menu_Start();
 		return;
 	}
+	if (StartScene == "cutscene") { Cut_Start("intro", "exit"); return; }
+	// SCENE=cutscene-<movie> plays one movie of DESC (bunt, death, scene8...) and quits
+	if (findSubStr(StartScene, "cutscene-", 0) == 0) { Cut_Start(strcut(StartScene, 9, strlen(StartScene) - 1), "exit"); return; }
 	Pdm_NewGame();
 	if (StartScene == "review") { Review_Start(); }
 	else if (StartScene == "town") { Town_Start(StartTown, "sea"); }

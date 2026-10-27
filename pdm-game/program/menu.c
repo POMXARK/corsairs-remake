@@ -80,9 +80,6 @@ void Menu_NewGame()
 	SendMessage(&GameInterface, "l", MSG_INTERFACE_RELEASE);
 	DeleteClass(&GameInterface);
 	screenName = "";
-	Pdm_NewGame();
-	// the hero starts in the town of his address (Highrock), coming from his ship at the pier:
-	// the sea has no islands yet (P4)
-	string island = PlayerCard.address.island;
-	Town_Start(PdmIslands.(island).town, "sea");
+	// the movie of the new game, then the hero starts in the town of his address (cutscene.c Cut_End)
+	Cut_Start("intro", "town");
 }
