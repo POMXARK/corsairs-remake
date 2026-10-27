@@ -146,6 +146,8 @@ def _cut_line(mesh, cache, box, axis, at):
 def add_eye_vertices(mesh):
     """Cuts the triangles over the window of every eye of this head texture by a grid of lines, so every piece lies in
     one cell and the engine moves the UV of the corners of the cells; returns the number of vertices added."""
+    if key(mesh.texture) in HERO:  # his mesh is dense already, cutting it makes the lids close as a grid
+        return 0
     eyes = load().get(key(mesh.texture))
     if not eyes:
         return 0
