@@ -92,7 +92,43 @@ Gouraud path. The known structural difference is the engine's split of live-lit 
 baked-lit locations; it is design, not a bug, and reads as matching in the town frames because the
 Lighter bakes the same sun direction into the walls.
 
-## 4. Evidence index
+## 5. Reproducing the picture: convert, launch, record, stop
+
+Convert only the sea content — the converters are split by part in `pdm-game\run.ps1` and nothing
+else is rewritten:
+
+```powershell
+$env:PDM   = 'C:\Program Files\1C\Корсары'     # the installed original
+$env:PARTS = 'ships,islands,sea'               # parts: sea, ships, islands, cities
+cd C:\corsairs-remake\pdm-game; .\run.ps1     # converts the selected parts, then starts the engine
+```
+
+`PARTS` unset = the original guarded flow; `RECONVERT=1` wipes and converts everything. A partial
+run never touches the cities or the characters.
+
+Launch the sea scene from the launcher menu (`sea` is menu item 3 of `game.ps1`):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\corsairs-remake\pdm-game\game.ps1 run Debug sea
+```
+
+Trigger the video: record the desktop while the scene runs, the recorder stops itself after `-t`
+seconds; the comparison frames come out of the same file, cropped to the game area:
+
+```powershell
+$rec = Start-Process C:\temp\ffmpeg.exe -ArgumentList '-f','gdigrab','-framerate','30','-i','desktop',
+                     '-t','150','-y','C:\temp\shots\sea_after.mp4' -PassThru
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\corsairs-remake\pdm-game\game.ps1 run Debug sea
+Stop-Process -Id $rec.Id                        # stop the recorder if the scene finished earlier
+# ffmpeg -ss <t> -i C:\temp\shots\sea_after.mp4 -frames:v 1 -vf "crop=950:1080:155:130" sea_fNc.png
+```
+
+Captures live in `C:\temp\shots`, never in the repository. To stop the engine when it is already
+running: kill `engine.exe` (`Stop-Process -Name engine.exe`) or close the window — the scene run
+is over when its process returns. The window-title capture (`-f gdigrab -title=...`) fails on this
+build ("Can't find window"), so the desktop capture with the crop above is the reliable recipe.
+
+## 6. Evidence index
 
 | Fact | File | Function / line |
 |---|---|---|
