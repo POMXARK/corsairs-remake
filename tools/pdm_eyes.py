@@ -21,6 +21,7 @@ TEX = 256.0
 # skin, soft, as on the dense mesh of the hero, the heads of the others are made as dense (DENSITY)
 RAMP = 3.0
 DENSITY = 2.0  # texels: the longest edge of the mesh over an eye
+GAZE = 1.0  # the darts of the look (key `gaze` of eyes.ini; 0 — the eyes only blink)
 RAMPS = {}
 
 
@@ -122,7 +123,7 @@ def write_ini(out):
     lines = ["; the eye windows of the heads, texels of a 256x256 texture; written by tools/pdm_eyes.py from tools/eyes.json",
              "; read by Character::UpdateEyeBlink (location/src/character.cpp)"]
     for name, eyes in sorted(load().items()):
-        lines += ["", f"[{name}]", f"mirror = {1 if len(eyes) == 1 else 0}", f"ramp = {ramp(name):g}"]
+        lines += ["", f"[{name}]", f"mirror = {1 if len(eyes) == 1 else 0}", f"ramp = {ramp(name):g}", f"gaze = {GAZE:g}"]
         for e in eyes:
             lines.append("eye = " + ", ".join(f"{v:.1f}" for v in window(e)))
     path = Path(out) / "ini" / "eyes.ini"

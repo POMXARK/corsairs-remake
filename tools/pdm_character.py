@@ -53,7 +53,7 @@ FPS = 10.0
 # a minute at 0.7 m/s, half the pace of a man (120 steps, 1.4 m/s); the walk and the run alone are
 # played twice as fast, the gestures stay at the frame rate of the original
 WALK_RATE = 2.0
-RUN_RATE = 2.0
+RUN_RATE = 3.0
 
 # Storm action <- the PDM actions to take it from, the first one the character has
 ACTIONS = {
@@ -556,7 +556,7 @@ def convert_all(res: Path, out: Path, textures=None, scale=DEFAULT_SCALE, worker
         if line:
             li += 1
         report.append((stem, cls, line))
-    (out / "ini" / "eyes.hero").write_text("the heads of the characters carry the dense eye mesh\n", encoding="ascii")  # run.sh / run.ps1 look for it
+    (out / "ini" / "eyes.look").write_text("the heads of the characters carry the dense eye mesh\n", encoding="ascii")  # run.sh / run.ps1 look for it
     return report
 
 
