@@ -68,6 +68,14 @@ not a procedure with its own commands.
   `pdm_character.py:convert_all` owns the character pass (`all` mode, 4-worker pool);
   `pdm_world.py` delegates. Verify by byte scans (neutral stamps, smooth-vs-flat face dots) plus
   the town-scenario frames through `storm-capture-crop`.
+  Sea content regenerates alone: set `$env:PARTS = 'ships,islands,sea'` (sea, ships, islands,
+  cities; `pdm-game\run.ps1` runs only those converters, guards bypassed for them only) and run
+  `.\run.ps1`; the same code fixes the hulls of `pdm_ship.py` and the forts of `pdm_island.py`.
+  Launch the test from the menu (`game.ps1 run Debug sea`), record the desktop
+  (`Start-Process ffmpeg ... -f gdigrab -i desktop -t 150`, then `Stop-Process -Id $rec.Id` when
+  the scene ends earlier; kill `engine.exe` to stop the game; the window-title capture fails on
+  this build), crop frames `crop=950:1080:155:130` into `C:\temp\shots`. The full instructions
+  are section 5 of `docs\cff-converted-characters.md`.
 - Purpose: reproduce the original game's soft, facet-free character look — the original renderer
   welded averaged normals and lit one warm key light at draw time; the port moves both facts into
   the converter (welded normals, neutral colour) for the engine's Gouraud + `modulate2x` live-lit
