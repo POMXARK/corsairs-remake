@@ -5,8 +5,8 @@ The head of a PDM character has 130..270 vertices and none of them lies in the e
 texture of the eye by the UV of the vertices (the way it blinks the hero). Two things make it possible:
   * tools/eyes.json: where the eyes of every head texture are, in texels of a texture taken as 256x256 (the position
     is marked by eye, the size comes from tools/make_eyes.py);
-  * add_eye_vertices(): the triangles over the window of each eye are cut by a grid of lines, so every piece lies in
-    one cell and its corners have the position, normal and bone of the surface and the UV of their own place.
+  * add_eye_vertices(): the edges of the triangles over the window of each eye are halved until they are at most
+    DENSITY texels long, so the mesh is as dense as the hero's and the lids close smoothly (the hero is left as he is).
 The engine finds the window of a vertex by its UV; the table of the windows goes to resource/ini/eyes.ini (write_ini).
 
   python tools/pdm_eyes.py <resource_out>     writes <resource_out>/ini/eyes.ini
@@ -17,16 +17,11 @@ from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parent
 TEX = 256.0
-# inner grid lines of a window: fractions of the half height, fractions of the half width
-ROWS = (-0.6, -0.3, -0.1, 0.0, 0.1, 0.3, 0.6)
-COLS = (-0.8, -0.4, 0.0, 0.4, 0.8)
-
-
 # the ramp of the engine on the edge of a window (texels): the cells of it show the rows between the lid and the
-# skin, so the thinner it is the smaller the streak; the hero has a dense mesh and keeps the soft one
-RAMP = 0.15
-REACH = 6.0  # texels beyond the grid up to which the cuts are kept free of T-junctions
-RAMPS = {"hero_head": 3.0}
+# skin, soft, as on the dense mesh of the hero, the heads of the others are made as dense (DENSITY)
+RAMP = 3.0
+DENSITY = 2.0  # texels: the longest edge of the mesh over an eye
+RAMPS = {}
 
 
 def ramp(name):
@@ -52,113 +47,74 @@ def window(e):
     return e["cx"] - hx, e["cx"] + hx, e["cy"] - hy, e["cy"] + hy, e.get("skin", e["cy"] + hy + 2.0)
 
 
-def lines(e, r):
-    """Grid lines (texels) through the window of an eye: x, y. The outermost lie beyond the ramp of the engine
-    (RAMP texels, weight 0), the one between them softens it."""
-    x0, x1, y0, y1, _ = window(e)
-    cx, mid, hx, hy = 0.5 * (x0 + x1), 0.5 * (y0 + y1), 0.5 * (x1 - x0), 0.5 * (y1 - y0)
-    xs = [x0 - r - 0.05, x0 - r * 0.5, x0] + [cx + c * hx for c in COLS] + [x1, x1 + r * 0.5, x1 + r + 0.05]
-    ys = [y0 - r - 0.05, y0 - r * 0.5, y0] + [mid + c * hy for c in ROWS] + [y1, y1 + r * 0.5, y1 + r + 0.05]
-    return sorted(set(round(v, 3) for v in xs)), sorted(set(round(v, 3) for v in ys))
+def _split_edges(mesh, boxes, limit):
+    """One pass: splits at the middle every edge longer than limit texels (in UV) that touches a box; the triangle
+    is cut by the edges split in it (1, 2 or 3 of them), so neighbours stay joined; returns whether any was split."""
+    def inside(i):
+        u, v = mesh.vertices[i][2][0] * TEX, mesh.vertices[i][2][1] * TEX
+        return any(x0 <= u <= x1 and y0 <= v <= y1 for x0, x1, y0, y1 in boxes)
 
+    def length(a, b):
+        ua, ub = mesh.vertices[a][2], mesh.vertices[b][2]
+        return ((ua[0] - ub[0]) ** 2 + (ua[1] - ub[1]) ** 2) ** 0.5 * TEX
 
-def _crossing(mesh, tri, axis, at):
-    """The edges (as sorted vertex pairs) of a triangle that the line uv[axis] = at crosses."""
-    ds = [mesh.vertices[i][2][axis] * TEX - at for i in tri]
-    ds = [0.0 if abs(v) < 1e-6 else v for v in ds]
-    return [(min(tri[k], tri[(k + 1) % 3]), max(tri[k], tri[(k + 1) % 3]))
-            for k in range(3) if ds[k] * ds[(k + 1) % 3] < 0.0]
-
-
-def _cut(mesh, cache, tri, axis, at):
-    """Cuts a triangle by the line uv[axis] = at (texels): the pieces keep the winding; the point on a shared edge is
-    made once, so the neighbours stay joined."""
-    def d(i):
-        v = mesh.vertices[i][2][axis] * TEX - at
-        return 0.0 if abs(v) < 1e-6 else v
-
-    def cross(a, b):
-        key = (min(a, b), max(a, b), axis, at)
-        if key not in cache:
-            da, db = d(a), d(b)
-            t = da / (da - db)
-            va, vb = mesh.vertices[a], mesh.vertices[b]
-            lerp = lambda k: tuple(va[k][j] + t * (vb[k][j] - va[k][j]) for j in range(len(va[k])))
-            nrm = lerp(1)
-            length = sum(c * c for c in nrm) ** 0.5 or 1.0
-            near = a if t < 0.5 else b
-            mesh.vertices.append((lerp(0), tuple(c / length for c in nrm), lerp(2), mesh.vertices[near][3]))
-            if mesh.colors is not None:
-                mesh.colors.append(mesh.colors[near])
-            cache[key] = len(mesh.vertices) - 1
-        return cache[key]
-
-    ds = [d(i) for i in tri]
-    if not (min(ds) < 0.0 < max(ds)):
-        return [tri]
-    side = [[], []]  # polygons of the two sides, in the order of the triangle
-    for k in range(3):
-        a, b = tri[k], tri[(k + 1) % 3]
-        da, db = ds[k], ds[(k + 1) % 3]
-        for poly, ok in ((side[0], da <= 0.0), (side[1], da >= 0.0)):
-            if ok:
-                poly.append(a)
-        if da * db < 0.0:
-            m = cross(a, b)
-            side[0].append(m)
-            side[1].append(m)
-    out = []
-    for poly in side:
-        out += [(poly[0], poly[k], poly[k + 1]) for k in range(1, len(poly) - 1)]
-    return out
-
-
-def _cut_line(mesh, cache, box, axis, at):
-    """Cuts every triangle that the line crosses inside the box, and the triangles that share a cut edge with them
-    (the cut edge is cut on both sides, otherwise a T-junction leaves a hole of a pixel)."""
-    other = 1 - axis
-    cut = set()  # edges the line is to cut
+    mid = {}
     for tri in mesh.triangles:
-        for a, b in _crossing(mesh, tri, axis, at):
-            p = [mesh.vertices[a][2], mesh.vertices[b][2]]
-            lo, hi = min(q[other] for q in p) * TEX, max(q[other] for q in p) * TEX
-            if lo <= box[2 * other + 1] and hi >= box[2 * other]:
-                cut.add((a, b))
-    near = (box[2 * other] - REACH, box[2 * other + 1] + REACH)  # further from the eye a T-junction is let be
-    grown = True
-    while grown:
-        grown = False
-        for tri in mesh.triangles:
-            edges = _crossing(mesh, tri, axis, at)
-            if any(max(mesh.vertices[v][2][other] for v in e) * TEX < near[0] or
-                   min(mesh.vertices[v][2][other] for v in e) * TEX > near[1] for e in edges):
-                continue
-            if any(e in cut for e in edges) and not all(e in cut for e in edges):
-                cut.update(edges)
-                grown = True
+        for k in range(3):
+            a, b = tri[k], tri[(k + 1) % 3]
+            e = (min(a, b), max(a, b))
+            if e not in mid and (inside(a) or inside(b)) and length(a, b) > limit:
+                mid[e] = None
+    if not mid:
+        return False
+    for a, b in mid:
+        va, vb = mesh.vertices[a], mesh.vertices[b]
+        lerp = lambda k: tuple(0.5 * (va[k][j] + vb[k][j]) for j in range(len(va[k])))
+        nrm = lerp(1)
+        norm = sum(c * c for c in nrm) ** 0.5 or 1.0
+        mesh.vertices.append((lerp(0), tuple(c / norm for c in nrm), lerp(2), va[3]))
+        if mesh.colors is not None:
+            mesh.colors.append(mesh.colors[a])
+        mid[(a, b)] = len(mesh.vertices) - 1
     out = []
     for tri in mesh.triangles:
-        edges = _crossing(mesh, tri, axis, at)
-        out += _cut(mesh, cache, tri, axis, at) if edges and edges[0] in cut else [tri]
+        v = list(tri)
+        m = [mid.get((min(v[k], v[(k + 1) % 3]), max(v[k], v[(k + 1) % 3]))) for k in range(3)]  # on edge k -> k+1
+        n = sum(x is not None for x in m)
+        if n == 0:
+            out.append(tri)
+            continue
+        # rotate so that the first edge is a split one (and, with two splits, the first two)
+        while not (m[0] is not None and (n != 2 or m[1] is not None)):
+            v, m = v[1:] + v[:1], m[1:] + m[:1]
+        if n == 1:
+            out += [(v[0], m[0], v[2]), (m[0], v[1], v[2])]
+        elif n == 2:
+            out += [(v[0], m[0], m[1]), (m[0], v[1], m[1]), (v[0], m[1], v[2])]
+        else:
+            out += [(v[0], m[0], m[2]), (m[0], v[1], m[1]), (m[2], m[1], v[2]), (m[0], m[1], m[2])]
     mesh.triangles = out
+    return True
 
 
 def add_eye_vertices(mesh):
-    """Cuts the triangles over the window of every eye of this head texture by a grid of lines, so every piece lies in
-    one cell and the engine moves the UV of the corners of the cells; returns the number of vertices added."""
-    if key(mesh.texture) in HERO:  # his mesh is dense already, cutting it makes the lids close as a grid
+    """Makes the mesh over the eye windows of this head texture as dense as the hero's (edges of at most DENSITY
+    texels): the engine moves the UV of the vertices, so a dense mesh closes the lids smoothly; returns the number
+    of vertices added."""
+    if key(mesh.texture) in HERO:  # his mesh is dense already
         return 0
     eyes = load().get(key(mesh.texture))
     if not eyes:
         return 0
-    before = len(mesh.vertices)
+    r = ramp(key(mesh.texture))
+    boxes = []
     for e in eyes:
-        xs, ys = lines(e, ramp(key(mesh.texture)))
-        cache = {}
-        box = (xs[0], xs[-1], ys[0], ys[-1])
-        for axis, values in ((0, xs), (1, ys)):
-            for at in values:
-                _cut_line(mesh, cache, box, axis, at)
+        x0, x1, y0, y1, _ = window(e)
+        boxes.append((x0 - r - DENSITY, x1 + r + DENSITY, y0 - r - DENSITY, y1 + r + DENSITY))
+    before = len(mesh.vertices)
+    for _ in range(8):
+        if not _split_edges(mesh, boxes, DENSITY):
+            break
     return len(mesh.vertices) - before
 
 
