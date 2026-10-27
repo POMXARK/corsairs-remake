@@ -37,11 +37,15 @@
 #define MAP_AUTO_MS 2000
 // a click on the map sails to the nearest island this many pixels of the map round it (ours)
 #define MAP_CLICK_R 60.0
+// one px of the map is 50 m of the sea: the scale from the original (WDM_MAP_TO_SEA_SCALE of worldmap_globals.c)
+#define MAP_TO_SEA_SCALE 50.0
 
 float mapX = 0.0;
 float mapY = 0.0;
 float mapToX = 0.0;
 float mapToY = 0.0;
+// the course of the ship on the map, it crosses the transitions (the original's worldMap.playerShipAY)
+float mapAY = 0.0;
 string mapTarget = "";
 string mapFrom = "";
 bool mapActive = false;
@@ -84,15 +88,17 @@ float Map_IslandY(string islandKey)
 	return stf(strcut(cell, b + 1, strlen(cell) - 1)) + MAP_ISLAND_DY;
 }
 
-void Map_Start(string fromIsland)
+void Map_Start(string fromIsland, float atX, float atY, float ay)
 {
 	Menu_InterfaceKeys();
 	mapFrom = fromIsland;
 	mapTarget = "";
 	if (fromIsland != "" && CheckAttribute(&PdmIslands, fromIsland + ".map_cell"))
 	{
-		mapX = Map_IslandX(fromIsland);
-		mapY = Map_IslandY(fromIsland);
+		mapX = atX;
+		mapY = atY;
+		// the route crosses the transition as is (playerShipAY of the original)
+		mapAY = ay;
 	}
 	CreateEntity(&GameInterface, "xinterface");
 	LayerAddObject(INTERFACE_EXECUTE, &GameInterface, -100);
@@ -334,15 +340,22 @@ void Map_Tick()
 		float dy = mapToY - mapY;
 		float d = sqrt(dx * dx + dy * dy);
 		float step = MAP_SPEED * MAP_TICK_MS / 1000.0;
-		if (d <= step)
+		// the ship reaches the edge of the island and not its flag (in the original the same: wdmMoveShips of worldmap.c moves
+		// ships to islands by their exit_r), exit_r from the data is in meters: 50 of them to one px of the map
+		// and the flag stands at the middle of an island (islands_loader.c sets worldMap.z of it by the island cell),
+		// so that the ship goes to sea from the edge and not from the point of the flag
+		float edge = step;
+		if (CheckAttribute(&PdmIslands, mapTarget + ".exit_r")) { edge = stf(PdmIslands.(mapTarget).exit_r) / MAP_TO_SEA_SCALE; }
+		if (d <= edge)
 		{
-			mapX = mapToX;
-			mapY = mapToY;
+			mapAY = atan2(dx, dy);
+			// the ship keeps the point where it arrived at the edge: no more it is pulled to the flag
 			Map_Fog();
 			Map_View();
 			PostEvent("Map_Arrive", 0);
 			return;
 		}
+		mapAY = atan2(dx, dy);
 		mapX = mapX + dx * step / d;
 		mapY = mapY + dy * step / d;
 		Map_Fog();
@@ -416,7 +429,7 @@ void Map_Arrive()
 	string island = mapTarget;
 	Map_Release();
 	Trace("PDM map: arrived at " + island);
-	Sea_Arrive(island);
+	Sea_Arrive(island, mapX, mapY, mapAY);
 }
 
 // "Выход": back to the sea of the island the ship left
@@ -424,7 +437,7 @@ void Map_Exit()
 {
 	if (!mapActive) { return; }
 	Map_Release();
-	Sea_Arrive(mapFrom);
+	Sea_Arrive(mapFrom, mapX, mapY, mapAY);
 }
 
 // clicks the island on the map the way the player does: mousepos is where it is on the window
