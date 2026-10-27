@@ -556,7 +556,7 @@ def convert_all(res: Path, out: Path, textures=None, scale=DEFAULT_SCALE, worker
         if line:
             li += 1
         report.append((stem, cls, line))
-    (out / "ini" / "eyes.dense").write_text("the heads of the characters carry the dense eye mesh\n", encoding="ascii")  # run.sh / run.ps1 look for it
+    (out / "ini" / "eyes.hero").write_text("the heads of the characters carry the dense eye mesh\n", encoding="ascii")  # run.sh / run.ps1 look for it
     return report
 
 

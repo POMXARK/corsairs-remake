@@ -126,7 +126,7 @@ else
     # eyes.ini comes with the eye grid of the heads (the blink): the characters of an older world are converted again alone (pdm_character.py all), and the boarding after them
     $worldNew = $false
     if (-not (Test-Path "$Demo/program/data/pdm_world.c")) { $worldNew = $true; Invoke-Python "$Tools/pdm_world.py" $Pdm $Demo }
-    elseif (-not (Test-Path "$Demo/resource/ini/eyes.dense")) { $worldNew = $true; Invoke-Python "$Tools/pdm_character.py" $Pdm "$Demo/resource" all }
+    elseif (-not (Test-Path "$Demo/resource/ini/eyes.hero")) { $worldNew = $true; Invoke-Python "$Tools/pdm_character.py" $Pdm "$Demo/resource" all }
     # the cabin of the boarding and the fighters with the blade drawn, after the characters
     if ($worldNew -or -not (Test-Pattern 'PdmBoarding.hud' "$Demo/program/data/pdm_boarding.c")) { Invoke-Python "$Tools/pdm_boarding.py" $Pdm $Demo }
 }

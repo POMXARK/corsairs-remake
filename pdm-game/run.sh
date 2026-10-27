@@ -71,7 +71,7 @@ grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'LB_V
 # eyes.ini comes with the eye grid of the heads (the blink): the characters of an older world are converted again alone (pdm_character.py all), and the boarding after them
 WORLD_NEW=0
 if [ ! -f "$DIR/program/data/pdm_world.c" ]; then WORLD_NEW=1; python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"
-elif [ ! -f "$DIR/resource/ini/eyes.dense" ]; then WORLD_NEW=1; python3 -I "$TOOLS/pdm_character.py" "$PDM" "$DIR/resource" all; fi
+elif [ ! -f "$DIR/resource/ini/eyes.hero" ]; then WORLD_NEW=1; python3 -I "$TOOLS/pdm_character.py" "$PDM" "$DIR/resource" all; fi
 # the cabin of the boarding, the fighters with the blade drawn and the plates of the bars, after the characters (it
 # writes their .ani again); again for the data written before the plates
 if [ "$WORLD_NEW" = 1 ] || ! grep -qs "PdmBoarding.hud" "$DIR/program/data/pdm_boarding.c"; then python3 -I "$TOOLS/pdm_boarding.py" "$PDM" "$DIR"; fi

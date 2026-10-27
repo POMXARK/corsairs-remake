@@ -98,11 +98,9 @@ def _split_edges(mesh, boxes, limit):
 
 
 def add_eye_vertices(mesh):
-    """Makes the mesh over the eye windows of this head texture as dense as the hero's (edges of at most DENSITY
+    """Makes the mesh over the eye windows of this head texture dense (edges of at most DENSITY
     texels): the engine moves the UV of the vertices, so a dense mesh closes the lids smoothly; returns the number
     of vertices added."""
-    if key(mesh.texture) in HERO:  # his mesh is dense already
-        return 0
     eyes = load().get(key(mesh.texture))
     if not eyes:
         return 0
