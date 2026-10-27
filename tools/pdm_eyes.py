@@ -6,7 +6,7 @@ texture of the eye by the UV of the vertices (the way it blinks the hero). Two t
   * tools/eyes.json: where the eyes of every head texture are, in texels of a texture taken as 256x256 (the position
     is marked by eye, the size comes from tools/make_eyes.py);
   * add_eye_vertices(): the edges of the triangles over the window of each eye are halved until they are at most
-    DENSITY texels long, so the mesh is as dense as the hero's and the lids close smoothly (the hero is left as he is).
+    DENSITY texels long, so the lids close smoothly (the hero's head too: without vertices in his window the eyes only twitch).
 The engine finds the window of a vertex by its UV; the table of the windows goes to resource/ini/eyes.ini (write_ini).
 
   python tools/pdm_eyes.py <resource_out>     writes <resource_out>/ini/eyes.ini
