@@ -19,6 +19,9 @@ while IFS='|' read -r name scene town auto marker secs; do
     error0=$(lines "$LOGS/error.log")
     SCENE="$scene" TOWN="$town" TOWN_AUTO="$auto" timeout -k 5 "$secs" "$DIR/run.sh" "$ENGINE" > /dev/null 2>&1
     code=$?
+    # the engine starts a log file anew: a log shorter than before is all new (tail would cut the run's lines)
+    [ "$(lines "$LOGS/compile.log")" -lt "$compile0" ] && compile0=0
+    [ "$(lines "$LOGS/error.log")" -lt "$error0" ] && error0=0
     new=$(tail -n +$((compile0 + 1)) "$LOGS/compile.log" 2>/dev/null)
     errors=$(( $(lines "$LOGS/error.log") - error0 ))
     if printf '%s\n' "$new" | grep -qE "$marker" && [ "$errors" -eq 0 ]; then

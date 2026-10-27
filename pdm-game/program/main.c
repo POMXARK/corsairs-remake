@@ -48,6 +48,7 @@ aref PlayerShipType;
 #include "hud.c"
 #include "sea.c"
 #include "autotest\sea_sail.c"
+#include "autotest\town_face.c"
 #include "battle.c"
 #include "fort.c"
 #include "town.c"

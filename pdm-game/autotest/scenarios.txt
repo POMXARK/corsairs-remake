@@ -7,6 +7,7 @@ town-tavern|town|City_GrandaAvilia|1|PDM town: autotest done|180
 town-talk|town|City_GrandaAvilia|2|PDM town: autotest done|180
 town-quest|town|City_HighRock|3|PDM town: autotest done|300
 town-land|town|City_HighRock|10|PDM town: autotest done|400
+town-face|town|City_HighRock|40|PDM face: autotest done|120
 sea-out|sea||4|PDM: sea at the island|180
 sea-port|sea||5|PDM: sea at the island|200
 sea-map|sea||6|PDM: sea, to the world map|300

@@ -22,6 +22,7 @@
 #define MSG_CHARACTER_GETAY 30203
 #define MSG_CHARACTER_TELEPORT_AY 30211
 #define MSG_CHARACTER_TURNBYCHR 30341
+#define MSG_CHARACTER_TURNBYPOINT 30342
 #define MSG_CHARACTER_HEADLOOK_DEFAULT 30380
 #define MSG_CHARACTER_HEADLOOK_CHARACTER 30382
 #define MSG_NPCHARACTER_SETTASK 30400
@@ -197,6 +198,9 @@ void Town_Handlers()
 	SetEventHandler("Town_AutoTalk", "Town_AutoTalk", 0);
 	SetEventHandler("Town_AutoPick", "Town_AutoPick", 0);
 	SetEventHandler("Town_WindWalk", "Town_WindWalk", 0);
+	SetEventHandler("TownFace_Start", "TownFace_Start", 0);
+	SetEventHandler("TownFace_Camera", "TownFace_Camera", 0);
+	SetEventHandler("TownFace_End", "TownFace_End", 0);
 	SetEventHandler("Control Activation", "Town_Control", 0);
 	SetEventHandler("DialogEvent", "Town_DialogEvent", 0);
 	SetEventHandler("DialogCancel", "Town_DialogLeave", 0);
@@ -318,6 +322,7 @@ void Town_Load(string loc, string from)
 	// the autotest of saving (save.c) has no walk of its own
 	if (TownAuto == 20) { PostEvent("Town_WindWalk", 3000); }
 	else if (TownAuto == 30) { PostEvent("Town_CharWalk", 3000); }
+	else if (TownAuto == 40) { PostEvent("TownFace_Start", 3000); }
 	else if (TownAuto && TownAuto != SAVEFILE_AUTO) { PostEvent("Town_AutoGo", 3000); }
 	Trace("PDM town: in " + loc + " from " + from + ", " + townNpcCount + " characters");
 }
