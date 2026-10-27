@@ -21,6 +21,17 @@
 4. Трассы с числами, по которым видно, что механика сработала (корпус, паруса, команда, координаты), а не только «шаг пройден».
 5. Строка в таблицу test-commands.md: что делает тест и какие строки лога ждать.
 
+## Прогон уст меню-икя (автотест "Плыть к", TOWN_AUTO=15)
+
+The sea test presses the command bar of the game itself, not the launch handler: chain in `autotest\sea_sail.c` шагает `Press` → `Step3` → `Step4` → `Step5` → `End`, each step posts the next via `PostEvent`, each press is a `SendMessage(&BattleInterface, "ls", 46105, ...)`:
+
+1. `SeaSailAuto_Press` = `"activate"` — hub step `sea/i_battle.cpp` (ours), opens the bar without keys (rule 12: same message the Tab press makes at land, `MSG_BATTLE_LAND_MAKE_COMMAND`).
+2. `"confirm"` на икя command name (first stage) — `battle_command.cpp:ExecuteConfirm` asks `BI_CommandEndChecking`, `hud.c:Hud_CommandEndChecking` answers 6238 = `SEA_SAIL_TO_MODE`, so no launch: `Update` + `FillIcons` (`sea/battle_ship_command.cpp`) rebuild the bar into target icons (hull cards, fort/town of the island, each gated by `evntCheckEnableLocator`, witnessed in `hud.c:Hud_LocatorCheck`).
+3. `"right"` — `ExecuteRight`, no wrap, edges clamped.
+4. Second `"confirm"` на икя target — endCode 0, launch `BI_LaunchCommand` "lsls" (chrIndex, name, nTargIndex, locName) → `hud.c:Hud_LaunchCommand` → `Sea_SailTo`, which resolves the pressed icon once (hull by index, fort/harbour by locator name, coordinates from `pdm-game\program\data\...` island data). The per-frame gate `Sea_CanSailTo` parks `hudSailTargetChr/Name` aside during the enable check, so the pressed pick is consumed only by the launch.
+
+Expected: `PDM: sea, sail to the pressed fort` / `pressed harbour` / `pressed hull`, `PDM: sea, sail to Highrock fort at X, Z`, hero abeam at ~60 m, then `PDM: sea, to the world map from ...`. Menu: `game.ps1 run Debug sailto`.
+
 ## Окружение
 
 ```bash

@@ -24,7 +24,7 @@ function Invoke-Run([string]$Cfg, [string]$Name)
     switch ($Name)
     {
         'quest' { $env:SCENE = 'town'; $env:TOWN = 'City_HighRock'; $env:TOWN_AUTO = '3' }
-        'sailto' { $env:SCENE = 'sea'; $env:TOWN = 'City_GrandaAvilia'; $env:TOWN_AUTO = '14' }
+        'sailto' { $env:SCENE = 'sea'; $env:TOWN = 'City_GrandaAvilia'; $env:TOWN_AUTO = '15' }
         'town' { $env:SCENE = 'town'; $env:TOWN = 'City_HighRock' }
         default { $env:SCENE = $Name }
     }

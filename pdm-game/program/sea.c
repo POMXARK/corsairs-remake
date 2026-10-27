@@ -96,7 +96,7 @@ bool seaAutoMapDone = false;
 bool seaAutoSailDone = false;
 // SCENE=battle (battle.c): Sea_AddShip gives the ships to SEA_AI, an enemy comes after the hero
 bool seaBattle = false;
-// "Плыть к" outside of battle (ours): the NPC ship the button teleports to, made for TOWN_AUTO=14
+// "Плыть к" outside of battle (ours): the NPC ship the button teleports to, made for TOWN_AUTO=14/15
 // of the same data card the battle enemy is made of (PdmCharacters, as BATTLE_ENEMY in battle.c)
 #define SEA_NPC_KEY "Umberto__Lump_"
 #define SEA_NPC_DISTANCE 150.0
@@ -193,6 +193,51 @@ void Sea_PortShips()
 // hero; true when something was picked (its place and name in seaSail*)
 bool Sea_SailToTarget()
 {
+	// the icon pressed in the hub of "Плыть к": hud.c's Hud_LaunchCommand got (chrIndex, locator
+	// name) from the engine's BI_LaunchCommand (battle_command.cpp ExecuteConfirm) and put them
+	// into the hudSail* globals; the hub closes the pick, so this hull or place is the target
+	if (hudSailTargetChr >= 0 || hudSailTargetName != "")
+	{
+		int targ = hudSailTargetChr;
+		string targName = hudSailTargetName;
+		hudSailTargetChr = -1;
+		hudSailTargetName = "";
+		if (targName == "harbour" && seaIsland != "")
+		{
+			seaSailIndex = -1;
+			seaSailTX = stf(PdmIslands.(seaIsland).harbour_x);
+			seaSailTZ = stf(PdmIslands.(seaIsland).harbour_z);
+			seaSailKind = "harbour";
+			seaSailName = seaIsland + " harbour";
+			Trace("PDM: sea, sail to the pressed harbour");
+			return true;
+		}
+		// the fort's and harbour names are ours from Hud_IslandLocators, the hull's icon answers
+		// with the character index (our hulls carry no lowercase "name", so the engine puts the
+		// index into nTargIndex — battle_command.cpp ExecuteConfirm, the name only if it exists)
+		if (targName == "fort" && CheckAttribute(&PdmIslands, seaIsland + ".fort_x"))
+		{
+			seaSailIndex = -1;
+			seaSailTX = stf(PdmIslands.(seaIsland).fort_x);
+			seaSailTZ = stf(PdmIslands.(seaIsland).fort_z);
+			seaSailKind = "fort";
+			seaSailName = seaIsland + " fort";
+			Trace("PDM: sea, sail to the pressed fort");
+			return true;
+		}
+		if (targ >= 0 && targ < seaShipCount && targ != seaHero)
+		{
+			seaSailIndex = targ;
+			seaSailTX = stf(SeaShips[targ].ship.pos.x);
+			seaSailTZ = stf(SeaShips[targ].ship.pos.z);
+			seaSailKind = "ship";
+			seaSailName = SeaShips[targ].id;
+			Trace("PDM: sea, sail to the pressed hull, index " + targ);
+			return true;
+		}
+		// the icon is gone or stale: fall to the nearest pick below
+		Trace("PDM: sea, sail to: pressed icon " + targName + " not resolved, picking the nearest");
+	}
 	seaSailIndex = -1;
 	seaSailKind = "";
 	seaSailName = "";
@@ -265,7 +310,30 @@ float d2 = 0.0;
 bool Sea_CanSailTo()
 {
 	if (seaBattle) { return false; }
-	return Sea_SailToTarget();
+	// the pressed pick belongs to the launch (Sea_SailTo), not to this enable check:
+	// the hub asks CanSailTo every frame and would otherwise consume the pressed icon
+	int parkChr = hudSailTargetChr;
+	string parkName = hudSailTargetName;
+	hudSailTargetChr = -1;
+	hudSailTargetName = "";
+	bool ready = Sea_SailToTarget();
+	hudSailTargetChr = parkChr;
+	hudSailTargetName = parkName;
+	return ready;
+}
+
+// put the hero's hull at a point of the game data at once (ship.cpp MSG_SHIP_TELEPORT
+// "lfff": the same call the sail-to of this file makes; the autotest moves the hero with it
+void Sea_TeleportHero(float x, float z)
+{
+	SendMessage(&SeaShips[seaHero], "lfff", MSG_SHIP_TELEPORT, x, z, stf(SeaShips[seaHero].ship.ang.y));
+	Trace("PDM sea: teleport sent, hero right after the send " + stf(SeaShips[seaHero].ship.pos.x) + ", " + stf(SeaShips[seaHero].ship.pos.z));
+}
+
+// the same teleport put on an NPC hull of this scene (the autotest moves the hull with it
+void Sea_TeleportNpc(float x, float z)
+{
+	SendMessage(&SeaShips[seaNpc], "lfff", MSG_SHIP_TELEPORT, x, z, stf(SeaShips[seaNpc].ship.ang.y));
 }
 
 // "Плыть к" outside of battle (ours, the math of battle.c:Battle_SailTo): the hero is put near
@@ -310,14 +378,14 @@ void Sea_SailTo()
 	 Trace("PDM: sea, sail to " + seaSailName + " at " + stf(seaSailTX) + ", " + stf(seaSailTZ));
 	}
 
-// TOWN_AUTO=14: the frame after the jump the hero and the target write their places again
+// TOWN_AUTO=15: the frame after the jump the hero and the target write their places again
 // (battle.c:Battle_SailToCheck's pattern)
 void Sea_SailToCheck()
 {
-		 if (seaSailKind == "") { return; }
+		 if (seaSailKind == "" || seaHero < 0) { return; }
 		 Trace("PDM: sea, sail to done, hero " + stf(SeaShips[seaHero].ship.pos.x) + " " + stf(SeaShips[seaHero].ship.pos.z) + ", target " + stf(seaSailTX) + " " + stf(seaSailTZ));
 		// the button works and the ships moved: the run ends by going back to the world map
-		 Sea_ToMap();
+		 // the map is the end of the autotest, not of the button press (autotest\sea_sail.c:SeaSailAuto_End)
 	}
 
 // until the player takes the mouse, the run needs no input.
@@ -373,10 +441,10 @@ void Sea_Start(string islandKey)
 	Sea_CreateCamera(hero);
 	Hud_Start();
 	if (seaBattle) { Battle_AddEnemy(x, z, ay); }
-	// the port of the island gets its moored hulls on a normal sea; TOWN_AUTO=14 keeps its
+	// the port of the island gets its moored hulls on a normal sea; TOWN_AUTO=14/15 keep their
 	// scripted lone NPC of SEA_NPC_KEY so the button autotest proves one deterministic target
-	if (TownAuto != 14) { Sea_PortShips(); }
-	if (TownAuto == 14) { Sea_NpcSpawn(x, z, ay); }
+	if (TownAuto != 14 && TownAuto != 15) { Sea_PortShips(); }
+	if (TownAuto == 14 || TownAuto == 15) { Sea_NpcSpawn(x, z, ay); }
 	SetEventHandler("Sea_Tick", "Sea_Tick", 0);
 	SetEventHandler("Sea_ToPort", "Sea_ToPort", 0);
 	SetEventHandler("Sea_ToMap", "Sea_ToMap", 0);
@@ -384,15 +452,20 @@ void Sea_Start(string islandKey)
 	// (hud.c:Hud_LaunchCommand), the autotest posts it too, never simulated keys
 	SetEventHandler("Sea_SailTo", "Sea_SailTo", 0);
 	SetEventHandler("Sea_SailToCheck", "Sea_SailToCheck", 0);
+	SetEventHandler("SeaSailAuto_End", "SeaSailAuto_End", 0);
+	SetEventHandler("SeaSailAuto_Step3", "SeaSailAuto_Step3", 0);
+	SetEventHandler("SeaSailAuto_Step4", "SeaSailAuto_Step4", 0);
+	SetEventHandler("SeaSailAuto_Step5", "SeaSailAuto_Step5", 0);
 	PostEvent("Sea_Tick", SEA_TICK_MS);
 	seaActive = true;
 	seaFromMap = false;
 	// TOWN_AUTO=4: the autotest sails out and comes back by itself; 6: out to the world map once
 	if (TownAuto == 4) { PostEvent("Sea_ToPort", SEA_AUTO_PORT_MS); }
 	if (TownAuto == 6 && !seaAutoMapDone) { seaAutoMapDone = true; PostEvent("Sea_ToMap", SEA_AUTO_MAP_MS); }
-	// TOWN_AUTO=14: the button "Плыть к" pressed once, as the battle's TOWN_AUTO=9 presses Battle_SailTo
+	// TOWN_AUTO=15: the button "Плыть к" pressed once, as the battle's TOWN_AUTO=9 presses Battle_SailTo
 	// (the event stands for the Tab's press, never simulated keys, as the interface autotests do)
-	if (TownAuto == 14 && !seaAutoSailDone) { seaAutoSailDone = true; PostEvent("Sea_SailTo", 0); PostEvent("Sea_SailToCheck", 500); }
+	// the autotest of the button lives in autotest\sea_sail.c: this is its first press
+	if (TownAuto == 15 && !seaAutoSailDone) { seaAutoSailDone = true; SeaSailAuto_Press(); }
 	if (TownAuto == 5 || TownAuto == 6) { seaTimeScale = SEA_AUTO_TIME_SCALE; }
 	SetTimeScale(seaTimeScale);
 	Trace("PDM: sea loaded");
@@ -734,8 +807,16 @@ int Sea_AddShip(aref card, string typeKey, float x, float z, float ay)
 	if (seaBattle) { Battle_AddShip(i, x, z, ay); }
 	else
 	{
+		// the NPC hulls of a normal sea go to the BI ship list too (BI_IN_CREATE_SHIP is
+		// SHIP_DESCRIBE_LIST::Add of ships_list.cpp, the same message battle.c sends and hud.c
+		// sends for the hero once): their icons fill the bar of "Плыть к".
 		CreateEntity(&SeaShips[i], "ship");
 		SendMessage(&SeaShips[i], "laa", MSG_SHIP_CREATE, &SeaShips[i], &SeaShipTypes[i]);
+		if (i != seaHero) { SendMessage(&BattleInterface, "llaall", BI_IN_CREATE_SHIP, i, &SeaShips[i], &SeaShipTypes[i], 0, BI_RELATION_NEUTRAL); }
+		// registration only after MSG_SHIP_CREATE: ships_list.cpp Add (SHIP_DESCRIBE_LIST::Add)
+		// scans the "ship" entities and derefs their character pointer, so the hull entity must
+		// already be fully created when it lands on the list
+
 	}
 	// lit by the sun of the weather; without a technique the vertex colours are drawn as is
 	SendMessage(&SeaShips[i], "ls", 20510, "DLightModel");

@@ -47,6 +47,7 @@ aref PlayerShipType;
 // before sea.c and town.c: they use its defines
 #include "hud.c"
 #include "sea.c"
+#include "autotest\sea_sail.c"
 #include "battle.c"
 #include "fort.c"
 #include "town.c"

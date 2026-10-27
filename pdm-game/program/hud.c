@@ -15,6 +15,22 @@
 // shared/battle_interface/msg_control.h and log_and_action.h
 #define BI_IN_CREATE_SHIP 46011
 #define BI_RELATION_FRIEND 1
+#define BI_RELATION_NEUTRAL 2
+// the mode bits of battle_interface/battle_ship_sign.cpp BIShipIcon::ExecuteCommand: a code > 0
+// from BI_CommandEndChecking switches the command list to that mode (msg_control.h of
+// shared_headers\include\shared\battle_interface), FillIcons then draws an icon per bit
+#define BI_COMMODE_ENEMY_SHIP_SELECT 2
+#define BI_COMMODE_NEUTRAL_FORT_SELECT 4
+#define BI_COMMODE_FRIEND_FORT_SELECT 8
+#define BI_COMMODE_ENEMY_FORT_SELECT 16
+#define BI_COMMODE_LAND_SELECT 64
+#define BI_COMMODE_FRIEND_SHIP_SELECT 2048
+#define BI_COMMODE_NEUTRAL_SHIP_SELECT 4096
+#define SEA_SAIL_TO_MODE 6238 // 2|4|8|16|64|2048|4096: hulls, forts of any relation, the land
+#define BI_SET_ISLAND_LOCATORS 46002 // i_battle.cpp BATTLE_INTERFACE::ProcessMessage "la"
+// the reach of the target icons: the same 400 m as SEA_SAIL_TO_RADIUS of sea.c, so the bar shows
+// what Sea_SailToTarget can really pick (battle_ship_command.cpp ShipAdding and LandAdding)
+#define HUD_SAIL_EFFECT_RADIUS 400.0
 #define LOG_ADD_STRING 45020
 #define LOG_SET_ACTIVE_ACTION 45021
 #define LOG_AND_ACTIONS_INIT 45022
@@ -79,6 +95,17 @@ bool hudSea = false;
 bool hudMapFree = true;
 // the action ILogAndActions shows, set only when it changes
 string hudAction = "";
+// "Плыть к" at sea asks for a target: the first Enter posts BI_CommandEndChecking, the mask
+// switches the list to the icons of the targets, the next Enter on an icon posts the launch with
+// it. 0 while no target round is open (battle_ship_sign.cpp BIShipIcon::ExecuteCommand)
+int hudSailMode = 0;
+// the target of the pressed icon: the index of the hull's character, or the name of the locator
+int hudSailTargetChr = -1;
+string hudSailTargetName = "";
+// the island class for BI_SET_ISLAND_LOCATORS: its class "reload" holds the locators of the places
+// (island_descr.cpp ISLAND_DESCRIBER::SetIsland); what one locator of evntGetLandData answers
+object HudIslandLoc;
+int hudLandData[6];
 
 // a length of the layout of 800x600 in pixels of the window
 int Hud_Px(float v)
@@ -417,6 +444,23 @@ void Hud_Start()
 	SeaShips[seaHero].Ship.SP = 100;
 	SeaShipTypes[seaHero].SP = 100;
 	SendMessage(&BattleInterface, "llaall", BI_IN_CREATE_SHIP, seaHero, &SeaShips[seaHero], &SeaShipTypes[seaHero], 1, BI_RELATION_FRIEND);
+		// the island's places for the icons of "Плыть к" (i_battle.cpp BI_SET_ISLAND_LOCATORS "la",
+		// island_descr.cpp ISLAND_DESCRIBER::SetIsland reads a class whose children are locators)
+		// the script gates the icons and answers their pictures (battle_ship_command.cpp FillIcons
+		// and island_descr.cpp SetIsland) — these must be registered before the locator message,
+		// SetIsland asks the handlers the moment it receives it
+		// the pictures and types of our locators (island_descr.cpp SetIsland asks the script per locator)
+		SetEventHandler("evntGetLandData", "Hud_GetLandData", 0);
+		// battle_ship_command.cpp BIShipCommandList::FortAdding / LandAdding ask the script about
+		// every locator that passed the distance gate ("evntCheckEnableLocator", "sa"): we keep them all
+		// and witness the call in the trace, so compile.log proves the harbour/fort icons were filled
+		SetEventHandler("evntCheckEnableLocator", "Hud_LocatorCheck", 0);
+		// the NPC hulls of the sea join the same list from sea.c Sea_AddShip with BI_IN_CREATE_SHIP
+		// the island's places for the icons of "Плыть к"
+		Hud_IslandLocators();
+		// the hero's own hull must stay out of the target bar (battle_ship_command.cpp ShipAdding
+		// skips the ship whose index is "MainChrIndex" of the BattleInterface class)
+		BattleInterface.MainChrIndex = seaHero;
 }
 
 // the picture of a ship (its top 50 rows of 64, the rest keyed out); the bars above it, on the plate of
@@ -735,6 +779,9 @@ void Hud_PossibleCommands()
 	BattleInterface.Commands.board.enable = Board_Can();
 	// "Плыть к" at sea (ours): the battle one is Battle_CanSailTo, the sea one is Sea_CanSailTo
 	if (seaBattle) { BattleInterface.Commands.sail_to.enable = Battle_CanSailTo(); } else { BattleInterface.Commands.sail_to.enable = Sea_CanSailTo(); }
+	// the reach of the target icons of the sea press: the same 400 m as Sea_SailToTarget of sea.c
+	// (battle_ship_command.cpp ShipAdding, FortAdding and LandAdding filter by "EffectRadius")
+	if (!seaBattle) { BattleInterface.Commands.sail_to.EffectRadius = HUD_SAIL_EFFECT_RADIUS; }
 	BattleInterface.Commands.land.enable = Hud_CanLand();
 	BattleInterface.Commands.sea_map.enable = hudMapFree;
 	BattleInterface.Commands.skip_time.enable = 1;
@@ -748,11 +795,16 @@ bool Hud_CanLand()
 	return Sea_NearHarbour(Sea_HeroHarbourDistance());
 }
 
-// every command is done at once, none asks for a target
+// the sea's "Плыть к" asks for a target: the first press returns the mode mask, its Enter on one
+// of the drawn icons comes back with code 0 and BI_LaunchCommand of battle_command.cpp carries the
+// target. The battle's own sail-to and every other command are done at once
 int Hud_CommandEndChecking()
 {
 	string name = GetEventData();
-	return 0;
+	if (name != "sail_to" || seaBattle) { return 0; }
+	if (hudSailMode != 0) { return 0; }
+	hudSailMode = SEA_SAIL_TO_MODE;
+	return SEA_SAIL_TO_MODE;
 }
 
 // "lsls" the character, the command, the target, the locator; the scene is changed outside the frame
@@ -764,9 +816,104 @@ void Hud_LaunchCommand()
 	if (name == "land") { PostEvent("Sea_ToPort", 0); }
 	if (name == "sea_map") { PostEvent("Sea_ToMap", 0); }
 	if (name == "board") { PostEvent("Board_Start", 0); }
-	// "Плыть к" at sea (ours): the Tab's press runs the sea's teleport outside of battle
-	if (name == "sail_to") { if (seaBattle) { PostEvent("Battle_SailTo", 0); } else { PostEvent("Sea_SailTo", 0); } }
+	// "Плыть к" at sea (ours): with a target it brings the character of the hull or the name of the
+	// locator of the place (battle_command.cpp BICommandList::ExecuteConfirm posts BI_LaunchCommand
+	// "lsls" only when the end-checking returned 0, i.e. on the press over a chosen icon)
+	if (name == "sail_to")
+	{
+		int targChr = GetEventData();
+		string targLoc = GetEventData();
+		hudSailMode = 0;
+		hudSailTargetChr = targChr;
+		hudSailTargetName = targLoc;
+		// the battle's own "Плыть к" never reads these: clear them, so a stale hull index
+		// cannot leak into the next pick of the sea (sea.c Sea_SailToTarget clears on use)
+		if (seaBattle) { hudSailTargetChr = -1; hudSailTargetName = ""; PostEvent("Battle_SailTo", 0); } else { PostEvent("Sea_SailTo", 0); }
+	}
 	if (name == "skip_time") { Sea_NextTimeScale(); }
+}
+
+// the island's places for the icons of "Плыть к": a class whose class "reload" holds the locators,
+// each locator carries x, z, radius, name and labelLoc (island_descr.cpp ISLAND_DESCRIBER::SetIsland
+// and i_battle.cpp BI_SET_ISLAND_LOCATORS "la"). The places come only from the game data of PdmIslands
+void Hud_IslandLocators()
+{
+	// the island Sea_Start was given, even the one whose data has no harbour is named there
+	string is = seaAt;
+	if (is == "") { return; }
+	// the old island's locators stay in the engine by pointer: the new class replaces them
+	DeleteAttribute(&HudIslandLoc, "");
+	int made = 0;
+	if (CheckAttribute(&PdmIslands, is + ".harbour_x"))
+	{
+		// the harbour: the landing place where the transition to another location happens
+		HudIslandLoc.reload.harbour.x = PdmIslands.(is).harbour_x;
+		HudIslandLoc.reload.harbour.z = PdmIslands.(is).harbour_z;
+		HudIslandLoc.reload.harbour.radius = 60;
+		// the name the engine gives back in BI_LaunchCommand (battle_command.cpp ExecuteConfirm)
+		// when this icon is pressed; the note of it is "labelLoc", left out as of now
+		HudIslandLoc.reload.harbour.name = "harbour";
+		// the marker our Hud_GetLandData reads for this locator
+		HudIslandLoc.reload.harbour.kind = "land";
+		made++;
+	}
+	if (CheckAttribute(&PdmIslands, is + ".fort_x"))
+	{
+		// the fort of the island, the same data the target pick of sea.c uses
+		HudIslandLoc.reload.fort.x = PdmIslands.(is).fort_x;
+		HudIslandLoc.reload.fort.z = PdmIslands.(is).fort_z;
+		HudIslandLoc.reload.fort.radius = 60;
+		HudIslandLoc.reload.fort.name = "fort";
+		HudIslandLoc.reload.fort.kind = "fort";
+		made++;
+	}
+	if (made == 0) { return; }
+	// the engine reads the locators again from this class on its Refresh, so the class must live on
+	SendMessage(&BattleInterface, "la", BI_SET_ISLAND_LOCATORS, &HudIslandLoc);
+	Trace("PDM hud: island locators for " + is + ": " + made);
+}
+
+// the witness gate of FortAdding / LandAdding (battle_ship_command.cpp lines 255, 307): the engine
+// asks us only for the locators that already passed the EffectRadius distance gate, so a trace here
+// proves the icon of this place went into the bar; return non-zero to keep it enabled
+int hudLocatorSeenHarbour = 0;
+int hudLocatorSeenFort = 0;
+int hudRetOne = 0;
+int hudSeenGetFort = 0;
+int hudSeenGetLand = 0;
+ref Hud_LocatorCheck()
+{
+	string cmdn = GetEventData();
+	aref loc = GetEventData();
+	string nm = loc.name;
+	if (nm == "harbour") { if (hudLocatorSeenHarbour == 0) { hudLocatorSeenHarbour = 1; Trace("PDM hud: locator check: harbour of the sea island in range"); } }
+	if (nm == "fort") { if (hudLocatorSeenFort == 0) { hudLocatorSeenFort = 1; Trace("PDM hud: locator check: fort of the sea island in range"); } }
+	hudRetOne = 1;
+	return &hudRetOne;
+}
+
+// island_descr.cpp ISLAND_DESCRIBER::SetIsland asks the script about every locator: the type of the
+// place (0 the land, 1 the fort, else the town), its relation, the texture of the list, the cells
+// of the picture and the lit one, and the "diseased" flag. Our cells go to commands.tga of PdmHud,
+// the domed fort and town of the original at PdmHud.command.town, the lit picture the next cell
+// (Hud_DefineCommand's rule: the selPicNum is the picNum plus 1)
+ref Hud_GetLandData()
+{
+	aref loc = GetEventData();
+	// this event is asked only inside the locator loop of island_descr.cpp SetIsland, so the trace
+	// here proves the engine stored this locator of the sea island into g_IslandDescr
+	if (loc.kind == "fort") { if (hudSeenGetFort == 0) { hudSeenGetFort = 1; Trace("PDM hud: SetIsland stored the fort locator of the sea island"); } }
+	else { if (hudSeenGetLand == 0) { hudSeenGetLand = 1; Trace("PDM hud: SetIsland stored the land locator of the sea island"); } }
+	hudLandData[0] = 0;
+	hudLandData[1] = BI_RELATION_NEUTRAL;
+	hudLandData[2] = 0;
+	hudLandData[3] = sti(PdmHud.command.town);
+	hudLandData[4] = sti(PdmHud.command.town) + 1;
+	hudLandData[5] = 0;
+	// the forts go through FortAdding (the mode bit of the forts), the harbour and the land through
+	// LandAdding (the bit of the land): the marker tells them apart
+	if (loc.kind == "fort") { hudLandData[0] = 1; }
+	return &hudLandData;
 }
 
 // "lllllll" sail to, land troops, map, attack, defend, reload, the reload target: every frame
