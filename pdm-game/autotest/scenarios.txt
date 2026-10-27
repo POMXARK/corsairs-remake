@@ -1,0 +1,21 @@
+# Автотесты игры: один сценарий на строку, поля через «|»: имя|SCENE|TOWN|TOWN_AUTO|маркер|секунды.
+# Маркер — регулярное выражение, которое должно появиться в новых строках compile.log (Trace «PDM …»).
+# Прогон: pdm-game/autotests.sh <engine> [имя ...] (Linux), game.ps1 test [имя ...] (Windows).
+story|story||0|PDM story test: .* actions run|120
+screens|screens||0|PDM trade: bought|300
+town-tavern|town|City_GrandaAvilia|1|PDM town: autotest done|180
+town-talk|town|City_GrandaAvilia|2|PDM town: autotest done|180
+town-quest|town|City_HighRock|3|PDM town: autotest done|300
+town-land|town|City_HighRock|10|PDM town: autotest done|400
+sea-out|sea||4|PDM: sea at the island|180
+sea-port|sea||5|PDM: sea at the island|200
+sea-map|sea||6|PDM: sea, to the world map|300
+battle-fire|battle||7|PDM: autotest done, battle|300
+battle-board|battle||8|PDM: autotest done, boarding|300
+battle-sail|battle||9|PDM: battle, sail to done|200
+battle-fort|battle||11|PDM: autotest done, battle|400
+save-sea|sea||12|PDM: autotest done, save|120
+save-screens|sea||13|PDM: autotest done, screens|120
+options-sea|sea||14|PDM options: autotest done|120
+options-close|menu||15|PDM close: autotest done|120
+sea-sail-to|sea||15|PDM: autotest done, sail to at sea|200

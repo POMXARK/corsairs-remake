@@ -79,6 +79,9 @@ python3 -I "$TOOLS/pdm_logic2c.py" "$DIR/data" "$DIR/program"
 echo "string StartScene = \"${SCENE:-menu}\";" > "$DIR/program/data/start.c"
 echo "string StartTown = \"${TOWN:-City_GrandaAvilia}\";" >> "$DIR/program/data/start.c"
 echo "int TownAuto = ${TOWN_AUTO:-0};" >> "$DIR/program/data/start.c"
+# TOWN_AUTO=2 with TALK_NPC=<id> and TALK_ANGLE=<degrees>: the hero talks to that character from that side (talk-angles.sh)
+echo "string TalkNpc = \"${TALK_NPC:-}\";" >> "$DIR/program/data/start.c"
+echo "int TalkAngle = ${TALK_ANGLE:-0};" >> "$DIR/program/data/start.c"
 echo "int SoundFxOnly = ${SOUND_FX_ONLY:-0};" >> "$DIR/program/data/start.c"
 # the volume and the voices of the characters: the variable, else settings.ini, else the default (0..100)
 setting() { local v="${!1:-}"; [ -n "$v" ] || v=$(sed -n "s/^$2[[:space:]]*=[[:space:]]*//p" "$DIR/settings.ini" 2>/dev/null | head -1); v="${v//[^0-9]/}"; echo "${v:-$3}"; }

@@ -441,10 +441,10 @@ void Sea_Start(string islandKey)
 	Sea_CreateCamera(hero);
 	Hud_Start();
 	if (seaBattle) { Battle_AddEnemy(x, z, ay); }
-	// the port of the island gets its moored hulls on a normal sea; TOWN_AUTO=14/15 keep their
-	// scripted lone NPC of SEA_NPC_KEY so the button autotest proves one deterministic target
-	if (TownAuto != 14 && TownAuto != 15) { Sea_PortShips(); }
-	if (TownAuto == 14 || TownAuto == 15) { Sea_NpcSpawn(x, z, ay); }
+	// the port of the island gets its moored hulls on a normal sea; TOWN_AUTO=15 keeps its scripted
+	// lone NPC of SEA_NPC_KEY so the button autotest proves one deterministic target (14 is the options page)
+	if (TownAuto != 15) { Sea_PortShips(); }
+	if (TownAuto == 15) { Sea_NpcSpawn(x, z, ay); }
 	SetEventHandler("Sea_Tick", "Sea_Tick", 0);
 	SetEventHandler("Sea_ToPort", "Sea_ToPort", 0);
 	SetEventHandler("Sea_ToMap", "Sea_ToMap", 0);

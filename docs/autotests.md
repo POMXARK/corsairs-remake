@@ -21,16 +21,46 @@
 4. Трассы с числами, по которым видно, что механика сработала (корпус, паруса, команда, координаты), а не только «шаг пройден».
 5. Строка в таблицу test-commands.md: что делает тест и какие строки лога ждать.
 
-## Прогон уст меню-икя (автотест "Плыть к", TOWN_AUTO=15)
+## Сценарий «Плыть к» (TOWN_AUTO=15)
 
-The sea test presses the command bar of the game itself, not the launch handler: chain in `autotest\sea_sail.c` шагает `Press` → `Step3` → `Step4` → `Step5` → `End`, each step posts the next via `PostEvent`, each press is a `SendMessage(&BattleInterface, "ls", 46105, ...)`:
+Тест нажимает «Плыть к» на командной панели моря так же, как игрок, а не вызывает обработчик запуска. Цепочка в `program/autotest/sea_sail.c`: `Press` → `Step3` → `Step4` → `Step5` → `End`. Каждый шаг ставит следующий через `PostEvent`, каждое нажатие — `SendMessage(&BattleInterface, "ls", 46105, ...)`:
 
-1. `SeaSailAuto_Press` = `"activate"` — hub step `sea/i_battle.cpp` (ours), opens the bar without keys (rule 12: same message the Tab press makes at land, `MSG_BATTLE_LAND_MAKE_COMMAND`).
-2. `"confirm"` на икя command name (first stage) — `battle_command.cpp:ExecuteConfirm` asks `BI_CommandEndChecking`, `hud.c:Hud_CommandEndChecking` answers 6238 = `SEA_SAIL_TO_MODE`, so no launch: `Update` + `FillIcons` (`sea/battle_ship_command.cpp`) rebuild the bar into target icons (hull cards, fort/town of the island, each gated by `evntCheckEnableLocator`, witnessed in `hud.c:Hud_LocatorCheck`).
-3. `"right"` — `ExecuteRight`, no wrap, edges clamped.
-4. Second `"confirm"` на икя target — endCode 0, launch `BI_LaunchCommand` "lsls" (chrIndex, name, nTargIndex, locName) → `hud.c:Hud_LaunchCommand` → `Sea_SailTo`, which resolves the pressed icon once (hull by index, fort/harbour by locator name, coordinates from `pdm-game\program\data\...` island data). The per-frame gate `Sea_CanSailTo` parks `hudSailTargetChr/Name` aside during the enable check, so the pressed pick is consumed only by the launch.
+1. `"activate"` — открывает панель (шаг хаба `sea/i_battle.cpp`, как Tab на суше, правило 12: то же сообщение `MSG_BATTLE_LAND_MAKE_COMMAND`).
+2. Первый `"confirm"` на имени команды — `battle_command.cpp:ExecuteConfirm` спрашивает `BI_CommandEndChecking`, `hud.c:Hud_CommandEndChecking` отвечает 6238 = `SEA_SAIL_TO_MODE`, запуска ещё нет. `FillIcons` (`sea/battle_ship_command.cpp`) перестраивает панель в значки целей: карточки кораблей и форт или город острова. Каждый значок проверяется `evntCheckEnableLocator` (`hud.c:Hud_LocatorCheck`).
+3. `"right"` — `ExecuteRight`, без зацикливания, на краю остановка.
+4. Второй `"confirm"` на значке цели — `BI_LaunchCommand` с аргументами `"lsls"` → `hud.c:Hud_LaunchCommand` → `Sea_SailTo`. Нажатый значок разрешается один раз. `Sea_CanSailTo` на каждом кадре откладывает `hudSailTargetChr/Name` на время проверки доступности, поэтому выбор расходуется только запуском.
 
-Expected: `PDM: sea, sail to the pressed fort` / `pressed harbour` / `pressed hull`, `PDM: sea, sail to Highrock fort at X, Z`, hero abeam at ~60 m, then `PDM: sea, to the world map from ...`. Menu: `game.ps1 run Debug sailto`.
+Ожидается: `PDM: sea, sail to the pressed fort` (или `harbour`, `hull`), `PDM: sea, sail to Highrock fort at X, Z`, герой на расстоянии около 60 м от форта, затем `PDM: sea, to the world map from …`. Меню: `game.ps1 run Debug sailto`.
+
+## Все автотесты разом
+
+Список — `pdm-game/autotest/scenarios.txt`: имя, сцена, город, `TOWN_AUTO`, маркер в `compile.log` и предел времени. Один и тот же список читают обе команды:
+
+```bash
+pdm-game/autotests.sh build/Debug/engine                 # Linux, все сценарии
+pdm-game/autotests.sh build/Debug/engine town-tavern     # один или несколько по имени
+```
+
+```powershell
+pdm-game\game.ps1 test Debug                            # Windows, меню game.ps1: пункт «t»
+pdm-game\game.ps1 test Debug -Names town-tavern,sea-sail-to
+```
+
+Тест засчитан, если маркер есть в новых строках `compile.log` и в `error.log` новых строк нет. Итог: `autotests: N passed, M failed`, код выхода 1 при провале.
+
+## Разговор с NPC с разных сторон
+
+Отдельный скрипт `pdm-game/autotest/talk-angles.sh` проверяет диалог со стражниками и другими жителями города: каждый NPC, с четырёх сторон (углы 0, 90, 180, 270 от его +x; `ANGLES` меняет набор). Герой появляется в городе, подходит к NPC и встаёт в `TALK_RADIUS` (1.5 м) от него под заданным углом, заговаривает, и первый ответ идёт в лог. Потом прогон заканчивается.
+
+```bash
+pdm-game/autotest/talk-angles.sh build/Debug/engine                          # все стражники (из данных), город TOWN=City_HighRock
+TOWN=City_GrandaAvilia pdm-game/autotest/talk-angles.sh build/Debug/engine Rinaldo___Town_Guard
+ANGLES="0 180" pdm-game/autotest/talk-angles.sh build/Debug/engine Billy___Town_Guard
+```
+
+Движку передаются переменные `TALK_NPC` и `TALK_ANGLE` (`run.sh` пишет их в `program/data/start.c`; при `TOWN_AUTO=2` без `TALK_NPC` работает прежний сценарий). Маркер на пару: `PDM dialog: autotest talked to <id> from angle <угол>,`. Id в движке приводятся к нижнему регистру, скрипт это учитывает.
+
+Стражник, которого нет в выбранном городе, даёт `SKIP`, а не провал: стражники распределены по городам. Итог: `talk-angles: N passed, M failed, K skipped`.
 
 ## Окружение
 

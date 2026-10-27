@@ -109,6 +109,8 @@ object TownVisited;
 #define TOWN_TALK_DIST 3.0
 #define TOWN_AUTO_COUNTER 0.3
 #define TOWN_AUTO_STEP 0.25
+// TALK_NPC / TALK_ANGLE (talk-angles.sh): the hero talks to that character from the angle, TALK_RADIUS off him
+#define TALK_RADIUS 1.5
 object TownDialog;
 // the NPC talked to (-1: no dialog), his dialog and its node on the screen
 int townTalkNpc = -1;
@@ -932,6 +934,8 @@ void Town_AutoPlan()
 		Town_PlanAdd("talk", "Billy___Town_Guard", "PdmA_Wine_good_end");
 		return;
 	}
+	// TALK_NPC (talk-angles.sh): the character may stand in the street, the hero talks where he arrived
+	if (TalkNpc != "") { Town_PlanAdd("talk", "", ""); return; }
 	// 4: out to sea and back to the pier (Sea_ToPort), then into the tavern; 5: the same, the ship
 	// sails into the port by the harbour (sea.c Sea_AtHarbour)
 	// 6: out to sea, over the world map to the next island and into its port (map.c)
@@ -1045,14 +1049,16 @@ void Town_AutoWhere()
 void Town_AutoTalkGo(string who, string want)
 {
 	townAutoNpc = -1;
+	string need = who;
+	if (TalkNpc != "") { need = TalkNpc; }
 	for (int i = 0; i < townNpcCount && townAutoNpc < 0; i++)
 	{
 		if (Town_DialogOf(i) == "") { continue; }
-		if (who == "" || TownNpc[i].id == who) { townAutoNpc = i; }
+		if (need == "" || TownNpc[i].id == need) { townAutoNpc = i; }
 	}
 	if (townAutoNpc < 0)
 	{
-		Trace("PDM dialog: autotest FAILED, nobody to talk to (" + who + ") in " + townHere);
+		Trace("PDM dialog: autotest FAILED, nobody to talk to (" + need + ") in " + townHere);
 		PostEvent("Town_AutoGo", 0);
 		return;
 	}
@@ -1084,6 +1090,13 @@ void Town_AutoTalkGo(string who, string want)
 			x = bx + (hx - bx) * TOWN_AUTO_COUNTER / len;
 			z = bz + (hz - bz) * TOWN_AUTO_COUNTER / len;
 		}
+	}
+	if (TalkNpc != "")
+	{
+		// the angle of the test: the spot TALK_RADIUS off the character, TalkAngle degrees from his +x
+		float ang = TalkAngle * 3.14159265 / 180.0;
+		x += TALK_RADIUS * cos(ang);
+		z += TALK_RADIUS * sin(ang);
 	}
 	townAutoGoX = x;
 	townAutoGoY = y;
@@ -1194,9 +1207,15 @@ void Town_AutoPick()
 		if (townAutoDone && out != "") { pick = out; }
 		if (!townAutoDone && townAutoWant != "" && fresh != "") { pick = fresh; }
 	}
+	if (townAutoPicks == 0 && TalkNpc != "")
+	{
+		Trace("PDM dialog: autotest talked to " + TownNpc[townTalkNpc].id + " from angle " + TalkAngle + ", answer " + pick);
+	}
 	townAutoPicks++;
 	if (townAutoPicks > 30) { Town_DialogLeave(); return; }
 	Town_DialogPick(pick);
+	// one character from one angle is the test: the first answer is in the log, the run ends
+	if (TalkNpc != "") { PostEvent("Town_AutoQuit", 3000); return; }
 	PostEvent("Town_AutoPick", 3500);
 }
 

@@ -4,8 +4,9 @@
 #        game.ps1 build Debug|Release
 #        game.ps1 run [Debug|Release] [menu|sea|sailto|battle|town|review|quest|story]
 #        game.ps1 convert | package | logs | keys | check
+#        game.ps1 test [Debug|Release] [-Names story,town-tavern]   the autotests of autotest/scenarios.txt
 # Paths are set in pdm-game/local.ps1 (not in git), e.g.  $env:PDM = 'D:\Games\Корсары'
-param([string]$Command = 'menu', [string]$Config = 'Debug', [string]$Scene = 'menu')
+param([string]$Command = 'menu', [string]$Config = 'Debug', [string]$Scene = 'menu', [string[]]$Names = @())
 $ErrorActionPreference = 'Stop'
 $Dir = $PSScriptRoot
 $Root = Split-Path $Dir
@@ -32,6 +33,48 @@ function Invoke-Run([string]$Cfg, [string]$Name)
     if (-not (Test-Path (Get-Engine $Cfg))) { Invoke-Build $Cfg }
     if (-not (Test-Path (Get-Engine $Cfg))) { throw "no engine after the build: $(Get-Engine $Cfg)" }
     & powershell -NoProfile -ExecutionPolicy Bypass -File "$Dir/run.ps1" (Get-Engine $Cfg)
+}
+
+# the autotests of autotest/scenarios.txt (the same list as autotests.sh on Linux): each one starts run.ps1 with its
+# variables and passes when its marker is in the new lines of compile.log and error.log got no new line
+function Get-LineCount([string]$Path) { if (Test-Path $Path) { @(Get-Content $Path).Count } else { 0 } }
+
+function Invoke-Tests([string]$Cfg, [string[]]$Only)
+{
+    $engine = Get-Engine $Cfg
+    if (-not (Test-Path $engine)) { Invoke-Build $Cfg }
+    if (-not (Test-Path $engine)) { throw "no engine after the build: $engine" }
+    $compile = Join-Path $Logs 'compile.log'
+    $errorLog = Join-Path $Logs 'error.log'
+    $pass = 0
+    $fail = 0
+    foreach ($line in Get-Content "$Dir/autotest/scenarios.txt")
+    {
+        if ($line -match '^\s*(#|$)') { continue }
+        $name, $scene, $town, $auto, $marker, $secs = $line -split '\|'
+        if ($Only -and $name -notin $Only) { continue }
+        $compile0 = Get-LineCount $compile
+        $error0 = Get-LineCount $errorLog
+        foreach ($v in 'SCENE', 'TOWN', 'TOWN_AUTO') { Remove-Item "env:$v" -ErrorAction SilentlyContinue }
+        $env:SCENE = $scene
+        if ($town) { $env:TOWN = $town }
+        $env:TOWN_AUTO = $auto
+        # run.ps1 starts the engine; the job is stopped after its time, and so is the engine it left running
+        $job = Start-Job -ScriptBlock { param($script, $engine) & $script $engine } -ArgumentList "$Dir/run.ps1", $engine
+        if (-not (Wait-Job $job -Timeout ([int]$secs))) { Stop-Job $job; Get-Process -Name engine -ErrorAction SilentlyContinue | Stop-Process -Force }
+        Remove-Job $job -Force
+        $new = @(Get-Content $compile -ErrorAction SilentlyContinue | Select-Object -Skip $compile0)
+        $errors = (Get-LineCount $errorLog) - $error0
+        if (($new -match $marker) -and $errors -eq 0) { Write-Host "PASS $name"; $pass++ }
+        else
+        {
+            Write-Host "FAIL $name (new error.log lines $errors): no `"$marker`""
+            $new | Select-String -Pattern 'PDM' | Select-Object -Last 5 | ForEach-Object { Write-Host "     $($_.Line)" }
+            $fail++
+        }
+    }
+    Write-Host "autotests: $pass passed, $fail failed"
+    if ($fail -gt 0) { throw "$fail autotest(s) failed" }
 }
 
 function Invoke-Convert { $env:RECONVERT = '1'; try { Invoke-Run 'Debug' 'story' } finally { Remove-Item env:RECONVERT } }
@@ -104,7 +147,8 @@ function Show-Menu
   3) Море                         8) Сконвертировать оригинал заново
   4) Смотр флота                  9) Собрать пакет для игры (dist\)
   5) Квест Хайрока (автотест)     c) Проверить окружение
-  b) Морской бой   s) Плыть к NPC (автотест)   k) Управление   l) Логи   q) Выход
+  b) Морской бой   s) Плыть к NPC (автотест)   t) Все автотесты
+  k) Управление   l) Логи   q) Выход
 "@
         $choice = Read-Host '>'
         try
@@ -118,6 +162,7 @@ function Show-Menu
                 '5' { Invoke-Run $cfg 'quest' }
                 'b' { Invoke-Run $cfg 'battle' }
                 's' { Invoke-Run $cfg 'sailto' }
+                't' { Invoke-Tests $cfg @() }
                 '6' { Invoke-Build $cfg }
                 '7' { $cfg = if ($cfg -eq 'Debug') { 'Release' } else { 'Debug' } }
                 '8' { Invoke-Convert }
@@ -142,5 +187,6 @@ switch ($Command)
     'logs' { Show-Logs }
     'keys' { Show-Keys }
     'check' { Show-Check }
+    'test' { Invoke-Tests $Config $Names }
     default { Get-Content $PSCommandPath -TotalCount 6 | Select-Object -Skip 2 | Write-Host; exit 1 }
 }
