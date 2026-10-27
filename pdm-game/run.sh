@@ -79,7 +79,7 @@ grep -qs '"fort"' "$DIR/data/islands/Highrock.json" || python3 -I "$TOOLS/pdm_is
 # the toolbar of the sea (the commands, the pictures of the ships with flags, the bars) and its notes
 grep -qs "info_rows" "$DIR/program/data/pdm_hud.c" || python3 -I "$TOOLS/pdm_hud.py" "$PDM" "$DIR"
 # the music, the sounds and their aliases, the sounds of the kinds of location
-[ -f "$DIR/program/data/pdm_sound.c" ] || python3 -I "$TOOLS/pdm_sound.py" "$PDM" "$DIR"
+[ -f "$DIR/program/data/pdm_sound.c" ] && [ -d "$DIR/resource/sounds/pdm/music" ] || python3 -I "$TOOLS/pdm_sound.py" "$PDM" "$DIR"
 python3 -I "$TOOLS/pdm_data2c.py" "$DIR/data" "$DIR/program"
 python3 -I "$TOOLS/pdm_logic2c.py" "$DIR/data" "$DIR/program"
 # the neural voice-over of the speeches (docs/voice-over.md): binds the files that exist, none is fine

@@ -138,7 +138,7 @@ elseif (-not (Test-Pattern '"fort"' "$Demo/data/islands/Highrock.json")) { Invok
 # so the grid of commands.tga.tx has to stand on the disk before the interface can draw an icon
 if (-not ((Test-Pattern 'info_rows' "$Demo/program/data/pdm_hud.c") -and (Test-Path "$Demo/resource/textures/battle_interface/pdm/commands.tga.tx"))) { Invoke-Python "$Tools/pdm_hud.py" $Pdm $Demo }
 # the music, the sounds and their aliases
-if (-not (Test-Path "$Demo/program/data/pdm_sound.c")) { Invoke-Python "$Tools/pdm_sound.py" $Pdm $Demo }
+if (-not ((Test-Path "$Demo/program/data/pdm_sound.c") -and (Test-Path "$Demo/resource/sounds/pdm/music"))) { Invoke-Python "$Tools/pdm_sound.py" $Pdm $Demo }
 Invoke-Python "$Tools/pdm_data2c.py" "$Demo/data" "$Demo/program"
 Invoke-Python "$Tools/pdm_logic2c.py" "$Demo/data" "$Demo/program"
 # the neural voice-over of the speeches: binds the files that exist, none is fine
