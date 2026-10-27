@@ -73,7 +73,7 @@ WORLD_NEW=0
 [ -f "$DIR/program/data/pdm_world.c" ] && [ -f "$DIR/resource/ini/eyes.ini" ] || { WORLD_NEW=1; python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"; }
 # the cabin of the boarding, the fighters with the blade drawn and the plates of the bars, after the characters (it
 # writes their .ani again); again for the data written before the plates
-[ "$WORLD_NEW" = 1 ] || grep -qs "PdmBoarding.hud" "$DIR/program/data/pdm_boarding.c" || python3 -I "$TOOLS/pdm_boarding.py" "$PDM" "$DIR"
+if [ "$WORLD_NEW" = 1 ] || ! grep -qs "PdmBoarding.hud" "$DIR/program/data/pdm_boarding.c"; then python3 -I "$TOOLS/pdm_boarding.py" "$PDM" "$DIR"; fi
 # the movies of the original (the intro of "Новая игра"): the scenes of DESC/*.ani, their models, textures and sounds
 grep -qs "PdmCut.intro" "$DIR/program/data/pdm_cutscenes.c" || python3 -I "$TOOLS/pdm_cutscene.py" "$PDM" "$DIR"
 # the islands (DESC/<Island>.def, WORLDS/islands_x.idf), where the ship appears at each, their names and forts
