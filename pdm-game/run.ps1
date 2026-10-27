@@ -97,6 +97,14 @@ if (-not (Test-Path "$Demo/resource/particles/explosion.xps"))
     Invoke-Python "$Demos/battle/make_battle.py" "$Demo/resource"
     Convert-Hulls
 }
+# the movies of the original: skies, moon and spyglass view (generated), the sprites of fire and smoke (converted), the guns
+if (-not (Test-Path "$Demo/resource/textures/weather/skies/haze/sky_up.tga.tx")) { Invoke-Python "$Tools/make_haze_sky.py" "$Demo/resource" }
+if (-not (Test-Path "$Demo/resource/textures/weather/skies/clear/sky_up.tga.tx")) { Invoke-Python "$Tools/make_clear_sky.py" "$Demo/resource" }
+if (-not (Test-Path "$Demo/resource/textures/weather/moon.tga.tx")) { Invoke-Python "$Tools/make_moon.py" "$Demo/resource" }
+if (-not (Test-Path "$Demo/resource/textures/cinema/binocular.tga.tx")) { Invoke-Python "$Tools/make_binocular.py" "$Demo/resource" }
+if (-not (Test-Path "$Demo/resource/textures/effects/fire.tx")) { Invoke-Python "$Tools/pdm_effects.py" $Pdm "$Demo/resource" }
+if (-not (Test-Path "$Demo/resource/particles/shothit.xps")) { Invoke-Python "$Tools/make_cannon_fx.py" "$Demo/resource" }
+if (-not (Test-Pattern 'PdmCut.intro' "$Demo/program/data/pdm_cutscenes.c")) { Invoke-Python "$Tools/pdm_cutscene.py" $Pdm $Demo }
 # the screens of the interface, the dialog window and the voices; again for screens made before the fog of
 # the map or the font of the notes of the toolbar
 $MainMap = "$Demo/resource/ini/interfaces/mainmap.ini"

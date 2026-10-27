@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The moon disc of the movies at night: a generated texture (no third-party art), a soft-edged disc with dim maria.
-usage: make_moon.py [out.tga]; the engine reads .tx: pdm2storm.tga_to_tx turns it into moon.tga.tx"""
+usage: make_moon.py <resource dir>; writes textures/weather/moon.tga.tx (with a file name that ends in .tga it writes that TGA instead)"""
 import math
 import random
 import sys
@@ -9,7 +9,7 @@ from pathlib import Path
 from PIL import Image
 
 N = 128
-out = Path(sys.argv[1] if len(sys.argv) > 1 else "pdm-game/resource/textures/weather/moon.tga")
+arg = Path(sys.argv[1] if len(sys.argv) > 1 else "pdm-game/resource")
 rnd = random.Random(7)
 maria = [(rnd.uniform(-0.5, 0.5), rnd.uniform(-0.5, 0.5), rnd.uniform(0.1, 0.28)) for _ in range(7)]
 img = Image.new("RGBA", (N, N))
@@ -26,5 +26,10 @@ for y in range(N):
         # the engine adds the texture to the sky (one + one): the halo is colour, black outside the disc
         k = 1.0 if r < 0.8 else 0.55 * glow * glow
         img.putpixel((x, y), (int(c * k), int(min(255, c + 4) * k), int(min(255, c + 14) * k), 255))
-out.parent.mkdir(parents=True, exist_ok=True)
-img.save(out)
+if arg.suffix == ".tga":
+    arg.parent.mkdir(parents=True, exist_ok=True)
+    img.save(arg)
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine" / "demos" / "common"))
+    from storm_formats import write_tx  # noqa: E402
+    write_tx(img, arg / "textures" / "weather" / "moon.tga.tx")

@@ -61,6 +61,9 @@ fi
 [ -f "$DIR/resource/textures/weather/skies/haze/sky_up.tga.tx" ] || python3 -I "$TOOLS/make_haze_sky.py" "$DIR/resource"
 [ -f "$DIR/resource/textures/effects/fire.tx" ] || python3 -I "$TOOLS/pdm_effects.py" "$PDM" "$DIR/resource"
 [ -f "$DIR/resource/particles/shothit.xps" ] || python3 -I "$TOOLS/make_cannon_fx.py" "$DIR/resource"
+[ -f "$DIR/resource/textures/weather/skies/clear/sky_up.tga.tx" ] || python3 -I "$TOOLS/make_clear_sky.py" "$DIR/resource"
+[ -f "$DIR/resource/textures/weather/moon.tga.tx" ] || python3 -I "$TOOLS/make_moon.py" "$DIR/resource"
+[ -f "$DIR/resource/textures/cinema/binocular.tga.tx" ] || python3 -I "$TOOLS/make_binocular.py" "$DIR/resource"
 # the screens of the interface (INI/menu.ini, the world map of INI/map.ini), their pictures, texts and fonts, the dialog window and the voices;
 # again for a map made before its fog
 grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'LB_VOICEON_OFF' "$DIR/resource/ini/interfaces/options.ini" && grep -qs 'PDM_HUD_18' "$DIR/resource/ini/fonts.ini" && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
