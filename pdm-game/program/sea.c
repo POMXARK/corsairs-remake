@@ -104,6 +104,22 @@ bool seaBattle = false;
 #define SEA_SAIL_TO 30.0
 // its index in SeaShips, -1 when there is no NPC ship on this sea
 int seaNpc = -1;
+// the target "Плыть к" picked for this press: a place of the game data (a ship, the island's fort
+// from PdmIslands.(island).fort_x/fort_z, or its harbour where the transition to another location
+// happens); "" while the target stayed unset
+string seaSailKind = "";
+float seaSailTX = 0.0;
+float seaSailTZ = 0.0;
+string seaSailName = "";
+// its index in SeaShips, -1 for a place of the data instead of a hull
+int seaSailIndex = -1;
+// "Плыть к" works on what stands this far from the hero: a ship, the island's fort, its harbour
+#define SEA_SAIL_TO_RADIUS 400.0
+// the hero stops this far off a place of the data (fort, harbour), and moored hulls of an island
+// stand this far off its port anchor port_x/port_z, at most that many of them
+#define SEA_SAIL_TO_PLACE 60.0
+#define SEA_PORT_SHIP_DIST 80.0
+#define SEA_PORT_SHIPS_MAX 3
 // the island Sea_Start was given, for a save (seaIsland is "" where the island has no harbour)
 string seaAt = "";
 // a loaded game (save.c) puts the ship where it was saved, not at the port
@@ -131,44 +147,178 @@ int Sea_NpcSpawn(float x, float z, float ay)
 	return seaNpc;
 }
 
-// "Плыть к" outside of battle is possible while the NPC ship is on the sea
+// moored hulls of an island's port (ours, the pattern of the original locations_loader.c:
+// LocLoadShips putting a hull for every character of the location at its locators.ships_other;
+// the converted data of our remake has no such locators, so the hulls stand by the port anchor
+// port_x/port_z of PdmIslands, facing port_ay). A character of the island is one of PdmCharacters
+// with address.island of it and a ship_key set; the forts (PdmShips class "fort") are places of
+// the sea, not hulls, and are handled as a target by their fort_x/fort_z instead
+void Sea_PortShips()
+{
+	if (seaIsland == "" || seaBattle) { return; }
+	aref root;
+	makearef(root, PdmCharacters);
+	int total = GetAttributesNum(root);
+	int made = 0;
+	float px = stf(PdmIslands.(seaIsland).port_x);
+	float pz = stf(PdmIslands.(seaIsland).port_z);
+	float pay = stf(PdmIslands.(seaIsland).port_ay);
+	Trace("PDM: sea, port ships of " + seaIsland);
+	for (int i = 0; i < total; i++)
+	{
+		aref child = GetAttributeN(root, i);
+		string key = GetAttributeName(child);
+		if (key == "") { continue; }
+		if (made >= SEA_PORT_SHIPS_MAX) { break; }
+		if (PdmCharacters.(key).address.island != seaIsland) { continue; }
+		string sk = PdmCharacters.(key).ship_key;
+		if (sk == "") { continue; }
+		if (PdmShips.(sk).class == "fort") { continue; }
+		// an attribute name in .(...) has to be a variable, as battle.c notes
+		aref card;
+		makearef(card, PdmCharacters.(key));
+		string typeKey = PdmShips.(sk).type_key;
+		// moored off the port anchor, in a fan to one side of the port head
+		float ang = pay + 0.5 + 0.5 * made;
+		Sea_AddShip(card, typeKey, px + sin(ang) * SEA_PORT_SHIP_DIST, pz + cos(ang) * SEA_PORT_SHIP_DIST, pay + BATTLE_PI);
+		made++;
+		Trace("PDM: sea, port ship " + card.id + " on " + sk + " moored at the port of " + seaIsland);
+	}
+	Trace("PDM: sea, port ships moored: " + made);
+}
+
+// the target "Плыть к" picks: the nearest of the NPC hulls on the sea, the fort of the island
+// at PdmIslands.(island).fort_x/fort_z and its harbour harbour_x/harbour_z where the transition
+// to another location happens — all places of the game data, within SEA_SAIL_TO_RADIUS of the
+// hero; true when something was picked (its place and name in seaSail*)
+bool Sea_SailToTarget()
+{
+	seaSailIndex = -1;
+	seaSailKind = "";
+	seaSailName = "";
+	float hx = stf(SeaShips[seaHero].ship.pos.x);
+	float hz = stf(SeaShips[seaHero].ship.pos.z);
+	float dx = 0.0;
+float dz = 0.0;
+float d2 = 0.0;
+	// reused by the hull, the fort and the harbour below, pdmscript keeps names at function level
+	 float best = SEA_SAIL_TO_RADIUS * SEA_SAIL_TO_RADIUS;
+	// the nearest hull that is not the hero's
+	for (int i = 0; i < seaShipCount; i++)
+	{
+		if (i == seaHero) { continue; }
+		dx = stf(SeaShips[i].ship.pos.x) - hx;
+	 dz = stf(SeaShips[i].ship.pos.z) - hz;
+	 d2 = dx * dx + dz * dz;
+	 if (d2 <= best)
+		{
+		 best = d2;
+		 seaSailIndex = i;
+		 seaSailTX = stf(SeaShips[i].ship.pos.x);
+		 seaSailTZ = stf(SeaShips[i].ship.pos.z);
+		 seaSailKind = "ship";
+		 seaSailName = SeaShips[i].id;
+		}
+	}
+	if (seaIsland != "")
+	{
+		// the fort of the island
+		if (CheckAttribute(&PdmIslands, seaIsland + ".fort_x"))
+		{
+		 float fx = stf(PdmIslands.(seaIsland).fort_x);
+		 float fz = stf(PdmIslands.(seaIsland).fort_z);
+		 dx = fx - hx;
+		 dz = fz - hz;
+		 d2 = dx * dx + dz * dz;
+		 if (d2 <= best)
+			{
+			 best = d2;
+			 seaSailIndex = -1;
+			 seaSailTX = fx;
+			 seaSailTZ = fz;
+			 seaSailKind = "fort";
+			 seaSailName = PdmIslands.(seaIsland).fort;
+			}
+		}
+		// the harbour: the landing point where the transition to another location happens
+		if (CheckAttribute(&PdmIslands, seaIsland + ".harbour_x"))
+		{
+		 float hx2 = stf(PdmIslands.(seaIsland).harbour_x);
+		 float hz2 = stf(PdmIslands.(seaIsland).harbour_z);
+		 dx = hx2 - hx;
+		 dz = hz2 - hz;
+		 d2 = dx * dx + dz * dz;
+		 if (d2 <= best)
+			{
+			 seaSailIndex = -1;
+			 seaSailTX = hx2;
+			 seaSailTZ = hz2;
+			 seaSailKind = "harbour";
+			 seaSailName = seaIsland + " harbour";
+			}
+		}
+	}
+	return seaSailKind != "";
+}
+
+// the button is lit only when a target of the data stands in reach of the press
 bool Sea_CanSailTo()
 {
-	return !seaBattle && seaNpc >= 0;
+	if (seaBattle) { return false; }
+	return Sea_SailToTarget();
 }
 
-// "Плыть к" outside of battle (ours, the math of battle.c:Battle_SailTo): the hero is teleported
-// abeam of the NPC ship at SEA_SAIL_TO m, on the side he is at now, heading as the NPC
+// "Плыть к" outside of battle (ours, the math of battle.c:Battle_SailTo): the hero is put near
+// the picked target — abeam of an NPC hull at SEA_SAIL_TO m as in battle.c, or SEA_SAIL_TO_PLACE
+// m off a place of the data (the fort, the harbour) on the line from it to where he is now
 void Sea_SailTo()
 {
-	if (!Sea_CanSailTo()) { return; }
-	float ex = stf(SeaShips[seaNpc].ship.pos.x);
-	float ez = stf(SeaShips[seaNpc].ship.pos.z);
-	float ay = stf(SeaShips[seaNpc].ship.ang.y);
-	// the starboard of the NPC is (cos ay, -sin ay); the hero stays on his side of it
-	// the same ship teleport as battle.c:Battle_SailTo sends to the hero's entity
-	// the NPC keeps its head in the teleport, the hero gets the same one
-	// so that the ships do not overlap and the button can be pressed again
-	// the hero sails on afterwards as the player steers him
-	// the NPC does not answer: the hero may press the button again from any side
+	// Sea_CanSailTo may not have run since the last open of the menu, pick again
+	if (!Sea_SailToTarget()) { Trace("PDM: sea, sail to: nothing to sail to in reach"); return; }
+	// an NPC hull: the same abeam landing as battle.c:Battle_SailTo
+	if (seaSailIndex >= 0)
+	{
+		float ex = stf(SeaShips[seaSailIndex].ship.pos.x);
+		 float ez = stf(SeaShips[seaSailIndex].ship.pos.z);
+	 float ay = stf(SeaShips[seaSailIndex].ship.ang.y);
+		// the starboard of the NPC is (cos ay, -sin ay); the hero stays on his side of it
+		// the same ship teleport as battle.c:Battle_SailTo sends to the hero's entity
+		// the NPC keeps its head in the teleport, the hero gets the same one
+		// so that the ships do not overlap and the button can be pressed again
+		// the hero sails on afterwards as the player steers him
+		// the NPC does not answer: the hero may press the button again from any side
 
-	float rx = cos(ay);
-	float rz = -sin(ay);
-	float side = SEA_SAIL_TO;
-	if ((stf(SeaShips[seaHero].ship.pos.x) - ex) * rx + (stf(SeaShips[seaHero].ship.pos.z) - ez) * rz < 0.0) { side = -side; }
-	SendMessage(&SeaShips[seaHero], "lfff", MSG_SHIP_TELEPORT, ex + rx * side, ez + rz * side, ay);
-	Hud_Log(PdmHud.note.sail_to + " " + SeaShips[seaNpc].Ship.Name);
-	Trace("PDM: sea, sail to " + SeaShips[seaNpc].id + ", " + side + " m abeam");
-}
+		float rx = cos(ay);
+		float rz = -sin(ay);
+		 float side = SEA_SAIL_TO;
+		if ((stf(SeaShips[seaHero].ship.pos.x) - ex) * rx + (stf(SeaShips[seaHero].ship.pos.z) - ez) * rz < 0.0) { side = -side; }
+		 SendMessage(&SeaShips[seaHero], "lfff", MSG_SHIP_TELEPORT, ex + rx * side, ez + rz * side, ay);
+		 Hud_Log(PdmHud.note.sail_to + " " + SeaShips[seaSailIndex].Ship.Name);
+		Trace("PDM: sea, sail to " + SeaShips[seaSailIndex].id + ", " + side + " m abeam");
+		 return;
+		}
+		// a place of the data: the hero stops SEA_SAIL_TO_PLACE m off it, on the line from the
+		// place to where he is now, the head as it was; atan2 gives the heading without sqrt
+		// and casts, the crash-prone chain of battle.c avoided
+	 float hx = stf(SeaShips[seaHero].ship.pos.x);
+	 float hz = stf(SeaShips[seaHero].ship.pos.z);
+	 float a = atan2(hx - seaSailTX, hz - seaSailTZ);
+	 // the hull branch above already declared ay at function level, this branch names it hay
+	 float hay = stf(SeaShips[seaHero].ship.ang.y);
+	 SendMessage(&SeaShips[seaHero], "lfff", MSG_SHIP_TELEPORT, seaSailTX + sin(a) * SEA_SAIL_TO_PLACE, seaSailTZ + cos(a) * SEA_SAIL_TO_PLACE, hay);
+	 Hud_Log(PdmHud.note.sail_to + " " + seaSailName);
+	 Trace("PDM: sea, sail to " + seaSailName + " at " + stf(seaSailTX) + ", " + stf(seaSailTZ));
+	}
 
-// TOWN_AUTO=14: the frame after the jump the ships write their places again (battle.c:Battle_SailToCheck's pattern)
+// TOWN_AUTO=14: the frame after the jump the hero and the target write their places again
+// (battle.c:Battle_SailToCheck's pattern)
 void Sea_SailToCheck()
 {
-	if (seaNpc < 0) { return; }
-	Trace("PDM: sea, sail to done, hero " + stf(SeaShips[seaHero].ship.pos.x) + " " + stf(SeaShips[seaHero].ship.pos.z) + ", NPC " + stf(SeaShips[seaNpc].ship.pos.x) + " " + stf(SeaShips[seaNpc].ship.pos.z));
-	// the button works and the ships moved: the run ends by going back to the world map
-	Sea_ToMap();
-}
+		 if (seaSailKind == "") { return; }
+		 Trace("PDM: sea, sail to done, hero " + stf(SeaShips[seaHero].ship.pos.x) + " " + stf(SeaShips[seaHero].ship.pos.z) + ", target " + stf(seaSailTX) + " " + stf(seaSailTZ));
+		// the button works and the ships moved: the run ends by going back to the world map
+		 Sea_ToMap();
+	}
 
 // until the player takes the mouse, the run needs no input.
 void Sea_Start(string islandKey)
@@ -223,6 +373,9 @@ void Sea_Start(string islandKey)
 	Sea_CreateCamera(hero);
 	Hud_Start();
 	if (seaBattle) { Battle_AddEnemy(x, z, ay); }
+	// the port of the island gets its moored hulls on a normal sea; TOWN_AUTO=14 keeps its
+	// scripted lone NPC of SEA_NPC_KEY so the button autotest proves one deterministic target
+	if (TownAuto != 14) { Sea_PortShips(); }
 	if (TownAuto == 14) { Sea_NpcSpawn(x, z, ay); }
 	SetEventHandler("Sea_Tick", "Sea_Tick", 0);
 	SetEventHandler("Sea_ToPort", "Sea_ToPort", 0);
