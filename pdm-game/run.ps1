@@ -17,6 +17,12 @@ if (-not (Test-Path "$Pdm/RESOURCE")) { throw "no original at ${Pdm}: set `$env:
 # a missing file is no match (Select-String stops the script on it under $ErrorActionPreference = 'Stop')
 function Test-Pattern([string]$Pattern, [string]$Path) { (Test-Path $Path) -and [bool](Select-String -Quiet -Pattern $Pattern -Path $Path) }
 function Get-Env([string]$Name, [string]$Default) { $v = [Environment]::GetEnvironmentVariable($Name); if ($v) { $v } else { $Default } }
+# the converters split by part: PARTS=sea|ships|islands|cities (comma separated) converts only those
+# over the existing output, without deleting and rewriting everything else (PARTS unset = all, the
+# original guarded flow)
+$Parts = (Get-Env 'PARTS' 'all') -replace '\s', ''
+$Selected = $Parts -ne 'all'
+function Test-Part([string]$Name) { ($Parts -eq 'all') -or ((($Parts -split ',').Contains($Name))) }
 # the volume and the voices of the characters: the variable, else settings.ini, else the default (0..100)
 function Get-Setting([string]$Name, [string]$Key, [string]$Default)
 {
@@ -50,6 +56,7 @@ if ((Get-Env 'RECONVERT' '0') -eq '1')
 # every hull of WORLDS/Ships.idf (the forts are parts of the islands)
 function Convert-Hulls
 {
+    if ($Selected -and -not (Test-Part 'ships')) { return }
     $ships = Get-Content -Raw "$Demo/data/tables/WORLDS/Ships.json" | ConvertFrom-Json
     $hulls = $ships.objects | ForEach-Object {
         $o = @{}; foreach ($pair in $_) { $o[$pair[0]] = $pair[1] }; $o['filename'].ToLower()
@@ -57,7 +64,19 @@ function Convert-Hulls
     foreach ($hull in $hulls) { Invoke-Python "$Tools/pdm_ship.py" $Pdm "$Demo/resource" $hull }
 }
 
-if (-not (Test-Path "$Demo/resource/.converted"))
+if ($Selected)
+{
+    # a partial reconversion: only the chosen converters run over the existing resource, guards are
+    # bypassed for the selected parts on purpose
+    if (Test-Part 'sea') { Invoke-Python "$Demos/sea/make_sea.py" "$Demo/resource" --waves $(if ($env:SEA_WAVES) { $env:SEA_WAVES } else { "fft" }) }
+    if (Test-Part 'ships')
+    {
+        Invoke-Python "$Demos/ship/make_ship.py" "$Demo/resource"
+        Convert-Hulls
+        if (Test-Path "$Demo/resource/ini/rigging_pdm.ini") { Get-Content "$Demo/resource/ini/rigging_pdm.ini" | Add-Content "$Demo/resource/ini/rigging.ini" }
+    }
+}
+elseif (-not (Test-Path "$Demo/resource/.converted"))
 {
     # the tables, characters, ships and the story data as JSON in data/
     Invoke-Python "$Tools/pdm2storm.py" $Pdm $Demo --only 'actions,dialogs,tables,desc,characters,ships,quests'
@@ -86,11 +105,26 @@ if (-not ((Test-Path $MainMap) -and ((Get-Content -Raw $MainMap) -match 'fogStam
     Invoke-Python "$Tools/pdm_ui.py" $Pdm $Demo
 }
 # the towns and interiors, their patches and the characters with animation (several minutes)
-if (-not (Test-Path "$Demo/program/data/pdm_world.c")) { Invoke-Python "$Tools/pdm_world.py" $Pdm $Demo }
-# the cabin of the boarding and the fighters with the blade drawn, after the characters
-if (-not (Test-Pattern 'PdmBoarding.hud' "$Demo/program/data/pdm_boarding.c")) { Invoke-Python "$Tools/pdm_boarding.py" $Pdm $Demo }
+if ($Selected)
+{
+    if (Test-Part 'cities')
+    {
+        Invoke-Python "$Tools/pdm_world.py" $Pdm $Demo
+        Invoke-Python "$Tools/pdm_boarding.py" $Pdm $Demo
+    }
+}
+else
+{
+    if (-not (Test-Path "$Demo/program/data/pdm_world.c")) { Invoke-Python "$Tools/pdm_world.py" $Pdm $Demo }
+    # the cabin of the boarding and the fighters with the blade drawn, after the characters
+    if (-not (Test-Pattern 'PdmBoarding.hud' "$Demo/program/data/pdm_boarding.c")) { Invoke-Python "$Tools/pdm_boarding.py" $Pdm $Demo }
+}
 # the islands, where the ship appears at each and their forts
-if (-not (Test-Pattern '"fort"' "$Demo/data/islands/Highrock.json")) { Invoke-Python "$Tools/pdm_island.py" $Pdm "$Demo/resource" all --data "$Demo/data" }
+if ($Selected)
+{
+    if (Test-Part 'islands') { Invoke-Python "$Tools/pdm_island.py" $Pdm "$Demo/resource" all --data "$Demo/data" }
+}
+elseif (-not (Test-Pattern '"fort"' "$Demo/data/islands/Highrock.json")) { Invoke-Python "$Tools/pdm_island.py" $Pdm "$Demo/resource" all --data "$Demo/data" }
 # the toolbar of the sea (the pictures with the class, the panel of the charges) and its notes
 # the atlas of the commands is not in git (resource/ is ignored): the notes alone make no pictures,
 # so the grid of commands.tga.tx has to stand on the disk before the interface can draw an icon
