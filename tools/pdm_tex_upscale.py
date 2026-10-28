@@ -147,6 +147,8 @@ def main():
             print(f"{path.name}: {src.width} px stays")
             continue
         rgb = src.convert("RGB")
+        print(f"[{n}/{len(stems)}] {path.name}: {src.width} -> {size[0]} px ...", end=" ", flush=True)
+        began = time.time()
         if comfy is not None:
             new = by_model(comfy, rgb, short, a.upscaler, work).resize(size, Image.LANCZOS)
         else:
@@ -157,7 +159,7 @@ def main():
         new = new.convert("RGBA")
         new.putalpha(alpha)
         write_tx(new, path)
-        print(f"[{n}/{len(stems)}] {path.name}: {src.width} -> {size[0]} px ({a.method})", flush=True)
+        print(f"done in {time.time() - began:.1f} s ({a.method})", flush=True)
 
 
 if __name__ == "__main__":
