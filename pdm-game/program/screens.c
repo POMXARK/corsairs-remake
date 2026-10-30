@@ -181,6 +181,7 @@ void Screen_Fill()
 	Screen_Text("EDITFACEMONEY", PlayerCard.money);
 	Screen_Text("EDITSHIPNAME", ship);
 	Screen_Text("EDITSHIPTYPENAME", PlayerShipType.type);
+	Screen_ShipText();
 	Screen_Lists();
 	// the values of the screen in the texts of the original: "Ранг %d", "9 узлов"
 	if (!CheckAttribute(PdmScreens, screenName + ".s")) { return; }
@@ -344,6 +345,46 @@ int Screen_Cargo()
 }
 
 // the first number of "4,0,0" (the guns of a board, of the stern)
+// the n-th number of a "a,b,c" list
+string Screen_Nth(string list, int n)
+{
+	string rest = list;
+	for (int i = 0; i < n; i++)
+	{
+		int at = findSubStr(rest, ",", 0);
+		if (at < 0) { return ""; }
+		rest = strcut(rest, at + 1, strlen(rest) - 1);
+	}
+	return Screen_First(rest);
+}
+
+// "4 + 4": the guns of the board are on both sides
+string Screen_Board(string list)
+{
+	string n = Screen_First(list);
+	return n + " + " + n;
+}
+
+// the type and the description of the ship of the hero in the words of the original (tools/pdm_ui.py, GOODS/SHIPS)
+void Screen_ShipText()
+{
+	string id = PlayerShipType.id;
+	if (CheckAttribute(PdmScreens, "ships." + id + ".name")) { Screen_Text("EDITSHIPTYPE", PdmScreens.ships.(id).name); }
+	if (CheckAttribute(PdmScreens, "ships." + id + ".about")) { Screen_Text("EDITDESC", PdmScreens.ships.(id).about); }
+}
+
+// the numbers of the gun of the hero: "12,400,40,27" is the shot, the range, the reload and the weight
+string Screen_Cannon(string node)
+{
+	string key = "Demi_culverins";
+	if (!CheckAttribute(PdmCannons, key + ".params")) { return ""; }
+	string params = PdmCannons.(key).params;
+	if (node == "S_CALIBERSET") { return Screen_Nth(params, 0); }
+	if (node == "S_FIRERANGE") { return Screen_Nth(params, 1); }
+	if (node == "S_RELOADRATE") { return Screen_Nth(params, 2); }
+	return Screen_Nth(params, 3);
+}
+
 string Screen_First(string list)
 {
 	int at = findSubStr(list, ",", 0);
@@ -373,6 +414,9 @@ string Screen_Value(string node)
 	if (node == "S_CAPACITY" || node == "S_MAXWEIGHT") { return PlayerShipType.capacity; }
 	if (node == "S_WEIGHT" || node == "S_TOTALWEIGHT") { return "" + Screen_Cargo(); }
 	if (node == "S_GUNPORTS") { return PlayerShipType.cannonstotal; }
+	if (node == "S_BOARD") { return Screen_Board(PlayerShipType.deckcannons); }
+	if (node == "S_STERN") { return Screen_First(PlayerShipType.cannonback); }
+	if (node == "S_CALIBERSET" || node == "S_SHOTWEIGHT" || node == "S_FIRERANGE" || node == "S_RELOADRATE") { return Screen_Cannon(node); }
 	if (node == "S_BOARDNUM") { return Screen_First(PlayerShipType.deckcannons); }
 	if (node == "S_STERNNUM") { return Screen_First(PlayerShipType.cannonback); }
 	return "";
@@ -502,6 +546,30 @@ void Screen_TourTrade(string name)
 	}
 }
 
+// TOWN_AUTO=18: the values of the shipyard must be there (the log tells the empty ones)
+void Screen_ShipyardCheck(string name)
+{
+	if (TownAuto != SHIPYARD_ID || name != "shipyard") { return; }
+	string nodes = "S_CLASS,S_HITPOINTS,S_SPEEDRATE,S_TURNRATE,S_MAXCREW,S_MINCREW,S_CAPACITY,S_GUNPORTS,S_BOARD,S_STERN,S_CALIBERSET,S_SHOTWEIGHT,S_FIRERANGE,S_RELOADRATE";
+	string empty = "";
+	int at = 0;
+	while (at < strlen(nodes))
+	{
+		int end = findSubStr(nodes, ",", at);
+		if (end < 0) { end = strlen(nodes); }
+		string node = strcut(nodes, at, end - 1);
+		string value = Screen_Value(node);
+		Trace("PDM shipyard: " + node + " = '" + value + "'");
+		if (value == "") { empty = empty + node + " "; }
+		at = end + 1;
+	}
+	string id = PlayerShipType.id;
+	if (!CheckAttribute(PdmScreens, "ships." + id + ".name")) { empty = empty + "type "; }
+	if (!CheckAttribute(PdmScreens, "ships." + id + ".about")) { empty = empty + "about "; }
+	if (empty == "") { Trace("PDM shipyard: values ok"); }
+	else { Trace("PDM shipyard: FAIL, empty " + empty); }
+}
+
 // SCENE=screens: the pages of the menu, a new game, F1 in the town and its button "Корабль", the other
 // screens over the game with the hero filled in, Escape back to the game
 void Screen_Tour()
@@ -510,6 +578,7 @@ void Screen_Tour()
 	if (screenTourStage == 0)
 	{
 		name = Screen_TourNext(screenTourMenu);
+		if (TownAuto == SHIPYARD_ID) { name = ""; }
 		screenMessage = PdmScreens.mainmenu.t.exit;
 		if (name != "") { Screen_Show(name); PostEvent("Screen_Tour", SCREEN_AUTO_MS); return; }
 		screenTourStage = 1;
@@ -530,7 +599,11 @@ void Screen_Tour()
 	if (screenTourStage == 2)
 	{
 		name = Screen_TourNext(screenTourGame);
-		if (name != "") { Screen_Show(name); Screen_TourTrade(name); PostEvent("Screen_Tour", SCREEN_AUTO_MS); return; }
+		if (TownAuto == SHIPYARD_ID)
+		{
+			if (screenTourAt == 0 || name != "shipyard") { while (name != "shipyard" && name != "") { name = Screen_TourNext(screenTourGame); } }
+		}
+		if (name != "") { Screen_Show(name); Screen_TourTrade(name); Screen_ShipyardCheck(name); PostEvent("Screen_Tour", SCREEN_AUTO_MS); return; }
 		screenTourStage = 3;
 		Screen_Escape();
 		PostEvent("Screen_Tour", SCREEN_AUTO_MS);

@@ -35,6 +35,7 @@
 | `sea-out` / `sea-port` / `sea-map` | выход в море, возврат в порт, переход на карту мира | `PDM: sea …` |
 | `battle-fire` / `battle-board` / `battle-sail` / `battle-fort` | залп, абордаж, парусная погоня, бой с фортом | `PDM: autotest done, battle…` |
 | `save-sea` | автосохранение в море и загрузка его обратно | `PDM: autotest done, save` |
+| `shipyard-screen` | `SCENE=screens`, `TOWN_AUTO=18`: новая игра, F1, открывает только экран «Верфь» и проверяет значения узлов `S_*` (класс, корпус, скорость, борт `4 + 4`, корма, калибр, дальность, перезарядка) и название/описание корабля из `GOODS/SHIPS` (`Screen_ShipyardCheck`, `screens.c`) | `PDM shipyard: values ok` |
 | `save-screens` | то же через страницы «Сохранить»/«Загрузить» | `PDM: autotest done, screens` |
 | `options-sea` / `options-close` | смена разрешения на странице «Настройки» (из меню и над живой сценой) | `PDM options: …`, `PDM close: …` |
 | `sea-sail-to` | «Плыть к» на панели моря (см. раздел выше) | `PDM: autotest done, sail to at sea` |
