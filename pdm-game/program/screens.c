@@ -49,6 +49,7 @@ void Screen_Init()
 {
 	SetEventHandler("Screen_Go", "Screen_Go", 0);
 	SetEventHandler("Screen_ShipyardVerify", "Screen_ShipyardVerify", 0);
+	SetEventHandler("Screen_ShipyardPick", "Screen_ShipyardPick", 0);
 	SetEventHandler("Screen_Pending", "Screen_Pending", 0);
 	SetEventHandler("Screen_Tour", "Screen_Tour", 0);
 	SetEventHandler("Screen_Credits", "Screen_CreditsStep", 0);
@@ -468,25 +469,39 @@ void Screen_ShipyardMode()
 
 // the right window of the shipyard: the types by class, "Ваш корабль" on top, the price and the rank under it
 // (the texts are of the screenshot of the original: they are not in the files read so far)
+// a row of the list of the types: the first replaces the text of the node, the others are added to it (as the
+// files of save.c); shipyardRows tells the type of each row, "-" for a header
+string shipyardRows = "";
+int shipyardRowCount = 0;
+
+void Screen_ShipyardRow(string line, string id)
+{
+	if (shipyardRowCount == 0) { Screen_Text("EDITSHIP", line); shipyardRows = id; }
+	else { SendMessage(&GameInterface, "lsle", MSG_INTERFACE_MSG_TO_NODE, "EDITSHIP", 0, &line); shipyardRows = shipyardRows + "," + id; }
+	shipyardRowCount++;
+}
+
 void Screen_ShipyardRight()
 {
-	string list = PdmScreens.shipyard.t.yourship + "\n";
 	int rank = 0;
 	if (CheckAttribute(PlayerCard, "rank")) { rank = sti(PlayerCard.rank); }
+	shipyardRowCount = 0;
+	Screen_ShipyardRow(PdmScreens.shipyard.t.yourship, "-");
+	Screen_ShipyardRow(" ", "-");
 	int n = GetAttributesNum(&PdmShipTypes);
 	for (int c = 5; c <= 6; c++)
 	{
-		list = list + "\n" + Screen_Put(PdmScreens.shipyard.t.classorder, "" + c) + "\n";
+		if (c == 6) { Screen_ShipyardRow(" ", "-"); }
+		Screen_ShipyardRow(Screen_Put(PdmScreens.shipyard.t.classorder, "" + c), "-");
 		for (int i = 0; i < n; i++)
 		{
 			aref type;
 			type = GetAttributeN(&PdmShipTypes, i);
 			if (sti(type.class) != c) { continue; }
 			string id = type.id;
-			if (CheckAttribute(PdmScreens, "ships." + id + ".name")) { list = list + PdmScreens.ships.(id).name + "\n"; }
+			if (CheckAttribute(PdmScreens, "ships." + id + ".name")) { Screen_ShipyardRow(PdmScreens.ships.(id).name, id); }
 		}
 	}
-	Screen_Text("EDITSHIP", list);
 	Screen_Text("EDITSUMMA", Screen_Put(PdmScreens.shipyard.t.shipcost, PlayerShipType.sellprice));
 	Screen_Text("EDITDAMAGES", Screen_Put(PdmScreens.shipyard.t.shipdamages, "" + (100 - Screen_HullPercent())));
 	Screen_Text("EDITHELP", Screen_Put(PdmScreens.shipyard.t.buybutclass, "" + Screen_RankClass(rank)));
@@ -702,6 +717,18 @@ bool Screen_ShipyardClick(string node)
 	if (node == "LB_RIGHTRIG") { shipyardRigFix = Screen_RigFix() + 10; Screen_Fill(); return true; }
 	if (node == "LB_REPAIR") { return Screen_ShipyardRepair(true, false); }
 	if (node == "LB_REPAIRALL") { return Screen_ShipyardRepair(true, true); }
+	if (node == "EDITSHIP")
+	{
+		int row = SendMessage(&GameInterface, "lsl", MSG_INTERFACE_MSG_TO_NODE, "EDITSHIP", 11);
+		string rid = Screen_Nth(shipyardRows, row);
+		if (rid == "-" || rid == "") { return true; }
+		shipyardPick = rid;
+		Screen_Fill();
+		Trace("PDM shipyard: pick " + rid);
+		return true;
+	}
+	if (node == "LB_PREVSHIP") { Screen_ShipyardStep(-1); return true; }
+	if (node == "LB_NEXTSHIP") { Screen_ShipyardStep(1); return true; }
 	if (node == "LB_SHIPUP") { Screen_ShipyardStep(-1); return true; }
 	if (node == "LB_SHIPDOWN") { Screen_ShipyardStep(1); return true; }
 	if (node == "LB_SELL")
@@ -890,11 +917,28 @@ void Screen_ShipyardCheck(string name)
 	else { Trace("PDM shipyard: FAIL, empty " + empty); }
 	shipyardMoney = sti(PlayerCard.money);
 	shipyardOwn = PlayerShipType.id;
+	PostEvent("Screen_ShipyardPick", 200);
 	PostEvent("ievnt_command", 500, "ss", "click", "LB_BUY");
 	PostEvent("ievnt_command", 800, "ss", "click", "LB_SELL");
 	PostEvent("ievnt_command", 1100, "ss", "click", "LB_BUY");
 	PostEvent("Screen_ShipyardVerify", 2000);
 	PostEvent("Town_AutoQuit", 4000);
+}
+
+// the list and the arrows in the test: a click on a row picks its type, a header does nothing, the arrows go on
+void Screen_ShipyardPick()
+{
+	SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, "EDITSHIP", 1, 2);
+	Screen_ShipyardClick("EDITSHIP");
+	if (shipyardPick != "") { Trace("PDM shipyard: row FAIL, a header picked " + shipyardPick); }
+	SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, "EDITSHIP", 1, 3);
+	Screen_ShipyardClick("EDITSHIP");
+	string first = shipyardPick;
+	Screen_ShipyardClick("LB_NEXTSHIP");
+	string second = shipyardPick;
+	Screen_ShipyardClick("LB_PREVSHIP");
+	if (first != "" && second != first && shipyardPick == first) { Trace("PDM shipyard: pick ok"); }
+	else { Trace("PDM shipyard: pick FAIL, " + first + ", " + second + ", " + shipyardPick); }
 }
 
 // the buttons in the test: the first Buy is refused (the old ship stands), Sell gives B, Buy takes A of the picked one

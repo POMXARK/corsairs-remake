@@ -948,7 +948,7 @@ CHECKS = {"check"}
 # a field a screen takes from another one (ours): [LoadGame] has no description of its own, the one of [Common]
 # is small and under the frame of the background, the scripts show the header of a save in it
 FIELDS_OF = {"LoadGame": {"EditDesc": ("SaveGame", "EditDesc")}}
-SELECT_LISTS = {("LoadGame", "EditFiles"), ("SaveGame", "EditFiles")}
+SELECT_LISTS = {("LoadGame", "EditFiles"), ("SaveGame", "EditFiles"), ("ShipYard", "EditShip")}
 # the screens without the help, the description and the face of the hero of [Common]
 NO_COMMON = {"MainMenu", "MainMap", "MessageBox", "Options", "KeyControls", "Credits"}
 # the width of the place of a value (s_Rank = txt:"%d",xr:490,...): the original prints it from a point (ours)
