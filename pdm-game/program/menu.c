@@ -39,6 +39,10 @@ void Menu_InterfaceKeys()
 	Menu_MapKey("IDown", 40, 0);
 	Menu_MapKey("IUp", 87, 0);	// W and S step as the arrows (the list of the shipyard)
 	Menu_MapKey("IDown", 83, 0);
+	Menu_MapKey("ILeft", 37, 0);
+	Menu_MapKey("IRight", 39, 0);
+	Menu_MapKey("ILeft", 65, 0);	// A and D step as the arrows (the cells of the saves)
+	Menu_MapKey("IRight", 68, 0);
 	Menu_MapKey("IAction", 13, 0);
 }
 

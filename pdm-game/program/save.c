@@ -252,8 +252,8 @@ void Save_CellShow(int k, bool on, bool selected)
 	bool chosen = on;
 	if (selected) { plain = false; } else { chosen = false; }
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell, on);
-	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_FRAME", plain);
-	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_SEL", chosen);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_FRAME", on);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_SEL", false);
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_NAME", chosen);
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_NAMEN", plain);
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_TEXT", plain);
