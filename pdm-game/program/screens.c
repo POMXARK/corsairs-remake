@@ -454,6 +454,9 @@ void Screen_ShipyardMode()
 	Screen_Use("EDITSUMMANEW,EDITBUY", buy);
 	Screen_Use("LB_SELL", !shipyardSold);
 	Screen_Use("LB_BUY", buy && shipyardSold);
+	string vid = Screen_ViewId();
+	if (sti(PdmShipTypes.(vid).class) > 5) { Screen_Text("S_LBS0", ""); Screen_Text("S_GOLD0", ""); }
+	else { Screen_Text("S_LBS0", PdmScreens.shipyard.s.S_LBS0); Screen_Text("S_GOLD0", PdmScreens.shipyard.s.S_GOLD0); }
 	if (!buy) { Screen_Text("EDITCANNON", PdmScreens.shipyard.t.weapon0); return; }
 	Screen_Text("EDITCANNON", PdmScreens.shipyard.t.weapon0);
 	Screen_Text("EDITSUMMANEW", Screen_Put(PdmScreens.shipyard.t.shipcost, Screen_ShipBuyPrice(shipyardPick)));
@@ -569,6 +572,9 @@ string Screen_Value(string node)
 	if (node == "S_BOARD") { return Screen_Board(PdmShipTypes.(vid).deckcannons); }
 	if (node == "S_STERN") { return "" + Screen_Deck(PdmShipTypes.(vid).cannonback); }
 	if (node == "S_CALIBERSET" || node == "S_SHOTWEIGHT" || node == "S_FIRERANGE" || node == "S_RELOADRATE") { return Screen_Cannon(node); }
+	// the screenshots of the original: a class 5 ship has the 16 pound guns to buy, a class 6 one has none
+	bool smallShip = sti(PdmShipTypes.(vid).class) > 5;
+	if (smallShip) { if (node == "S_LBSNUM0" || node == "S_GOLDNUM0") { return ""; } }
 	if (node == "S_LBSNUM0") { return Screen_Nth(PdmCannons.Culverins.params, 0); }
 	if (node == "S_GOLDNUM0") { return "+" + (sti(PdmGoods.Culverins.price) * sti(PdmShipTypes.(vid).cannonstotal)); }
 	if (node == "S_BOARDNUM") { return "" + Screen_Deck(PdmShipTypes.(vid).deckcannons); }
