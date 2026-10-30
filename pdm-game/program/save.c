@@ -123,6 +123,8 @@ void OnLoad()
 {
 	Trace("PDM save: loaded " + savefile_info + ", at " + saveX + ", " + saveZ);
 	Save_ClearScenes();
+	// the save carries the tables of its time; a file older than the table (the weather) has it empty
+	PdmWeather_Init();
 	Pdm_Base();
 	// the town keeps its handlers from its first start; landing after a load needs them as well
 	Town_Handlers();
