@@ -821,6 +821,12 @@ void Screen_Command()
 {
 	string command = GetEventData();
 	string node = GetEventData();
+	if (screenName == "shipyard")
+	{
+		// the arrows (and W/S) of the list: the type changes, not only the row under the cursor
+		if (command == "upstep") { Trace("PDM shipyard: key up at " + node); Screen_ShipyardStep(-1); return; }
+		if (command == "downstep") { Trace("PDM shipyard: key down at " + node); Screen_ShipyardStep(1); return; }
+	}
 	if (command != "click" && command != "activate") { return; }
 	if (screenName == "mainmenu")
 	{
@@ -1003,6 +1009,11 @@ void Screen_ShipyardPick()
 	Screen_ShipyardClick("LB_NEXTSHIP");
 	string second = shipyardPick;
 	Screen_ShipyardClick("LB_PREVSHIP");
+	// the key of the list (down, then up): the engine sends "downstep" / "upstep" of the node to the script
+	SendMessage(&GameInterface, "lss", MSG_INTERFACE_MENU_ACTION, "downstep", "");
+	string afterKey = shipyardPick;
+	SendMessage(&GameInterface, "lss", MSG_INTERFACE_MENU_ACTION, "upstep", "");
+	Trace("PDM shipyard: key test " + first + " -> " + afterKey + " -> " + shipyardPick);
 	if (first != "" && second != first && shipyardPick == first) { Trace("PDM shipyard: pick ok"); }
 	else { Trace("PDM shipyard: pick FAIL, " + first + ", " + second + ", " + shipyardPick); }
 }

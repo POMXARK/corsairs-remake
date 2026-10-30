@@ -590,7 +590,11 @@ class Converter:
                     notes.append(f"; {key} = {value}")
                     continue
                 w, h = int(a["dx"]), int(a["dy"])
+                if section == "ShipYard" and key.lower() == "edithelp":
+                    a = dict(a, type="1"); h = max(h, 30)  # "Ваш ранг позволяет управлять вам кораблями до 6 класса" takes three lines of the list's panel (ours)
                 x, y, l = self.field(key, a, w, h)
+                if section == "ShipYard" and key.lower() == "edithelp":
+                    y += 14; h -= 14; l[1] = f"position = {x},{y},{x + w},{y + h}"   # from the middle of its box down, as the one line was
                 if (x, y) == (0, 0) or x < 0 or y < 0 or x + w > 800 or y + h > 600:
                     # a pattern of a row of a list (EditSkillName at 0,0) or off the screen (EditTotalMonthly)
                     notes.append(f"; {key} = {value}")

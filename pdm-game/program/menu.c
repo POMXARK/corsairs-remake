@@ -37,6 +37,8 @@ void Menu_InterfaceKeys()
 	Menu_MapKey("ITurnV", 257, INVERSE_CONTROL);
 	Menu_MapKey("IUp", 38, 0);
 	Menu_MapKey("IDown", 40, 0);
+	Menu_MapKey("IUp", 87, 0);	// W and S step as the arrows (the list of the shipyard)
+	Menu_MapKey("IDown", 83, 0);
 	Menu_MapKey("IAction", 13, 0);
 }
 
