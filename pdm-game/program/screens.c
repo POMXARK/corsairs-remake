@@ -568,6 +568,20 @@ void Screen_ShipyardRight()
 	Screen_ShipyardMode();
 }
 
+// the page of the ship: the description in its parchment, the wear of the hull and the rig as the percent under their
+// titles; "Корпус" and "Оснастка" of the left corner belong to the lines of the repair, which an undamaged ship has not
+void Screen_Sship(string id)
+{
+	Screen_Text("EDITSHIPDESC", PdmScreens.ships.(id).about);
+	Screen_Text("S_HULL", "");
+	Screen_Text("S_RIG", "");
+	Screen_Text("EDITHULLPERCENT", Screen_HullPercent() + "%");
+	Screen_Text("EDITRIGPERCENT", Screen_RigPercent() + "%");
+	int hp = sti(PlayerShipType.hitpoint);
+	if (CheckAttribute(PlayerShipCard, "hull_hp")) { hp = sti(PlayerShipCard.hull_hp); }
+	Screen_Text("EDITHULLHP", hp + " " + PdmScreens.sship.t.hp);
+}
+
 // the type and the description of the ship of the hero in the words of the original (tools/pdm_ui.py, GOODS/SHIPS)
 void Screen_ShipText()
 {
@@ -576,7 +590,7 @@ void Screen_ShipText()
 	// the description of the ship stands under the ship in the parchment of its page, the other pages have none of it
 	if (CheckAttribute(PdmScreens, "ships." + id + ".about"))
 	{
-		if (screenName == "sship") { Screen_Text("EDITSHIPDESC", PdmScreens.ships.(id).about); }
+		if (screenName == "sship") { Screen_Sship(id); }
 		if (screenName == "shipyard") { Screen_Text("EDITDESC", PdmScreens.ships.(id).about); }
 	}
 	if (screenName == "shipyard")
