@@ -34,6 +34,7 @@ The positions: xo/yo the centre, xl/yl the left/top, xr the right edge. A key ma
 instead of ',' (xr:585:yo:175 in [Options]). The paths are relative to [Common] path = MENU\ and do
 not care about the case of letters.
 """
+import math
 import os
 import re
 import shutil
@@ -122,6 +123,74 @@ def find_faces(dirs):
             italic = "italic" if "italic" in (style or "").lower() else ""
             faces.setdefault(face_key(family + italic), f)
     return faces
+
+
+def _cursor_imports():
+    import numpy
+    import cff2gm
+    import tf2tx
+    return numpy, cff2gm, tf2tx
+
+
+
+def render_cursor_model(cff, tf, size=48, ss=8, spin=1.57, tilt=0.3, roll=-0.78):
+    """The cursor of the original screens (MODELS/cursor.cff, a four-sided silver arrowhead, textured k_1n.tf) drawn
+    into a size x size picture: the interface of the original shows this model, not the flat IMAGES/cursor.tga that
+    the screen .ini name (the screenshots of the original). The tip is at the top left, lit from the same corner."""
+    np, cff2gm, tf2tx = _cursor_imports()
+    meshes = cff2gm.cff_to_meshes(cff)
+    tex = np.asarray(tf2tx.tf_image(tf).convert('RGBA'), dtype=float)
+    th,tw=tex.shape[:2]
+    # model z (tip) -> screen up, then lean and roll
+    def rot(p):
+        x,y,z=p
+        c,s=math.cos(spin),math.sin(spin); x,y=x*c-y*s,x*s+y*c
+        # x-rotation: z->-y (tip up on screen, y down)
+        x,y,z=x,-z,y
+        # pitch toward viewer
+        c,s=math.cos(tilt),math.sin(tilt); y,z=y*c-z*s,y*s+z*c
+        c,s=math.cos(roll),math.sin(roll); x,y=x*c-y*s,x*s+y*c
+        return (x,y,z)
+    tris=[]
+    for m in meshes:
+        n=len(m.vertices)//2
+        for a,b,c in m.triangles[:len(m.triangles)//2]:
+            v=[m.vertices[i] for i in (a,b,c)]
+            tris.append([(rot(q[0]),q[2]) for q in v])
+    pts=np.array([p for t in tris for p,_ in t])
+    big=size*ss
+    # fit: bbox to size-4 px margin
+    mn=pts[:,:2].min(0); mx=pts[:,:2].max(0); k=(size-4)*ss/max(mx-mn)
+    img=np.zeros((big,big,4)); zb=np.full((big,big),-1e9)
+    L=np.array([-0.4,-0.5,0.75]); L/=np.linalg.norm(L)
+    for t in tris:
+        P=np.array([[(p[0]-mn[0])*k+2*ss,(p[1]-mn[1])*k+2*ss,p[2]] for p,_ in t]); UV=np.array([uv for _,uv in t])
+        e1=P[1]-P[0]; e2=P[2]-P[0]; nrm=np.cross(e1,e2); ln=np.linalg.norm(nrm)
+        if ln<1e-9: continue
+        nrm/=ln
+        if nrm[2]<0: nrm=-nrm   # two-sided
+        shade=0.55+0.6*max(0,float(nrm@L))
+        x0,x1=int(P[:,0].min()),int(P[:,0].max())+1; y0,y1=int(P[:,1].min()),int(P[:,1].max())+1
+        d=(P[1,0]-P[0,0])*(P[2,1]-P[0,1])-(P[2,0]-P[0,0])*(P[1,1]-P[0,1])
+        if abs(d)<1e-9: continue
+        for y in range(max(y0,0),min(y1,big)):
+            for x in range(max(x0,0),min(x1,big)):
+                w1=((x+.5-P[0,0])*(P[2,1]-P[0,1])-(P[2,0]-P[0,0])*(y+.5-P[0,1]))/d
+                w2=((P[1,0]-P[0,0])*(y+.5-P[0,1])-(x+.5-P[0,0])*(P[1,1]-P[0,1]))/d
+                w0=1-w1-w2
+                if min(w0,w1,w2)<0: continue
+                z=w0*P[0,2]+w1*P[1,2]+w2*P[2,2]
+                if z<=zb[y,x]: continue
+                zb[y,x]=z
+                u=(w0*UV[0,0]+w1*UV[1,0]+w2*UV[2,0]); v=(w0*UV[0,1]+w1*UV[1,1]+w2*UV[2,1])
+                c=tex[int(v*th)%th,int(u*tw)%tw]
+                img[y,x]=[min(255,c[0]*shade),min(255,c[1]*shade),min(255,c[2]*shade),255]
+    # box downsample, premultiplied
+    a=img[...,3:4]/255; rgb=img[...,:3]*a
+    rgb=rgb.reshape(size,ss,size,ss,3).sum((1,3)); al=a.reshape(size,ss,size,ss,1).sum((1,3))
+    out=np.zeros((size,size,4)); m=al[...,0]>0
+    out[m,:3]=rgb[m]/al[m]; out[...,3]=al[...,0]/(ss*ss)*255
+    return Image.fromarray(out.astype('uint8'),'RGBA')
 
 
 class Original:
@@ -884,8 +953,14 @@ class Converter:
     def common(self):
         ini = self.resource / "ini"
         self.read_screens("menu.ini")
-        cursor = self.image(dict(self.ini["Common"])["cursor"])
-        tex, _, _ = self.texture(self.keyed(cursor), "cursor")
+        cff = self.pdm.find("MODELS/cursor.cff")
+        tf = self.pdm.find("TEXTURES/k_1n.tf")
+        if cff is not None and tf is not None:
+            cursor = render_cursor_model(cff, tf)
+            tex, _, _ = self.texture(cursor, "cursor")
+        else:
+            cursor = self.image(dict(self.ini["Common"])["cursor"])
+            tex, _, _ = self.texture(self.keyed(cursor), "cursor")
         (ini / "interfaces/interfaces.ini").write_text(
             "; converted by tools/pdm_ui.py. bDynamicScaling puts the 800x600 screens of the original in the\n"
             "; middle of a wider window; without [PC_SCREEN] the screen rect is upside down and nothing is drawn\n"
