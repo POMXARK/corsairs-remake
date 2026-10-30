@@ -987,7 +987,7 @@ void Screen_TourTrade(string name)
 	PlayerCard.money = 500;
 	Trade_Begin();
 	Screen_Fill();
-	string keys = "LB_TOVARDOWN,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_BUY,LB_LEFT,LB_SELL,LB_TOVARDOWN,LB_ALL,LB_BUY";
+	string keys = "LB_TOVARDOWN,LB_BUY,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_BUY,LB_SELL,LB_ALL,LB_SELL";
 	int at = 0;
 	int t = 300;
 	while (at < strlen(keys))

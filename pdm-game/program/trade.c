@@ -107,6 +107,8 @@ int Trade_Step(int i)
 // cargo.n<i>) — TOWN.dll lists the hero and the non-empty slots +0x130..+0x148 of him. PlayerFleet.n is the count with the
 // flagship. The arrows PrevShip/NextShip of the store move tradeShip along the list.
 int tradeShip = 0;
+// the deal as TOWN.dll has it: 0 none, 1 buying, 2 selling (the first press of Buy / Sell enters it, the second one does it)
+int tradeMode = 0;
 
 int Trade_Ships()
 {
@@ -318,6 +320,14 @@ void Trade_Arrows()
 {
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_PREVSHIP", tradeShip > 0);
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_NEXTSHIP", tradeShip < Trade_Ships() - 1);
+	// the quantity arrows and "all" work in a deal only, the other side's button is dimmed, the cancel of this side shows
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_LEFT", tradeMode != 0);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_RIGHT", tradeMode != 0);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_ALL", tradeMode != 0);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_SELL", tradeMode != 1);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_BUY", tradeMode != 2);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "LB_BCANCEL", tradeMode == 1);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "LB_SCANCEL", tradeMode == 2);
 }
 
 // opening of the screen
@@ -325,6 +335,7 @@ void Trade_Begin()
 {
 	tradeSel = 0;
 	tradeShip = 0;
+	tradeMode = 0;
 	tradeTop = 0;
 	tradeQty = 0;
 	tradeHelp = "";
@@ -469,6 +480,16 @@ bool Trade_Click(string node)
 	int n = Trade_Rows();
 	if (townIsland == "") { return false; }
 	int i = Trade_Nth(tradeSel);
+	// the goods and the ship are chosen outside a deal only
+	if (tradeMode != 0)
+	{
+		if (node == "LB_TOVARUP" || node == "LB_TOVARUP1" || node == "LB_TOVARDOWN" || node == "LB_TOVARDOWN1") { return true; }
+		if (node == "LB_PREVSHIP" || node == "LB_NEXTSHIP") { return true; }
+	}
+	if (tradeMode == 0)
+	{
+		if (node == "LB_LEFT" || node == "LB_RIGHT" || node == "LB_ALL") { return true; }
+	}
 	if (node == "LB_TOVARUP" || node == "LB_TOVARUP1") { if (tradeSel > 0) { tradeSel--; tradeQty = 0; tradeHelp = ""; } }
 	else if (node == "LB_TOVARDOWN" || node == "LB_TOVARDOWN1") { if (tradeSel < n - 1) { tradeSel++; tradeQty = 0; tradeHelp = ""; } }
 	else if (node == "LB_LEFT") { tradeQty = tradeQty - Trade_Step(i); if (tradeQty < 0) { tradeQty = 0; } }
@@ -488,8 +509,17 @@ bool Trade_Click(string node)
 	}
 	else if (node == "LB_PREVSHIP") { if (tradeShip > 0) { tradeShip--; tradeQty = 0; tradeHelp = ""; } }
 	else if (node == "LB_NEXTSHIP") { if (tradeShip < Trade_Ships() - 1) { tradeShip++; tradeQty = 0; tradeHelp = ""; } }
-	else if (node == "LB_BUY") { Trade_Buy(); }
-	else if (node == "LB_SELL") { Trade_Sell(); }
+	else if (node == "LB_BUY")
+	{
+		if (tradeMode == 0) { tradeMode = 1; tradeQty = 0; tradeHelp = ""; }
+		else { Trade_Buy(); tradeMode = 0; }
+	}
+	else if (node == "LB_SELL")
+	{
+		if (tradeMode == 0) { tradeMode = 2; tradeQty = 0; tradeHelp = ""; }
+		else { Trade_Sell(); tradeMode = 0; }
+	}
+	else if (node == "LB_BCANCEL" || node == "LB_SCANCEL") { tradeMode = 0; tradeQty = 0; tradeHelp = ""; }
 	else { return false; }
 	Screen_Fill();
 	return true;
@@ -521,6 +551,7 @@ void Trade_Check(string name)
 	tradeStock0 = Trade_Stock(townIsland, i);
 	tradeOnboard0 = Trade_Onboard(i);
 	// the first goods: 3 steps right, buy
+	PostEvent("ievnt_command", 100, "ss", "click", "LB_BUY");
 	PostEvent("ievnt_command", 300, "ss", "click", "LB_RIGHT");
 	PostEvent("ievnt_command", 500, "ss", "click", "LB_RIGHT");
 	PostEvent("ievnt_command", 700, "ss", "click", "LB_RIGHT");
@@ -541,9 +572,10 @@ void Trade_Verify()
 		if (got > 0 && paid == got * Trade_Price(townIsland, i) && Trade_Stock(townIsland, i) == tradeStock0 - got) { Trace("PDM store: buy ok, " + got + " for " + paid); }
 		else { Trace("PDM store: buy FAIL, got " + got + ", paid " + paid + ", stock " + Trade_Stock(townIsland, i) + " of " + tradeStock0); }
 		tradeMoney1 = sti(PlayerCard.money);
-		PostEvent("ievnt_command", 100, "ss", "click", "LB_ALL");
-		PostEvent("ievnt_command", 300, "ss", "click", "LB_SELL");
-		PostEvent("Trade_Verify", 700);
+		PostEvent("ievnt_command", 50, "ss", "click", "LB_SELL");
+		PostEvent("ievnt_command", 200, "ss", "click", "LB_ALL");
+		PostEvent("ievnt_command", 400, "ss", "click", "LB_SELL");
+		PostEvent("Trade_Verify", 800);
 		return;
 	}
 	if (tradeStage == 1)
@@ -554,9 +586,10 @@ void Trade_Verify()
 		else { Trace("PDM store: sell FAIL, onboard " + Trade_Onboard(i) + ", earned " + earned1); }
 		// the next ship of the fleet: the purchase goes into its hold, the flagship stays empty
 		PostEvent("ievnt_command", 100, "ss", "click", "LB_NEXTSHIP");
-		PostEvent("ievnt_command", 300, "ss", "click", "LB_RIGHT");
-		PostEvent("ievnt_command", 500, "ss", "click", "LB_BUY");
-		PostEvent("Trade_Verify", 900);
+		PostEvent("ievnt_command", 250, "ss", "click", "LB_BUY");
+		PostEvent("ievnt_command", 400, "ss", "click", "LB_RIGHT");
+		PostEvent("ievnt_command", 550, "ss", "click", "LB_BUY");
+		PostEvent("Trade_Verify", 1000);
 		return;
 	}
 	int second = Trade_Onboard(i);
