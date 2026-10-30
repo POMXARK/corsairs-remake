@@ -26,6 +26,8 @@
 #define MENUARROWS_ID 16
 // SCENE=town: the dialog with the shipyard owner opens the screen of the shipyard, its values are checked (screens.c, Screen_ShipyardCheck)
 #define SHIPYARD_ID 19
+// the same with the store owner and the screen of the trade (trade.c, Trade_Check)
+#define STORE_ID 21
 
 object Render;
 object Scene;
@@ -37,6 +39,7 @@ aref PlayerShipCard;
 aref PlayerShipType;
 
 #include "data\pdm_data.c"
+#include "data\pdm_trade.c"
 #include "data\start.c"
 #include "data\pdm_logic.c"
 #include "data\pdm_world.c"
@@ -77,6 +80,7 @@ void MapKey(string controlName, int keyCode)
 void Main()
 {
 	PdmData_Init();
+	PdmTrade_Init();
 	Trace("PDM main: pdm_data.c done");
 	PdmLogic_Init();
 	Trace("PDM main: pdm_logic.c done");

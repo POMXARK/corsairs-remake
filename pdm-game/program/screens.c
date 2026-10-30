@@ -50,6 +50,7 @@ void Screen_Init()
 	SetEventHandler("Screen_Go", "Screen_Go", 0);
 	SetEventHandler("Screen_ShipyardVerify", "Screen_ShipyardVerify", 0);
 	SetEventHandler("Screen_ShipyardPick", "Screen_ShipyardPick", 0);
+	SetEventHandler("Trade_Verify", "Trade_Verify", 0);
 	SetEventHandler("Screen_Pending", "Screen_Pending", 0);
 	SetEventHandler("Screen_Tour", "Screen_Tour", 0);
 	SetEventHandler("Screen_Credits", "Screen_CreditsStep", 0);
@@ -132,6 +133,7 @@ void Screen_Show(string name)
 	Screen_Fill();
 	Trace("PDM screen: " + name);
 	Screen_ShipyardCheck(name);
+	Trade_Check(name);
 }
 
 void Screen_Text(string node, string text)
@@ -983,6 +985,8 @@ void Screen_TourTrade(string name)
 	SetEventHandler("ievnt_command", "Screen_Command", 0);
 	Trace("PDM tour trade: island " + townIsland);
 	PlayerCard.money = 500;
+	Trade_Begin();
+	Screen_Fill();
 	string keys = "LB_TOVARDOWN,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_BUY,LB_LEFT,LB_SELL,LB_TOVARDOWN,LB_ALL,LB_BUY";
 	int at = 0;
 	int t = 300;

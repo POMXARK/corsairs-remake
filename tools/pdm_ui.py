@@ -1001,6 +1001,10 @@ class Converter:
         for key in ("Weapon0", "Weapon1", "Weapon2", "YourShip", "BoatWelcome"):
             if "ShipYard" + key in self.strings:
                 self.messages.setdefault("shipyard", {})[key.lower()] = self.strings["ShipYard" + key]
+        # the store: the marks of the balance column ("Экспорт", "Импорт") and "Деньги %d" under the lists
+        for key, skey in (("exporting", "TradeExporting"), ("importing", "TradeImporting"), ("money", "t_TradeMoney")):
+            if skey in self.strings:
+                self.messages.setdefault("trade", {})[key] = self.strings[skey]
         lines = [f'\tPdmScreens.{name}.title = {n};\n\tPdmScreens.{name}.text = "{text}";'
                  for name, (n, text) in sorted(self.places.items())]
         lines += [f'\tPdmScreens.{name}.s.{node} = "{text}";'

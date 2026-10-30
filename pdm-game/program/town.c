@@ -978,6 +978,14 @@ void Town_AutoPlan()
 		Town_PlanAdd("talk", "", "PdmA_SHIPYARD");
 		return;
 	}
+	// 21: to the store, the owner's dialog, its link opens the trade (trade.c, Trade_Check)
+	if (TownAuto == STORE_ID)
+	{
+		PlayerCard.money = 500;
+		Town_PlanAdd("go", "store", "");
+		Town_PlanAdd("talk", "", "PdmA_STORE");
+		return;
+	}
 	if (TownAuto == 10)
 	{
 		Town_PlanAdd("hud", "store", "");
