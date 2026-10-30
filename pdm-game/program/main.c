@@ -43,6 +43,7 @@ aref PlayerShipType;
 #include "data\pdm_hud.c"
 #include "data\pdm_boarding.c"
 #include "data\pdm_cutscenes.c"
+#include "data\pdm_weather.c"
 #include "sound.c"
 #include "story.c"
 // before sea.c and town.c: they use its defines
@@ -89,6 +90,7 @@ void Main()
 	Trace("PDM main: pdm_hud.c done");
 	PdmBoarding_Init();
 	PdmCut_Init();
+	PdmWeather_Init();
 	Trace("PDM main: pdm_boarding.c done");
 	makearef(PlayerCard, PdmCharacters.Nicolas_Sharp);
 	// an attribute name in .(...) has to be a variable

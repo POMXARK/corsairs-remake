@@ -54,7 +54,7 @@ float seaSpeedScale = 1.0;
 
 float fogHeight = 150.0;
 // the sky of weather\skies\ that Sea_CreateWorld puts up; the movies change it
-string seaSkyDir = "day";
+string seaSkyDir = "";
 #define SEA_TICK_MS 40
 // gusts (ours): the wind of the weather swings by these shares of its speed and radians of its angle
 // over the periods in s, incommensurate so the gusts do not repeat; the sail entity reads the
@@ -68,6 +68,12 @@ string seaSkyDir = "day";
 #define SEA_WIND_VEER 0.08
 #define SEA_WIND_VEER_PERIOD 61.0
 float seaTime = 0.0;
+// the hour of the day (weather.ini, data\pdm_weather.c): SEA_DAY_SECONDS of play are 24 hours
+float seaHour = -1.0;
+bool seaSkyUp = false;
+float seaSkyK = 1.0;
+float seaWindBase = 10.0;
+#define SEA_DAY_SECONDS 1440.0
 // sailing into the port (ours): the ship enters it when it comes back to the harbour as near as
 // where it appeared plus SEA_PORT_REACH m, after it has sailed SEA_PORT_ARM m farther off than that
 #define SEA_PORT_REACH 30.0
@@ -547,6 +553,8 @@ void Sea_ToMap()
 // deletes what Sea_Start made, so that the next voyage starts afresh
 void Sea_Release()
 {
+	seaSkyDir = "";
+	seaSkyUp = false;
 	seaActive = false;
 	Hud_Release();
 	Battle_Release();
@@ -591,9 +599,86 @@ void Sea_MapShipKeys()
 	MapKey("ShipCamera_Backward", 69);
 }
 
+
+float Sea_Min(float a, float b) { if (a < b) { return a; } return b; }
+float Sea_PeriodHour(int k)
+{
+	string key = "p" + k;
+	return stf(PdmWeather.(key).hour);
+}
+float Sea_Mix(float a, float b, float t) { return a + (b - a) * t; }
+
+// weather.ini: the light, the fog and the wind between the two periods that the hour lies in
+void Sea_ApplyWeather()
+{
+	int n = sti(PdmWeather.count);
+	int i = 0;
+	while (i + 1 < n && Sea_PeriodHour(i + 1) <= seaHour) { i++; }
+	int j = i + 1;
+	float h0 = Sea_PeriodHour(i);
+	float h1 = 24.0;
+	if (j < n) { h1 = Sea_PeriodHour(j); } else { j = 0; }
+	float t = (seaHour - h0) / (h1 - h0);
+	string a = "p" + i;
+	string b = "p" + j;
+	// the sun climbs from 5.5 to 20 h; by night a dim light stays
+	float day = sin(3.1415927 * (seaHour - 5.5) / 14.5);
+	if (seaHour < 5.5 || seaHour > 20.0) { day = 0.0; }
+	float height = 0.05 + 1.2 * day;
+	float azimuth = 1.57 + 3.14 * (seaHour - 5.5) / 14.5;
+	float lit = 0.25 + 0.75 * Sea_Min(1.0, day * 3.0);
+	float amb = Sea_Mix(stf(PdmWeather.(a).ambientK), stf(PdmWeather.(b).ambientK), t) * 0.75;
+	float sr = Sea_Mix(stf(PdmWeather.(a).direct.r), stf(PdmWeather.(b).direct.r), t) * 0.9 * lit;
+	float sg = Sea_Mix(stf(PdmWeather.(a).direct.g), stf(PdmWeather.(b).direct.g), t) * 0.86 * lit;
+	float sb = Sea_Mix(stf(PdmWeather.(a).direct.b), stf(PdmWeather.(b).direct.b), t) * 0.8 * lit;
+	float ar = Sea_Mix(stf(PdmWeather.(a).ambient.r), stf(PdmWeather.(b).ambient.r), t) * amb;
+	float ag = Sea_Mix(stf(PdmWeather.(a).ambient.g), stf(PdmWeather.(b).ambient.g), t) * amb;
+	float ab = Sea_Mix(stf(PdmWeather.(a).ambient.b), stf(PdmWeather.(b).ambient.b), t) * amb;
+	// the fog colour of the file, softened with the haze of the sea; darkened by night
+	float fr = (Sea_Mix(stf(PdmWeather.(a).fog.r), stf(PdmWeather.(b).fog.r), t) * 0.6 + 150.0 * 0.4) * (0.15 + 0.85 * lit);
+	float fg = (Sea_Mix(stf(PdmWeather.(a).fog.g), stf(PdmWeather.(b).fog.g), t) * 0.6 + 185.0 * 0.4) * (0.15 + 0.85 * lit);
+	float fb = (Sea_Mix(stf(PdmWeather.(a).fog.b), stf(PdmWeather.(b).fog.b), t) * 0.6 + 215.0 * 0.4) * (0.15 + 0.85 * lit);
+	Weather.Sun.Color = argb(0, makeint(sr), makeint(sg), makeint(sb));
+	Weather.Sun.Ambient = argb(0, makeint(ar), makeint(ag), makeint(ab));
+	Weather.Sun.HeightAngle = height;
+	Weather.Sun.AzimuthAngle = azimuth;
+	Weather.Fog.Color = argb(0, makeint(fr), makeint(fg), makeint(fb));
+	// the sky and its reflection in the sea go dark by night (the sky textures are day ones)
+	seaSkyK = 0.06 + 0.94 * Sea_Min(1.0, (lit - 0.25) / 0.35);
+	if (seaSkyUp)
+	{
+		float k = seaSkyK;
+		Sky.Color = argb(0, makeint(255.0 * k), makeint(255.0 * k), makeint(255.0 * k));
+		Sea.Sea2.SkyColor = argb(0, makeint(205.0 * k), makeint(255.0 * k), makeint(255.0 * k));
+	}
+	// the swell of the period (sea_amplitude) around the swell of the game, within 0.6..1.6 of it
+	float amp = Sea_Mix(stf(PdmWeather.(a).amp), stf(PdmWeather.(b).amp), t) / 0.0003;
+	if (amp < 0.6) { amp = 0.6; }
+	if (amp > 1.6) { amp = 1.6; }
+	if (seaSkyUp)
+	{
+		Sea.Sea2.Amp1 = 3.0 * amp;
+		Sea.Sea2.Amp2 = 0.8 * amp;
+	}
+	seaWindBase = SEA_WIND_SPEED * Sea_Mix(stf(PdmWeather.(a).wind), stf(PdmWeather.(b).wind), t);
+}
+
+// the sky of the period the hour lies in (picked when the sky is put up)
+string Sea_HourSky()
+{
+	// the sky textures are day ones: the darkest preset after sunset
+	if (seaHour < 5.0 || seaHour >= 20.5) { return "storm"; }
+	int n = sti(PdmWeather.count);
+	int i = 0;
+	while (i + 1 < n && Sea_PeriodHour(i + 1) <= seaHour) { i++; }
+	string key = "p" + i;
+	return PdmWeather.(key).sky;
+}
+
 // Sea, sky and weather as in the sea demo, with the day preset; the wind blows the sails.
 void Sea_CreateWorld()
 {
+	if (seaHour < 0.0) { seaHour = StartHour; }
 	CreateEntity(&Weather, "weather");
 	Weather.Fog.Enable = 1;
 	Weather.Fog.Start = 0.0;
@@ -610,6 +695,8 @@ void Sea_CreateWorld()
 	Weather.isDone = "";
 
 	SetEventHandler("WhrCalcFogColor", "Sea_FogColor", 0);
+	Sea_ApplyWeather();
+	if (seaSkyDir == "") { seaSkyDir = Sea_HourSky(); }
 	CreateEntity(&Sky, "Sky");
 	Sky.Size = 2048.0;
 	Sky.Angle = 0.0;
@@ -623,8 +710,10 @@ void Sea_CreateWorld()
 	LayerAddObject(SEA_REFLECTION, &Sky, 1);
 	Sky.Dir.d0 = "weather\skies\" + seaSkyDir + "\";
 	Sky.Dir = "12";
-	Sky.Color = argb(0, 255, 255, 255);
+	Sky.Color = argb(0, makeint(255.0 * seaSkyK), makeint(255.0 * seaSkyK), makeint(255.0 * seaSkyK));
+	seaSkyUp = true;
 	Sky.isDone = "";
+	Weather.isDone = "";
 
 	CreateEntity(&Sea, "sea");
 	LayerAddObject(EXECUTE, &Sea, 4);
@@ -897,7 +986,10 @@ void Sea_Tick()
 	}
 	seaTime = seaTime + SEA_TICK_MS / 1000.0;
 	float gust = SEA_GUST * sin(SEA_PI2 * seaTime / SEA_GUST_PERIOD) + SEA_GUST_FAST * sin(SEA_PI2 * seaTime / SEA_GUST_FAST_PERIOD);
-	Weather.Wind.Speed = SEA_WIND_SPEED * (1.0 + gust);
+	seaHour = seaHour + SEA_TICK_MS / 1000.0 * 24.0 / SEA_DAY_SECONDS;
+	if (seaHour >= 24.0) { seaHour = seaHour - 24.0; }
+	Sea_ApplyWeather();
+	Weather.Wind.Speed = seaWindBase * (1.0 + gust);
 	Weather.Wind.Angle = SEA_WIND_VEER * sin(SEA_PI2 * seaTime / SEA_WIND_VEER_PERIOD);
 	float d = Sea_HeroHarbourDistance();
 	// the player lands by the command of the toolbar; the autotest sailing in lands by itself

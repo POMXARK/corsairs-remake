@@ -76,6 +76,7 @@ elif [ ! -f "$DIR/resource/ini/eyes.run" ]; then WORLD_NEW=1; python3 -I "$TOOLS
 # writes their .ani again); again for the data written before the plates
 if [ "$WORLD_NEW" = 1 ] || ! grep -qs "PdmBoarding.hud" "$DIR/program/data/pdm_boarding.c"; then python3 -I "$TOOLS/pdm_boarding.py" "$PDM" "$DIR"; fi
 # the movies of the original (the intro of "Новая игра"): the scenes of DESC/*.ani, their models, textures and sounds
+[ -f "$DIR/program/data/pdm_weather.c" ] || python3 -I "$TOOLS/pdm_weather.py" "$PDM" "$DIR"
 grep -qs "PdmCut.intro" "$DIR/program/data/pdm_cutscenes.c" || python3 -I "$TOOLS/pdm_cutscene.py" "$PDM" "$DIR"
 # the islands (DESC/<Island>.def, WORLDS/islands_x.idf), where the ship appears at each, their names and forts
 grep -qs '"fort"' "$DIR/data/islands/Highrock.json" || python3 -I "$TOOLS/pdm_island.py" "$PDM" "$DIR/resource" all --data "$DIR/data"
@@ -91,6 +92,8 @@ python3 -I "$TOOLS/pdm_logic2c.py" "$DIR/data" "$DIR/program"
 echo "string StartScene = \"${SCENE:-menu}\";" > "$DIR/program/data/start.c"
 echo "string StartTown = \"${TOWN:-City_GrandaAvilia}\";" >> "$DIR/program/data/start.c"
 echo "int TownAuto = ${TOWN_AUTO:-0};" >> "$DIR/program/data/start.c"
+# HOUR=<0..24> starts the day of the sea at that hour (weather.ini periods), default 9
+echo "float StartHour = $(LC_NUMERIC=C printf %.2f "${HOUR:-9}");" >> "$DIR/program/data/start.c"
 # TOWN_AUTO=2 with TALK_NPC=<id> and TALK_ANGLE=<degrees>: the hero talks to that character from that side (talk-angles.sh)
 echo "string TalkNpc = \"${TALK_NPC:-}\";" >> "$DIR/program/data/start.c"
 echo "int TalkAngle = ${TALK_ANGLE:-0};" >> "$DIR/program/data/start.c"
