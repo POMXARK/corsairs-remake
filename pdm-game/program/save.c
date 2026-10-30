@@ -256,7 +256,8 @@ void Save_CellShow(int k, bool on, bool selected)
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_SEL", chosen);
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_NAME", chosen);
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_NAMEN", plain);
-	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_TEXT", on);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_TEXT", plain);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_TEXTY", chosen);
 }
 
 // the cells of the rows from saveTop on
@@ -287,6 +288,7 @@ void Save_ScreenCells()
 			Screen_Text(cell + "_NAME", name);
 			Screen_Text(cell + "_NAMEN", name);
 			Screen_Text(cell + "_TEXT", text);
+			Screen_Text(cell + "_TEXTY", text);
 		}
 		SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_SHOT", shot);
 	}
@@ -368,6 +370,20 @@ int Save_FreeNumber()
 		if (taken) { n++; }
 	}
 	return n;
+}
+
+// the arrows: a cell to the side, a row up or down
+void Save_ScreenStep(string command)
+{
+	int items = saveFileFirst + saveFileCount;
+	int to = saveSel;
+	if (command == "leftstep") { to = saveSel - 1; }
+	if (command == "rightstep") { to = saveSel + 1; }
+	if (command == "upstep") { to = saveSel - SAVEFILE_COLUMNS; }
+	if (command == "downstep") { to = saveSel + SAVEFILE_COLUMNS; }
+	if (to < 0 || to >= items) { return; }
+	Trace("PDM save: arrow " + command + " from " + saveSel + " to " + to);
+	Save_ScreenSelect(to);
 }
 
 // a button of the two screens; true if it was one of theirs
@@ -534,6 +550,8 @@ void Save_ScreensSelect()
 	}
 	string text = "";
 	SendMessage(&GameInterface, "lse", MSG_INTERFACE_GET_SAVE_DATA, RUN_SAVEPFX + Save_ScreenFile(), &text);
+	PostEvent("ievnt_command", 0, "ss", "rightstep", "LB_LOAD");
+	PostEvent("ievnt_command", 0, "ss", "leftstep", "LB_LOAD");
 	Trace("PDM save: autotest, " + saveFileCount + " files, the cursor on " + Save_ScreenFile() + ": " + text);
 }
 

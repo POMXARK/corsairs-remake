@@ -866,6 +866,10 @@ void Screen_Command()
 		if (command == "upstep") { Trace("PDM shipyard: key up at " + node); Screen_ShipyardStep(-1); return; }
 		if (command == "downstep") { Trace("PDM shipyard: key down at " + node); Screen_ShipyardStep(1); return; }
 	}
+	if (screenName == "loadgame" || screenName == "savegame")
+	{
+		if (command == "leftstep" || command == "rightstep" || command == "upstep" || command == "downstep") { Save_ScreenStep(command); return; }
+	}
 	if (command != "click" && command != "activate") { return; }
 	if (screenName == "mainmenu")
 	{

@@ -125,7 +125,7 @@ def find_faces(dirs):
     return faces
 
 
-CURSOR_FRAMES = 16      # frames of the turn of the cursor in its strip
+CURSOR_FRAMES = 64      # frames of the turn of the cursor in its strip
 CURSOR_FRAME = 64       # one frame, px
 CURSOR_TIP = 8          # where the tip of the arrowhead is in a frame (the same in all of them), px
 
@@ -422,10 +422,12 @@ class Converter:
             lines += [f"[CELL{k}_SHOT]", f"position = {x + sx},{y + sy},{x + sx + sw},{y + sy + sh}",
                       f"textureName = {icons[1][0]}", "textureRect = 0.6,0.6,0.61,0.61", "bNotUse = 1", ""]
             for suffix, (fx, fy, fw, fh), font, color, align in (
-                    ("NAME", (nx, ny, nw, nh), name_font, name_color, "center"),
+                    ("NAME", (nx, ny, nw, nh), name_font, SAVE_YELLOW, "center"),
                     # on the dark ribbon of a cell not selected the name is light (ours, the original keeps 8,8,8)
                     ("NAMEN", (nx, ny, nw, nh), name_font, SAVE_NAME_LIGHT, "center"),
-                    ("TEXT", (tx, ty, tw, th), text_font, text_color, "center")):
+                    ("TEXT", (tx, ty, tw, th), text_font, text_color, "center"),
+                    # the text of the selected cell is yellow (the original shows it so)
+                    ("TEXTY", (tx, ty, tw, th), text_font, SAVE_YELLOW, "center")):
                 nodes.append(("FORMATEDTEXT", f"CELL{k}_{suffix}"))
                 # a box lower than a line shows nothing: the line sits in the middle of the rect of the original
                 line_h = round(self.fonts[font][2])
@@ -838,7 +840,10 @@ class Converter:
                       f"fontColorPressed = {rgb(a.get('rgbd'), '255,255,255')}",
                       f"unselectableFontColor = {rgb(a.get('rgbi'), '128,128,128')}",
                       "command = click", "command = activate"]
-            if node in names:
+            if section in ("LoadGame", "SaveGame"):
+                # the arrows go over the cells of the saves (save.c), not over the buttons
+                lines += [f"command = {c}" for c in ("leftstep", "rightstep", "upstep", "downstep")]
+            elif node in names:
                 i = names.index(node)
                 if i > 0:
                     lines.append(f"command = upstep,select:{names[i - 1]}")
@@ -1041,7 +1046,7 @@ class Converter:
             tex, _, _ = self.texture(strip, "cursor")
             # the strip is a texture of the power of two; the engine turns the frames at frames:(count,ms,width px)
             pointer = (f"{tex},10,size:({CURSOR_FRAME},{CURSOR_FRAME}),pos:({CURSOR_TIP - CURSOR_FRAME // 2},"
-                       f"{CURSOR_TIP - CURSOR_FRAME // 2}),frames:({CURSOR_FRAMES},250)")
+                       f"{CURSOR_TIP - CURSOR_FRAME // 2}),frames:({CURSOR_FRAMES},62)")
         else:
             cursor = self.image(dict(self.ini["Common"])["cursor"])
             tex, _, _ = self.texture(self.keyed(cursor), "cursor")
@@ -1124,6 +1129,7 @@ FIELDS_OF = {"LoadGame": {k: ("SaveGame", k) for k in (
     "EditFileName", "lb_ScrollUp", "lb_ScrollDown")}}
 SAVE_GRID = ("LoadGame", "SaveGame")
 SAVE_COLUMNS, SAVE_ROWS = 4, 2
+SAVE_YELLOW = "255,255,224,48"
 SAVE_NAME_LIGHT = "255,200,164,110"
 SELECT_LISTS = {("LoadGame", "EditFiles"), ("SaveGame", "EditFiles"), ("ShipYard", "EditShip")}
 # the shipyard: the class, the current gun and the rows of the guns to buy take a click (the screenshots of the original show them selectable)
