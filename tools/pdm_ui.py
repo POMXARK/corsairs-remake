@@ -387,6 +387,59 @@ class Converter:
                 ["[SHIPSPRITE]", "position = 310,135,489,285", "bNotUse = 1", "",
                  "[CANNONSPRITE]", "position = 62,416,126,480", "bNotUse = 1", ""])
 
+    def save_grid(self, e):
+        """The saves of [SaveGame] and [LoadGame] (IconsRect): a grid of the cells of icon1.tga (the selected one) and
+        icon2.tga, 142 x 145. In a cell the screenshot of the save (savesprite_rect, the script puts it in, MSG_INTERFACE_
+        LOADPICTUREFROMSAVE), the name on the ribbon (FileNameRect) and the text under it (FileTextRect). CELL<n> is
+        a click on the whole cell. The cells are SAVE_COLUMNS wide and SAVE_ROWS high in IconsRect, one row of them
+        a step of the arrows (the pitch is ours: the original does it in the DLL)."""
+        ax, ay, aw, ah = (int(v) for v in e["IconsRect"].split(","))
+        sx, sy, sw, sh = (int(v) for v in e["savesprite_rect"].split(","))
+        nx, ny, nw, nh = (int(v) for v in e["FileNameRect"].split(","))
+        tx, ty, tw, th = (int(v) for v in e["FileTextRect"].split(","))
+        icons = []
+        for name in ("icon1", "icon2"):
+            image = self.image(e[name])
+            tex, w, h = self.texture(self.keyed(image), "save_" + name)
+            icons.append((tex, image.width / w, image.height / h, image.width, image.height))
+        cw, ch = icons[0][3], icons[0][4]
+        pitch_x, pitch_y = aw // SAVE_COLUMNS, ah // SAVE_ROWS
+        nodes, lines = [], []
+
+        def cell_font(key, default):
+            a = attrs(e[key])
+            return self.font(a.get("font", default)), rgb(a.get("rgb"), "255,255,255")
+
+        name_font, name_color = cell_font("EditFileName", "logbook_italic,19,0")
+        text_font, text_color = cell_font("EditFileText", "logbook_italic,19,0")
+        for k in range(SAVE_COLUMNS * SAVE_ROWS):
+            x, y = ax + k % SAVE_COLUMNS * pitch_x, ay + k // SAVE_COLUMNS * pitch_y
+            for suffix, (tex, ur, vb, w, h) in (("FRAME", icons[1]), ("SEL", icons[0])):
+                nodes.append(("PICTURE", f"CELL{k}_{suffix}"))
+                lines += [f"[CELL{k}_{suffix}]", f"position = {x},{y},{x + w},{y + h}", f"textureName = {tex}",
+                          f"textureRect = 0,0,{ur:g},{vb:g}", "bNotUse = 1", ""]
+            nodes.append(("PICTURE", f"CELL{k}_SHOT"))
+            lines += [f"[CELL{k}_SHOT]", f"position = {x + sx},{y + sy},{x + sx + sw},{y + sy + sh}",
+                      f"textureName = {icons[1][0]}", "textureRect = 0.6,0.6,0.61,0.61", "bNotUse = 1", ""]
+            for suffix, (fx, fy, fw, fh), font, color, align in (
+                    ("NAME", (nx, ny, nw, nh), name_font, name_color, "center"),
+                    # on the dark ribbon of a cell not selected the name is light (ours, the original keeps 8,8,8)
+                    ("NAMEN", (nx, ny, nw, nh), name_font, SAVE_NAME_LIGHT, "center"),
+                    ("TEXT", (tx, ty, tw, th), text_font, text_color, "center")):
+                nodes.append(("FORMATEDTEXT", f"CELL{k}_{suffix}"))
+                # a box lower than a line shows nothing: the line sits in the middle of the rect of the original
+                line_h = round(self.fonts[font][2])
+                fy -= (line_h - fh) // 2 if fh < line_h else 0
+                fh = max(fh, line_h)
+                lines += [f"[CELL{k}_{suffix}]", f"position = {x + fx},{y + fy},{x + fx + fw},{y + fy + fh}",
+                          f"font = {font}", f"fontScale = {1 / FONT_OVERSAMPLE:.3f}",
+                          f"lineSpace = {round(self.fonts[font][2])}", f"color = {color}", f"alignment = {align}",
+                          "bNotUse = 1", ""]
+            nodes.append(("FORMATEDTEXT", f"CELL{k}"))
+            lines += [f"[CELL{k}]", f"position = {x},{y},{x + cw},{y + ch}", f"font = {name_font}", "color = 0,0,0,0",
+                      "command = click", "bNotUse = 1", ""]
+        return nodes, lines
+
     def stamp(self, file, name):
         """A brush of alpha (MAP.dll mask_black*.tga) centred in a power of two texture; returns the texture name."""
         image = Image.open(self.pdm.find(self.base + file)).convert("RGBA")
@@ -675,6 +728,8 @@ class Converter:
                 else:
                     # the buttons of the message box of the map, drawn by MAP.dll over map_message.tga
                     self.skipped.append(f"{section}.{key}: a button of a message box")
+            elif low == "editfiles" and section in SAVE_GRID:
+                notes.append(f"; {key} = {value}")  # the list of the files is the grid of the saves (save_grid)
             elif low.startswith("edit") and low != "editisland":
                 a = attrs(value)
                 if "dx" not in a or "dy" not in a:
@@ -797,6 +852,10 @@ class Converter:
                 lines += [f"[{node}_OFF]", f"position = {x},{y},{x + w},{y + h}", f"textureName = {tex}",
                           f"textureRect = 0,{(h + 2) / th:g},{w / tw:g},{(2 * h + 2) / th:g}", "bNotUse = 1", ""]
 
+        if section in SAVE_GRID:
+            n, l = self.save_grid(dict(entries))
+            nodes += n
+            lines += l
         if out_name == "shipyard":
             n, l = self.ship_portraits()
             nodes += n
@@ -982,7 +1041,7 @@ class Converter:
             tex, _, _ = self.texture(strip, "cursor")
             # the strip is a texture of the power of two; the engine turns the frames at frames:(count,ms,width px)
             pointer = (f"{tex},10,size:({CURSOR_FRAME},{CURSOR_FRAME}),pos:({CURSOR_TIP - CURSOR_FRAME // 2},"
-                       f"{CURSOR_TIP - CURSOR_FRAME // 2}),frames:({CURSOR_FRAMES},80)")
+                       f"{CURSOR_TIP - CURSOR_FRAME // 2}),frames:({CURSOR_FRAMES},250)")
         else:
             cursor = self.image(dict(self.ini["Common"])["cursor"])
             tex, _, _ = self.texture(self.keyed(cursor), "cursor")
@@ -1060,7 +1119,12 @@ CHECKS = {"check"}
 # the fields that are lists with a cursor: the files of the saves
 # a field a screen takes from another one (ours): [LoadGame] has no description of its own, the one of [Common]
 # is small and under the frame of the background, the scripts show the header of a save in it
-FIELDS_OF = {"LoadGame": {"EditDesc": ("SaveGame", "EditDesc")}}
+FIELDS_OF = {"LoadGame": {k: ("SaveGame", k) for k in (
+    "EditDesc", "IconsRect", "icon1", "icon2", "savesprite_rect", "FileTextRect", "FileNameRect", "EditFileText",
+    "EditFileName", "lb_ScrollUp", "lb_ScrollDown")}}
+SAVE_GRID = ("LoadGame", "SaveGame")
+SAVE_COLUMNS, SAVE_ROWS = 4, 2
+SAVE_NAME_LIGHT = "255,200,164,110"
 SELECT_LISTS = {("LoadGame", "EditFiles"), ("SaveGame", "EditFiles"), ("ShipYard", "EditShip")}
 # the shipyard: the class, the current gun and the rows of the guns to buy take a click (the screenshots of the original show them selectable)
 SHIPYARD_CLICK = {"S_SHIP0", "S_SHIP10", "S_CALIBERSET", "S_LBSNUM0", "S_LBS0", "S_GOLDNUM0", "S_GOLD0", "S_LBSNUM1", "S_LBS1", "S_GOLDNUM1", "S_GOLD1"}

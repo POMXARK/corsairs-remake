@@ -32,14 +32,19 @@ string saveAutoSize = "";
 #define MSG_INTERFACE_GET_SAVE_DATA 45048
 // the rows of the lists of "Загрузить игру" and "Сохранить игру"
 #define SAVEFILE_LIST_MAX 60
+#define MSG_INTERFACE_LOADPICTUREFROMSAVE 45059
+// the grid of the screens: the cells (SAVE_COLUMNS x SAVE_ROWS of tools/pdm_ui.py) and a row of them
+#define SAVEFILE_CELLS 8
+#define SAVEFILE_COLUMNS 4
 
 // the files of the list of the screen, newest first: SaveFiles.f<row> = the name in save\
 object SaveFiles;
 int saveFileCount = 0;
 // "Сохранить игру" has "Новая запись" in its first row
 int saveFileFirst = 0;
-// the rows put into the list
-int saveFileRows = 0;
+// the selected item of the grid ("Новая запись" is the first one of "Сохранить игру") and the first one seen
+int saveSel = 0;
+int saveTop = 0;
 // the file the message box asks about: to delete or to write over
 string saveFileAsked = "";
 
@@ -48,8 +53,6 @@ void Save_Init()
 	MapKey("Save_Quick", SAVEFILE_KEY);
 	MapKey("Save_Load", SAVEFILE_LOAD_KEY);
 	SetEventHandler("Save_Auto", "Save_Auto", 0);
-	SetEventHandler("FTChange", "Save_ScreenChange", 0);
-	SetEventHandler("FormatedTextActivate", "Save_ScreenChange", 0);
 }
 
 // "town", "sea" or "" where the game is not saved
@@ -219,15 +222,88 @@ string Save_Title(string name)
 	return name;
 }
 
-// the files of save\ into EDITFILES, a group a row the cursor of the list goes over (backColor of
-// tools/pdm_ui.py); its header under the list
-// a row of the list: the first one replaces the text of the page (an empty text would leave a row of garbage in
-// a list with wrapoff, GetOneLine of the engine does not end its line), the others are added to it
-void Save_ScreenRow(string line)
+// the files of save\ as the cells of the grid of the screen (tools/pdm_ui.py save_grid): a cell a file, the
+// screenshot of the save in it, the name on the ribbon and the text of the save under it. "Сохранить игру" has
+// "Новая запись" in its first cell. The arrows go a row of the grid, a click on a cell selects its file.
+
+// the name on the ribbon of a cell (83 pixels, shorter than the one of the list)
+string Save_Ribbon(string name)
 {
-	if (saveFileRows == 0) { Screen_Text("EDITFILES", line); }
-	else { SendMessage(&GameInterface, "lsle", MSG_INTERFACE_MSG_TO_NODE, "EDITFILES", 0, &line); }
-	saveFileRows++;
+	if (name == "quick") { return "Быстрое"; }
+	if (name == "auto") { return "Авто"; }
+	if (findSubStr(name, "game", 0) == 0) { return "Запись " + strcut(name, 4, strlen(name) - 1); }
+	return name;
+}
+
+// the file of an item of the grid, "" for "Новая запись" or none
+string Save_ItemFile(int item)
+{
+	// apart: the compiler drops "- saveFileFirst" after the call
+	int n = item - saveFileFirst;
+	if (n < 0 || n >= saveFileCount) { return ""; }
+	string at = "f" + n;
+	return SaveFiles.(at);
+}
+
+void Save_CellShow(int k, bool on, bool selected)
+{
+	string cell = "CELL" + k;
+	bool plain = on;
+	bool chosen = on;
+	if (selected) { plain = false; } else { chosen = false; }
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell, on);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_FRAME", plain);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_SEL", chosen);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_NAME", chosen);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_NAMEN", plain);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_TEXT", on);
+}
+
+// the cells of the rows from saveTop on
+void Save_ScreenCells()
+{
+	int items = saveFileFirst + saveFileCount;
+	for (int k = 0; k < SAVEFILE_CELLS; k++)
+	{
+		int item = saveTop + k;
+		bool on = item < items;
+		bool selected = item == saveSel;
+		Save_CellShow(k, on, selected);
+		string cell = "CELL" + k;
+		bool shot = false;
+		if (on)
+		{
+			string file = Save_ItemFile(item);
+			string name = "Новая";
+			string text = "Новая запись";
+			if (file != "")
+			{
+				name = Save_Ribbon(file);
+				text = "";
+				SendMessage(&GameInterface, "lse", MSG_INTERFACE_GET_SAVE_DATA, RUN_SAVEPFX + file, &text);
+				SendMessage(&GameInterface, "lss", MSG_INTERFACE_LOADPICTUREFROMSAVE, RUN_SAVEPFX + file, cell + "_SHOT");
+				shot = true;
+			}
+			Screen_Text(cell + "_NAME", name);
+			Screen_Text(cell + "_NAMEN", name);
+			Screen_Text(cell + "_TEXT", text);
+		}
+		SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, cell + "_SHOT", shot);
+	}
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_SCROLLUP", saveTop > 0);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_SCROLLDOWN", saveTop + SAVEFILE_CELLS < items);
+}
+
+// the cell of an item is seen: the grid goes by rows
+void Save_ScreenSelect(int item)
+{
+	saveSel = item;
+	int row = 0;
+	while (row + SAVEFILE_COLUMNS <= item) { row = row + SAVEFILE_COLUMNS; }
+	if (item < saveTop) { saveTop = row; }
+	if (item >= saveTop + SAVEFILE_CELLS) { saveTop = row - SAVEFILE_COLUMNS; }
+	Save_ScreenCells();
+	Save_ScreenDesc();
 }
 
 void Save_ScreenFill()
@@ -235,11 +311,11 @@ void Save_ScreenFill()
 	GameInterface.SavePath = RUN_SAVEDIR;
 	saveFileCount = 0;
 	saveFileFirst = 0;
-	saveFileRows = 0;
+	saveSel = 0;
+	saveTop = 0;
 	if (screenName == "savegame")
 	{
 		saveFileFirst = 1;
-		Save_ScreenRow("Новая запись");
 		bool can = Save_Where() != "";
 		SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_SAVE", can);
 	}
@@ -251,28 +327,20 @@ void Save_ScreenFill()
 		if (SendMessage(&GameInterface, "llee", MSG_INTERFACE_SAVE_FILE_FIND, saveFileCount, &name, &size) == 0) { break; }
 		at = "f" + saveFileCount;
 		SaveFiles.(at) = name;
-		Save_ScreenRow(Save_Title(name));
 		saveFileCount++;
 	}
 	// the rest of a list cut at SAVEFILE_LIST_MAX
 	if (saveFileCount == SAVEFILE_LIST_MAX) { SendMessage(&GameInterface, "llee", MSG_INTERFACE_SAVE_FILE_FIND, 1000, &name, &size); }
-	if (saveFileRows == 0) { Screen_Text("EDITFILES", " "); }
 	bool any = saveFileCount > 0;
 	if (screenName == "loadgame") { SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_LOAD", any); }
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_DELETE", any);
-	SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, "EDITFILES", 1, 0);
-	Save_ScreenDesc();
+	Save_ScreenSelect(0);
 }
 
-// the file of the row under the cursor, "" for "Новая запись" or none
+// the file of the selected cell, "" for "Новая запись" or none
 string Save_ScreenFile()
 {
-	// apart: the compiler drops "- saveFileFirst" after the call
-	int row = SendMessage(&GameInterface, "lsl", MSG_INTERFACE_MSG_TO_NODE, "EDITFILES", 11);
-	row = row - saveFileFirst;
-	if (row < 0 || row >= saveFileCount) { return ""; }
-	string at = "f" + row;
-	return SaveFiles.(at);
+	return Save_ItemFile(saveSel);
 }
 
 void Save_ScreenDesc()
@@ -302,18 +370,24 @@ int Save_FreeNumber()
 	return n;
 }
 
-// the cursor of the list moved (FTChange, FormatedTextActivate of the FORMATEDTEXT): the header of its file
-void Save_ScreenChange()
-{
-	string node = GetEventData();
-	if (node != "EDITFILES") { return; }
-	if (screenName == "loadgame" || screenName == "savegame") { Save_ScreenDesc(); }
-}
-
 // a button of the two screens; true if it was one of theirs
 bool Save_ScreenClick(string node)
 {
 	string file = Save_ScreenFile();
+	if (node == "LB_SCROLLUP" || node == "LB_SCROLLDOWN")
+	{
+		int items = saveFileFirst + saveFileCount;
+		if (node == "LB_SCROLLUP" && saveTop > 0) { saveTop = saveTop - SAVEFILE_COLUMNS; }
+		if (node == "LB_SCROLLDOWN" && saveTop + SAVEFILE_CELLS < items) { saveTop = saveTop + SAVEFILE_COLUMNS; }
+		Save_ScreenCells();
+		return true;
+	}
+	if (strlen(node) == 5 && findSubStr(node, "CELL", 0) == 0)
+	{
+		int clicked = saveTop + sti(strcut(node, 4, 4));
+		if (clicked < saveFileFirst + saveFileCount) { Save_ScreenSelect(clicked); }
+		return true;
+	}
 	if (node == "LB_LOAD")
 	{
 		if (file != "") { Save_Load(RUN_SAVEPFX + file); }
@@ -455,8 +529,7 @@ void Save_ScreensSelect()
 		string at = "f" + i;
 		if (SaveFiles.(at) == saveAutoFile)
 		{
-			SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, "EDITFILES", 1, i + saveFileFirst);
-			Save_ScreenDesc();
+			Save_ScreenSelect(i + saveFileFirst);
 		}
 	}
 	string text = "";
@@ -477,7 +550,7 @@ void Save_ScreensStep()
 		Trace("PDM save: autotest, " + saveFileCount + " files, saving " + saveAutoFile);
 		// the file keeps the step after the load, the game goes on with the next one when it is written
 		saveAutoStep = 4;
-		Trace("PDM save: autotest, the row " + SendMessage(&GameInterface, "lsl", MSG_INTERFACE_MSG_TO_NODE, "EDITFILES", 11) + ", the file '" + Save_ScreenFile() + "'");
+		Trace("PDM save: autotest, the item " + saveSel + ", the file '" + Save_ScreenFile() + "'");
 		Save_ScreensClick("LB_SAVE");
 		PostEvent("Save_ScreensSaved", 500);
 	}
