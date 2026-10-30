@@ -472,6 +472,7 @@ void Screen_ShipyardMode()
 // a row of the list of the types: the first replaces the text of the node, the others are added to it (as the
 // files of save.c); shipyardRows tells the type of each row, "-" for a header
 string shipyardRows = "";
+int shipyardGun = 0;	// the gun of the shipyard screen: 0 = 12 pound, 1 = 16 pound (the list of PdmCannons in the order of the calibers)
 int shipyardRowCount = 0;
 
 void Screen_ShipyardRow(string line, string id)
@@ -492,7 +493,7 @@ void Screen_ShipyardRight()
 	for (int c = 5; c <= 6; c++)
 	{
 		if (c == 6) { Screen_ShipyardRow(" ", "-"); }
-		Screen_ShipyardRow(Screen_Put(PdmScreens.shipyard.t.classorder, "" + c), "-");
+		Screen_ShipyardRow(Screen_Put(PdmScreens.shipyard.t.classorder, "" + c), "class" + c);
 		for (int i = 0; i < n; i++)
 		{
 			aref type;
@@ -542,9 +543,23 @@ void Screen_ShipText()
 }
 
 // the numbers of the gun of the hero: "12,400,40,27" is the shot, the range, the reload and the weight
+string Screen_GunKey(int n)
+{
+	if (n == 1) { return "Culverins"; }
+	return "Demi_culverins";
+}
+
+// the guns the ship of the screen takes: a class 5 one the 12 and the 16 pound, a class 6 one the 12 pound only
+int Screen_GunMax()
+{
+	string vid = Screen_ViewId();
+	if (sti(PdmShipTypes.(vid).class) > 5) { return 0; }
+	return 1;
+}
+
 string Screen_Cannon(string node)
 {
-	string key = "Demi_culverins";
+	string key = Screen_GunKey(shipyardGun);
 	if (!CheckAttribute(PdmCannons, key + ".params")) { return ""; }
 	string params = PdmCannons.(key).params;
 	if (node == "S_CALIBERSET") { return Screen_Nth(params, 0); }
@@ -595,10 +610,12 @@ string Screen_Value(string node)
 	if (node == "S_STERN") { return "" + Screen_Deck(PdmShipTypes.(vid).cannonback); }
 	if (node == "S_CALIBERSET" || node == "S_SHOTWEIGHT" || node == "S_FIRERANGE" || node == "S_RELOADRATE") { return Screen_Cannon(node); }
 	// the screenshots of the original: a class 5 ship has the 16 pound guns to buy, a class 6 one has none
-	bool smallShip = sti(PdmShipTypes.(vid).class) > 5;
-	if (smallShip) { if (node == "S_LBSNUM0" || node == "S_GOLDNUM0") { return ""; } }
-	if (node == "S_LBSNUM0") { return Screen_Nth(PdmCannons.Culverins.params, 0); }
-	if (node == "S_GOLDNUM0") { return "+" + (sti(PdmGoods.Culverins.price) * sti(PdmShipTypes.(vid).cannonstotal)); }
+	// the next gun after the current one (a click on the row of the caliber takes it)
+	string nextKey = Screen_GunKey(shipyardGun + 1);
+	bool noMore = shipyardGun + 1 > Screen_GunMax();
+	if (noMore) { if (node == "S_LBSNUM0" || node == "S_GOLDNUM0") { return ""; } }
+	if (node == "S_LBSNUM0") { return Screen_Nth(PdmCannons.(nextKey).params, 0); }
+	if (node == "S_GOLDNUM0") { return "+" + (sti(PdmGoods.(nextKey).price) * sti(PdmShipTypes.(vid).cannonstotal)); }
 	if (node == "S_BOARDNUM") { return "" + Screen_Deck(PdmShipTypes.(vid).deckcannons); }
 	if (node == "S_STERNNUM") { return "" + Screen_Deck(PdmShipTypes.(vid).cannonback); }
 	return "";
@@ -628,6 +645,25 @@ int Screen_ShipSellPrice(string id)
 	return (price / 100) * 100;
 }
 
+// the first type of the class (0: the other class than the one on the screen)
+void Screen_ShipyardClass(int c)
+{
+	string vid = Screen_ViewId();
+	if (c == 0) { c = 5; if (sti(PdmShipTypes.(vid).class) == 5) { c = 6; } }
+	int n = GetAttributesNum(&PdmShipTypes);
+	for (int i = 0; i < n; i++)
+	{
+		aref type;
+		type = GetAttributeN(&PdmShipTypes, i);
+		if (sti(type.class) != c) { continue; }
+		shipyardPick = type.id;
+		break;
+	}
+	shipyardGun = 0;
+	Screen_Fill();
+	Trace("PDM shipyard: class " + c + ", pick " + shipyardPick);
+}
+
 // the next type of the list "Класс 5/6" after the chosen one (step -1: the previous)
 void Screen_ShipyardStep(int step)
 {
@@ -654,6 +690,7 @@ void Screen_ShipyardStep(int step)
 		if (cc == 5 || cc == 6) { shipyardPick = cand.id; break; }
 	}
 	string id = shipyardPick;
+	shipyardGun = 0;
 	Screen_Fill();
 	Trace("PDM shipyard: pick " + id);
 }
@@ -728,12 +765,23 @@ bool Screen_ShipyardClick(string node)
 	{
 		int row = SendMessage(&GameInterface, "lsl", MSG_INTERFACE_MSG_TO_NODE, "EDITSHIP", 11);
 		string rid = Screen_Nth(shipyardRows, row);
+		if (strcut(rid, 0, 4) == "class") { Screen_ShipyardClass(sti(strcut(rid, 5, 5))); return true; }
 		if (rid == "-" || rid == "") { return true; }
 		shipyardPick = rid;
+		shipyardGun = 0;
 		Screen_Fill();
 		Trace("PDM shipyard: pick " + rid);
 		return true;
 	}
+	if (node == "S_SHIP10" || node == "S_SHIP11")
+	{
+		shipyardGun = shipyardGun + 1;
+		if (shipyardGun > Screen_GunMax()) { shipyardGun = 0; }
+		Screen_Fill();
+		Trace("PDM shipyard: gun " + Screen_GunKey(shipyardGun));
+		return true;
+	}
+	if (node == "S_SHIP0") { Screen_ShipyardClass(0); return true; }
 	if (node == "LB_PREVSHIP") { Screen_ShipyardStep(-1); return true; }
 	if (node == "LB_NEXTSHIP") { Screen_ShipyardStep(1); return true; }
 	if (node == "LB_SHIPUP") { Screen_ShipyardStep(-1); return true; }
@@ -937,7 +985,18 @@ void Screen_ShipyardPick()
 {
 	SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, "EDITSHIP", 1, 2);
 	Screen_ShipyardClick("EDITSHIP");
-	if (shipyardPick != "") { Trace("PDM shipyard: row FAIL, a header picked " + shipyardPick); }
+	string head = shipyardPick;
+	Screen_ShipyardClick("S_SHIP0");
+	string other = shipyardPick;
+	Screen_ShipyardClick("S_SHIP0");
+	bool classOk = head != "" && other != "" && other != head && sti(PdmShipTypes.(head).class) != sti(PdmShipTypes.(other).class) && shipyardPick == head;
+	int gunBefore = shipyardGun;
+	Screen_ShipyardClick("S_SHIP10");
+	bool gunOk = shipyardGun != gunBefore;
+	Screen_ShipyardClick("S_SHIP11");
+	if (classOk && gunOk && shipyardGun == gunBefore) { Trace("PDM shipyard: class and gun ok"); }
+	else { Trace("PDM shipyard: class and gun FAIL, " + head + ", " + other + ", gun " + shipyardGun); }
+	shipyardPick = "";
 	SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, "EDITSHIP", 1, 3);
 	Screen_ShipyardClick("EDITSHIP");
 	string first = shipyardPick;

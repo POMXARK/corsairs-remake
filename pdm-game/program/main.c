@@ -97,6 +97,8 @@ void Main()
 	PdmWeather_Init();
 	Trace("PDM main: pdm_boarding.c done");
 	makearef(PlayerCard, PdmCharacters.Nicolas_Sharp);
+	// the gold of a new game: "Деньги 1000" on the screens of the original
+	if (!CheckAttribute(PlayerCard, "money")) { PlayerCard.money = 1000; }
 	// an attribute name in .(...) has to be a variable
 	string shipKey = PlayerCard.ship_key;
 	makearef(PlayerShipCard, PdmShips.(shipKey));

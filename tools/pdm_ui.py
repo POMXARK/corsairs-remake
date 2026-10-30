@@ -627,7 +627,8 @@ class Converter:
                 self.templates.setdefault(out_name, {})[key.upper()] = text
                 x, y, l = self.field(key, dict(a, txt="" if "%" in text else a.get("txt", "")), S_WIDTH, h)
                 nodes.append(("FORMATEDTEXT", key.upper()))
-                lines += l + [""]
+                # the shipyard: the class and the guns of the row of the type are switched by a click (ours, the original does it by arrows)
+                lines += l + (["command = click"] if out_name == "shipyard" and key.upper() in ("S_SHIP0", "S_SHIP10", "S_SHIP11") else []) + [""]
             elif low.startswith("t_"):
                 # the texts the screen shows in a message box (t_Exit = #YouWant2Exit#), for the scripts
                 if text_key(value) in self.strings:
