@@ -215,3 +215,6 @@ corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City
 
 ## status-screens (TOWN_AUTO=22)
 В городе Хайрок: F1, затем кнопки «Корабль», «Трюм», «Сундук», «Журнал» с паузой 1,5 с. Маркер `PDM status: pages ok`, имена страниц — в `compile.log` (`PDM screen: sship` …). Кадры — из видео `shots.sh` (игра сама закрывается через ~8 с). Сделано нами для проверки; в оригинале страницы открывает скрипт игры.
+
+## ransack-screens (TOWN_AUTO=23)
+Как `status-screens`, но страницы `RANSACK.dll`: «Грабёж: Корабли» (`shipexchange`), «Грабёж: Трюм» (`transfer`) и окно сообщения. Маркер `PDM status: pages ok`. Открываются прямо из теста (наше): в оригинале их запускает игровой скрипт после абордажа.

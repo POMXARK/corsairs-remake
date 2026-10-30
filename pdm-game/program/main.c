@@ -30,6 +30,8 @@
 #define STORE_ID 21
 // F1 in the town and the pages of the status: ship, goods, chest, log book (screens.c, Screen_StatusAuto)
 #define STATUS_ID 22
+// the same for the pages of RANSACK.dll, which a boarding opens in the original: ship exchange, transfer, message box
+#define RANSACKSCR_ID 23
 
 object Render;
 object Scene;

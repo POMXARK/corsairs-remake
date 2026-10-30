@@ -1056,6 +1056,7 @@ void Screen_StatusAuto()
 {
 	int step = GetEventData();
 	string buttons = "F1,LB_SHIP,LB_GOODS,LB_CHEST,LB_LOGBOOK";
+	if (TownAuto == RANSACKSCR_ID) { buttons = "F1,@shipexchange,@transfer,@messagebox_ransack"; }
 	int at = 0;
 	for (int i = 0; i < step; i++)
 	{
@@ -1073,6 +1074,12 @@ void Screen_StatusAuto()
 	if (end < 0) { end = strlen(buttons); }
 	string b = strcut(buttons, at, end - 1);
 	if (b == "F1") { Screen_Status(); }
+	else if (strcut(b, 0, 0) == "@")
+	{
+		screenNext = strcut(b, 1, strlen(b) - 1);
+		screenGoing = true;
+		PostEvent("Screen_Go", 0);
+	}
 	else { Screen_Click(b); }
 	Trace("PDM status: " + b + " -> '" + screenName + "'");
 	PostEvent("Screen_StatusAuto", 1500, "l", step + 1);

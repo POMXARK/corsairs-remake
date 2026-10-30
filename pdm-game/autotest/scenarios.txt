@@ -31,3 +31,4 @@ store-screen|town|City_HighRock|21|PDM store: sell ok|120
 store-fleet|town|City_HighRock|21|PDM store: fleet ok|120
 shipyard-screen|town|City_HighRock|19|PDM shipyard: repair ok|120
 status-screens|town|City_HighRock|22|PDM status: pages ok|120
+ransack-screens|town|City_HighRock|23|PDM status: pages ok|120
