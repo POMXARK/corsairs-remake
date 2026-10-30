@@ -423,7 +423,8 @@ void Screen_ShipyardHide()
 void Screen_ShipyardRight()
 {
 	string list = PdmScreens.shipyard.t.yourship + "\n";
-	int rank = sti(PlayerCard.rank);
+	int rank = 0;
+	if (CheckAttribute(PlayerCard, "rank")) { rank = sti(PlayerCard.rank); }
 	int n = GetAttributesNum(&PdmShipTypes);
 	for (int c = 5; c <= 6; c++)
 	{
@@ -584,6 +585,7 @@ bool Screen_ShipyardClick(string node)
 		makearef(PlayerShipType, PdmShipTypes.(id));
 		shipyardSold = false;
 		Screen_ShipText();
+		Screen_Text("EDITSHIPMONEY", Screen_Put(PdmScreens.shipyard.t.money, PlayerCard.money));
 		Trace("PDM shipyard: bought " + id + ", money " + PlayerCard.money);
 		return true;
 	}
