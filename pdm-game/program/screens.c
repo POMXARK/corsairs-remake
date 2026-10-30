@@ -30,6 +30,11 @@ string screenPending = "";
 string screenTourMenu = "options,keycontrols,loadgame,savegame,credits,messagebox,mainmenu";
 string screenTourGame = "sgoods,sship,logbook,schest,trade,shipyard,crew,tavern,messagebox_town,transfer,shipexchange,messagebox_ransack";
 // the text of the message box and what its "Да" does
+// the shipyard: the type chosen in the list (ShipUp/ShipDown) and whether the old ship is sold already
+string shipyardPick = "";
+bool shipyardSold = false;
+int shipyardMoney = 0;
+string shipyardOwn = "";
 string screenMessage = "";
 string screenMessageYes = "";
 // the page the message box goes back to
@@ -40,6 +45,7 @@ int screenTourStage = 0;
 void Screen_Init()
 {
 	SetEventHandler("Screen_Go", "Screen_Go", 0);
+	SetEventHandler("Screen_ShipyardVerify", "Screen_ShipyardVerify", 0);
 	SetEventHandler("Screen_Pending", "Screen_Pending", 0);
 	SetEventHandler("Screen_Tour", "Screen_Tour", 0);
 	SetEventHandler("Screen_Credits", "Screen_CreditsStep", 0);
@@ -513,6 +519,77 @@ string Screen_Value(string node)
 	return "";
 }
 
+
+// the price of a ship the shipyard asks (A of the original) and gives (B), in hundreds; the skill and the
+// reputation of the hero are not mapped yet (docs/original-vs-remake.md), so the spread is 0
+int Screen_ShipBuyPrice(string id) { return (sti(PdmShipTypes.(id).buyprice) / 100) * 100; }
+int Screen_ShipSellPrice(string id) { return (sti(PdmShipTypes.(id).sellprice) / 100) * 100; }
+
+// the next type of the list "Класс 5/6" after the chosen one (step -1: the previous)
+void Screen_ShipyardStep(int step)
+{
+	int n = GetAttributesNum(&PdmShipTypes);
+	int at = -1;
+	int first = -1;
+	for (int i = 0; i < n; i++)
+	{
+		aref type;
+		type = GetAttributeN(&PdmShipTypes, i);
+		int c = sti(type.class);
+		if (c != 5 && c != 6) { continue; }
+		if (type.id == shipyardPick) { at = i; }
+	}
+	int k = at;
+	for (int j = 0; j < n; j++)
+	{
+		k = k + step;
+		if (k >= n) { k = 0; }
+		if (k < 0) { k = n - 1; }
+		aref cand;
+		cand = GetAttributeN(&PdmShipTypes, k);
+		int cc = sti(cand.class);
+		if (cc == 5 || cc == 6) { shipyardPick = cand.id; break; }
+	}
+	string id = shipyardPick;
+	Screen_Text("EDITSUMMA", Screen_Put(PdmScreens.shipyard.t.shipcost, Screen_ShipBuyPrice(id)));
+	if (CheckAttribute(PdmScreens, "ships." + id + ".name")) { Screen_Text("EDITSHIPTYPE", PdmScreens.ships.(id).name); }
+	Trace("PDM shipyard: pick " + id);
+}
+
+// Sell: the hero gets the price B of the ship, the type is chosen from the list; Buy: needs the old ship sold
+// and the gold, the new one takes its place (the messages are the original ones)
+bool Screen_ShipyardClick(string node)
+{
+	if (node == "LB_SHIPUP") { Screen_ShipyardStep(-1); return true; }
+	if (node == "LB_SHIPDOWN") { Screen_ShipyardStep(1); return true; }
+	if (node == "LB_SELL")
+	{
+		if (shipyardSold) { return true; }
+		string own = PlayerShipType.id;
+		PlayerCard.money = sti(PlayerCard.money) + Screen_ShipSellPrice(own);
+		shipyardSold = true;
+		Screen_Text("EDITSHIPMONEY", Screen_Put(PdmScreens.shipyard.t.money, PlayerCard.money));
+		Trace("PDM shipyard: sold " + own + ", money " + PlayerCard.money);
+		return true;
+	}
+	if (node == "LB_BUY")
+	{
+		if (shipyardPick == "") { Screen_ShipyardStep(1); }
+		string id = shipyardPick;
+		if (!shipyardSold) { Screen_Text("EDITHELP", PdmScreens.shipyard.t.buybutsell); Trace("PDM shipyard: refused, sell the old ship"); return true; }
+		int price = Screen_ShipBuyPrice(id);
+		if (sti(PlayerCard.money) < price) { Screen_Text("EDITHELP", PdmScreens.shipyard.t.buybutmoney); Trace("PDM shipyard: refused, no money"); return true; }
+		PlayerCard.money = sti(PlayerCard.money) - price;
+		PlayerShipCard.type_key = id;
+		makearef(PlayerShipType, PdmShipTypes.(id));
+		shipyardSold = false;
+		Screen_ShipText();
+		Trace("PDM shipyard: bought " + id + ", money " + PlayerCard.money);
+		return true;
+	}
+	return false;
+}
+
 void Screen_Command()
 {
 	string command = GetEventData();
@@ -526,6 +603,7 @@ void Screen_Command()
 	}
 	if (screenName == "messagebox" && node == "LB_YES" && screenMessageYes == "exit") { ExitProgram(); return; }
 	if (screenName == "trade" && Trade_Click(node)) { return; }
+	if (screenName == "shipyard" && Screen_ShipyardClick(node)) { return; }
 	if (Screen_Page(node)) { return; }
 	Screen_Click(node);
 }
@@ -660,7 +738,22 @@ void Screen_ShipyardCheck(string name)
 	if (!CheckAttribute(PdmScreens, "ships." + id + ".about")) { empty = empty + "about "; }
 	if (empty == "") { Trace("PDM shipyard: values ok"); }
 	else { Trace("PDM shipyard: FAIL, empty " + empty); }
-	PostEvent("Town_AutoQuit", 3000);
+	shipyardMoney = sti(PlayerCard.money);
+	shipyardOwn = PlayerShipType.id;
+	PostEvent("ievnt_command", 500, "ss", "click", "LB_BUY");
+	PostEvent("ievnt_command", 800, "ss", "click", "LB_SELL");
+	PostEvent("ievnt_command", 1100, "ss", "click", "LB_BUY");
+	PostEvent("Screen_ShipyardVerify", 2000);
+	PostEvent("Town_AutoQuit", 4000);
+}
+
+// the buttons in the test: the first Buy is refused (the old ship stands), Sell gives B, Buy takes A of the picked one
+void Screen_ShipyardVerify()
+{
+	string id = shipyardPick;
+	int want = shipyardMoney + Screen_ShipSellPrice(shipyardOwn) - Screen_ShipBuyPrice(id);
+	if (PlayerShipType.id == id && sti(PlayerCard.money) == want && id != "") { Trace("PDM shipyard: actions ok"); }
+	else { Trace("PDM shipyard: actions FAIL, type " + PlayerShipType.id + ", pick " + id + ", money " + PlayerCard.money + ", want " + want); }
 }
 
 // SCENE=screens: the pages of the menu, a new game, F1 in the town and its button "Корабль", the other
