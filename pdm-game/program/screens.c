@@ -35,6 +35,7 @@ string shipyardPick = "";
 bool shipyardSold = false;
 int shipyardMoney = 0;
 int shipyardSoldFor = 0;
+bool shipyardRankRefused = false;
 // the percent of hull and rig the player chose to repair with the arrows (-1: all the wear)
 int shipyardHullFix = -1;
 int shipyardRigFix = -1;
@@ -401,15 +402,18 @@ string Screen_Board(string list)
 	return n + " + " + n;
 }
 
-// the best class the rank lets command (ours: the original counts it in TOWN.dll)
+// the best class (the smallest number) the rank lets command: 6 - (rank - 1) / 2, not below 1 (TOWN.dll 0x10004d3e, rank is +0x1cc of the hero)
 int Screen_RankClass(int rank)
 {
-	if (rank >= 25) { return 1; }
-	if (rank >= 20) { return 2; }
-	if (rank >= 15) { return 3; }
-	if (rank >= 10) { return 4; }
-	if (rank >= 5) { return 5; }
-	return 6;
+	int c = 6 - (rank - 1) / 2;
+	if (c < 1) { c = 1; }
+	return c;
+}
+
+int Screen_HeroRank()
+{
+	if (CheckAttribute(PlayerCard, "rank")) { return sti(PlayerCard.rank); }
+	return 1;
 }
 
 string Screen_Decimal(string value)
@@ -503,8 +507,7 @@ void Screen_ShipyardRow(string line, string id)
 
 void Screen_ShipyardRight()
 {
-	int rank = 0;
-	if (CheckAttribute(PlayerCard, "rank")) { rank = sti(PlayerCard.rank); }
+	int rank = Screen_HeroRank();
 	shipyardRowCount = 0;
 	Screen_ShipyardRow(PdmScreens.shipyard.t.yourship, "-");
 	Screen_ShipyardRow(" ", "-");
@@ -884,11 +887,13 @@ bool Screen_ShipyardClick(string node)
 		Trace("PDM shipyard: sold " + own + ", money " + PlayerCard.money);
 		return true;
 	}
+	if (node == "TEST_RANK") { PlayerCard.rank = 15; return true; }	// the test: the rank that lets buy the picked type
 	if (node == "LB_BUY")
 	{
 		if (shipyardPick == "") { Screen_ShipyardStep(1); }
 		string id = shipyardPick;
 		if (!shipyardSold) { Screen_Text("EDITBUY", PdmScreens.shipyard.t.buybutsell); Trace("PDM shipyard: refused, sell the old ship"); return true; }
+		if (sti(PdmShipTypes.(id).class) < Screen_RankClass(Screen_HeroRank())) { Screen_Text("EDITBUY", Screen_Put(PdmScreens.shipyard.t.buybutclass, "" + Screen_RankClass(Screen_HeroRank()))); Trace("PDM shipyard: refused, rank"); shipyardRankRefused = true; return true; }
 		int price = Screen_ShipBuyPrice(id);
 		if (sti(PlayerCard.money) < price) { Screen_Text("EDITBUY", PdmScreens.shipyard.t.buybutmoney); Trace("PDM shipyard: refused, no money"); return true; }
 		PlayerCard.money = sti(PlayerCard.money) - price;
@@ -1075,6 +1080,8 @@ void Screen_ShipyardCheck(string name)
 	PostEvent("Screen_ShipyardPick", 200);
 	PostEvent("ievnt_command", 500, "ss", "click", "LB_BUY");
 	PostEvent("ievnt_command", 800, "ss", "click", "LB_SELL");
+	PostEvent("ievnt_command", 950, "ss", "click", "LB_BUY");
+	PostEvent("ievnt_command", 1000, "ss", "click", "TEST_RANK");
 	PostEvent("ievnt_command", 1100, "ss", "click", "LB_BUY");
 	PostEvent("Screen_ShipyardVerify", 2000);
 	PostEvent("Town_AutoQuit", 4000);
@@ -1117,6 +1124,7 @@ void Screen_ShipyardVerify()
 {
 	string id = PlayerShipType.id;
 	int want = shipyardMoney + shipyardSoldFor - Screen_ShipBuyPrice(id);
+	if (!shipyardRankRefused) { Trace("PDM shipyard: rank refusal FAIL"); }
 	if (shipyardPick == "" && id != shipyardOwn && sti(PlayerCard.money) == want) { Trace("PDM shipyard: actions ok"); }
 	else { Trace("PDM shipyard: actions FAIL, type " + PlayerShipType.id + ", pick " + id + ", money " + PlayerCard.money + ", want " + want); }
 	// a half-broken hull and sails: Repair All takes the price of both and makes them whole
