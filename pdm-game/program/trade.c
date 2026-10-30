@@ -15,8 +15,9 @@
 // t = the Trade skill * 5 (up to 95) + the reputation part (Trade_Rep: reputation of the hero moved 5 away from 0, tenths cut,
 // times 10, within -30..30); when the two prices meet, the store pays one less with a chance of a half (rand).
 // Ours: the original counts the days since the last visit by the date of the game (the store fills up on the 1st and the 16th
-// of each month), the remake has no calendar: the first visit is a month, each next one fifteen days. The price modifier of
-// the island is not known: 100%.
+// of each month), the remake has no calendar: the first visit is a month, each next one fifteen days.
+// The price of the goods is multiplied by the island's percent (the third number of "type" in islands_x.idf: 130 on Shark
+// Island and Gray Sails, 10 on the dead variants of the islands, else 100).
 
 #define TRADE_LINES 7
 
@@ -77,10 +78,23 @@ int Trade_Nth(int row)
 	return 0;
 }
 
-int Trade_Price0(int i)
+// the price modifier of the island, percent: the third number of "type" of the island (islands_x.idf), 100 when it has none
+int Trade_IslandPct(string island)
+{
+	if (!CheckAttribute(PdmIslands, island + ".type")) { return 100; }
+	string list = PdmIslands.(island).type;
+	int at = findSubStr(list, ",", 0);
+	int last = at;
+	while (at >= 0) { last = at; at = findSubStr(list, ",", last + 1); }
+	if (last < 0) { return 100; }
+	return sti(strcut(list, last + 1, strlen(list) - 1));
+}
+
+// the base price of the goods in the store of the island: the price of Goods.idf times the modifier of the island
+int Trade_Price0(string island, int i)
 {
 	string id = Trade_Id(i);
-	return sti(PdmGoods.(id).price);
+	return MakeInt(sti(PdmGoods.(id).price) * (Trade_IslandPct(island) * 0.01));
 }
 
 int Trade_Weight(int i)
@@ -237,12 +251,13 @@ void Trade_Fill(string island)
 	int refills = 1;
 	if (!CheckAttribute(PdmStore, island + ".visits")) { refills = 2; PdmStore.(island).visits = 0; }
 	PdmStore.(island).visits = sti(PdmStore.(island).visits) + 1;
+	Trace("PDM store: island " + island + " price " + Trade_IslandPct(island) + "%");
 	int n = Trade_Goods();
 	for (int i = 0; i < n; i++)
 	{
 		if (Trade_Type(i) == 0) { continue; }
 		string kind = Trade_Kind(island, i);
-		float p = Trade_Price0(i);
+		float p = Trade_Price0(island, i);
 		float f;
 		int norm;
 		int a;
@@ -537,6 +552,8 @@ void Trade_Check(string name)
 	if (TownAuto != STORE_ID || name != "trade") { return; }
 	int i = Trade_Nth(0);
 	string empty = "";
+	// the modifier of the island comes from the table: 130 on Shark Island, 10 on the dead Highrock
+	if (Trade_IslandPct("shark_island") != 130 || Trade_IslandPct("highrock_") != 10) { empty = empty + "pct "; }
 	if (Trade_Rows() != 16) { empty = empty + "rows "; }
 	if (Trade_Stock(townIsland, i) < 1) { empty = empty + "stock "; }
 	if (Trade_Price(townIsland, i) < 1) { empty = empty + "price "; }
