@@ -456,10 +456,26 @@ void Screen_ShipyardMode()
 	Screen_Use("LB_SELL", !shipyardSold);
 	Screen_Use("LB_BUY", buy && shipyardSold);
 	string vid = Screen_ViewId();
-	if (sti(PdmShipTypes.(vid).class) > 5) { Screen_Text("S_LBS0", ""); Screen_Text("S_GOLD0", ""); }
+	int gmax = Screen_GunMax();
+	if (shipyardGun > gmax) { shipyardGun = 0; }
+	if (gmax < 1) { Screen_Text("S_LBS0", ""); Screen_Text("S_GOLD0", ""); }
 	else { Screen_Text("S_LBS0", PdmScreens.shipyard.s.S_LBS0); Screen_Text("S_GOLD0", PdmScreens.shipyard.s.S_GOLD0); }
-	if (!buy) { Screen_Text("EDITCANNON", PdmScreens.shipyard.t.weapon0); return; }
-	Screen_Text("EDITCANNON", PdmScreens.shipyard.t.weapon0);
+	if (gmax < 2) { Screen_Text("S_LBS1", ""); Screen_Text("S_GOLD1", ""); }
+	else { Screen_Text("S_LBS1", PdmScreens.shipyard.s.S_LBS1); Screen_Text("S_GOLD1", PdmScreens.shipyard.s.S_GOLD1); }
+	// the row of the selected gun is lit
+	for (int g = 0; g < 3; g++)
+	{
+		string rowNode = "GUNROW" + g;
+		Screen_Use(rowNode, g == shipyardGun);
+		if (g == shipyardGun)
+		{
+			Screen_Text(rowNode, " ");
+			SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, rowNode, 1, 0);
+		}
+	}
+	string weaponKey = "weapon" + shipyardGun;
+	Screen_Text("EDITCANNON", PdmScreens.shipyard.t.(weaponKey));
+	if (!buy) { return; }
 	Screen_Text("EDITSUMMANEW", Screen_Put(PdmScreens.shipyard.t.shipcost, Screen_ShipBuyPrice(shipyardPick)));
 	if (shipyardSold) { Screen_Text("EDITBUY", ""); }
 	else { Screen_Text("EDITBUY", PdmScreens.shipyard.t.buybutsell); }
@@ -533,9 +549,10 @@ void Screen_ShipText()
 		SendMessage(&GameInterface, "lslls", MSG_INTERFACE_MSG_TO_NODE, "SHIPSPRITE", 2, 0, "interfaces\\pdm\\ship_" + id + ".tga");
 		SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "SHIPSPRITE", 1);
 		// the picture of the gun in its frame (GOODS/GOODS/<file>64.tga of the original, cannon_<file>)
-		if (CheckAttribute(PdmCannons, "Demi_culverins.filename"))
+		string gunKey = Screen_GunKey(shipyardGun);
+		if (CheckAttribute(PdmCannons, gunKey + ".filename"))
 		{
-			SendMessage(&GameInterface, "lslls", MSG_INTERFACE_MSG_TO_NODE, "CANNONSPRITE", 2, 0, "interfaces\\pdm\\cannon_" + Town_Lower(PdmCannons.Demi_culverins.filename) + ".tga");
+			SendMessage(&GameInterface, "lslls", MSG_INTERFACE_MSG_TO_NODE, "CANNONSPRITE", 2, 0, "interfaces\\pdm\\cannon_" + Town_Lower(PdmCannons.(gunKey).filename) + ".tga");
 			SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "CANNONSPRITE", 1);
 		}
 		Screen_ShipyardRight();
@@ -546,15 +563,27 @@ void Screen_ShipText()
 string Screen_GunKey(int n)
 {
 	if (n == 1) { return "Culverins"; }
+	if (n == 2) { return "Demi_cannons"; }
 	return "Demi_culverins";
 }
 
-// the guns the ship of the screen takes: a class 5 one the 12 and the 16 pound, a class 6 one the 12 pound only
+// the guns the ship of the screen takes after the 12 pound ones: weapon_type of the type is a mask, 1 = the 12 pound only,
+// 3 = up to the 16 pound, 7 = up to the 24 pound (the screenshots of the original: a lugger has no gun to buy, a shnyava the 16 pound)
 int Screen_GunMax()
 {
 	string vid = Screen_ViewId();
-	if (sti(PdmShipTypes.(vid).class) > 5) { return 0; }
-	return 1;
+	int wt = sti(PdmShipTypes.(vid).weapon_type);
+	if (wt >= 7) { return 2; }
+	if (wt >= 3) { return 1; }
+	return 0;
+}
+
+// the price of the change to the gun n: the difference of the prices of the guns for all the guns of the ship (+1920 for 12 guns, 16 pound)
+int Screen_GunCost(int n)
+{
+	string vid = Screen_ViewId();
+	string key = Screen_GunKey(n);
+	return (sti(PdmCannons.(key).price) - sti(PdmCannons.Demi_culverins.price)) * sti(PdmShipTypes.(vid).cannonstotal);
 }
 
 string Screen_Cannon(string node)
@@ -562,10 +591,11 @@ string Screen_Cannon(string node)
 	string key = Screen_GunKey(shipyardGun);
 	if (!CheckAttribute(PdmCannons, key + ".params")) { return ""; }
 	string params = PdmCannons.(key).params;
-	if (node == "S_CALIBERSET") { return Screen_Nth(params, 0); }
+	// the current caliber stays, the rest is of the gun the cursor is on (the original: shot weight = the caliber, then the range and the reload)
+	if (node == "S_CALIBERSET") { return Screen_Nth(PdmCannons.Demi_culverins.params, 0); }
 	if (node == "S_FIRERANGE") { return Screen_Nth(params, 1); }
 	if (node == "S_RELOADRATE") { return Screen_Nth(params, 2); }
-	return Screen_Nth(params, 3);
+	return Screen_Nth(params, 0);
 }
 
 string Screen_First(string list)
@@ -610,12 +640,16 @@ string Screen_Value(string node)
 	if (node == "S_STERN") { return "" + Screen_Deck(PdmShipTypes.(vid).cannonback); }
 	if (node == "S_CALIBERSET" || node == "S_SHOTWEIGHT" || node == "S_FIRERANGE" || node == "S_RELOADRATE") { return Screen_Cannon(node); }
 	// the screenshots of the original: a class 5 ship has the 16 pound guns to buy, a class 6 one has none
-	// the next gun after the current one (a click on the row of the caliber takes it)
-	string nextKey = Screen_GunKey(shipyardGun + 1);
-	bool noMore = shipyardGun + 1 > Screen_GunMax();
-	if (noMore) { if (node == "S_LBSNUM0" || node == "S_GOLDNUM0") { return ""; } }
-	if (node == "S_LBSNUM0") { return Screen_Nth(PdmCannons.(nextKey).params, 0); }
-	if (node == "S_GOLDNUM0") { return "+" + (sti(PdmGoods.(nextKey).price) * sti(PdmShipTypes.(vid).cannonstotal)); }
+	int rowGun = 0;
+	if (node == "S_LBSNUM0" || node == "S_GOLDNUM0") { rowGun = 1; }
+	if (node == "S_LBSNUM1" || node == "S_GOLDNUM1") { rowGun = 2; }
+	if (rowGun > 0)
+	{
+		if (rowGun > Screen_GunMax()) { return ""; }
+		string rowKey = Screen_GunKey(rowGun);
+		if (strcut(node, 2, 4) == "LBS") { return Screen_Nth(PdmCannons.(rowKey).params, 0); }
+		return "+" + Screen_GunCost(rowGun);
+	}
 	if (node == "S_BOARDNUM") { return "" + Screen_Deck(PdmShipTypes.(vid).deckcannons); }
 	if (node == "S_STERNNUM") { return "" + Screen_Deck(PdmShipTypes.(vid).cannonback); }
 	return "";
@@ -773,10 +807,15 @@ bool Screen_ShipyardClick(string node)
 		Trace("PDM shipyard: pick " + rid);
 		return true;
 	}
-	if (node == "S_SHIP10" || node == "S_SHIP11")
+	int rowClicked = -1;
+	if (node == "S_SHIP10" || node == "S_CALIBERSET") { rowClicked = 0; }
+	if (node == "S_LBSNUM0" || node == "S_LBS0" || node == "S_GOLDNUM0" || node == "S_GOLD0") { rowClicked = 1; }
+	if (node == "S_LBSNUM1" || node == "S_LBS1" || node == "S_GOLDNUM1" || node == "S_GOLD1") { rowClicked = 2; }
+	if (rowClicked >= 0)
 	{
-		shipyardGun = shipyardGun + 1;
-		if (shipyardGun > Screen_GunMax()) { shipyardGun = 0; }
+		// the row of the current caliber or of a gun to buy: the window under shows that gun (the original), nothing is bought
+		if (rowClicked > Screen_GunMax()) { return true; }
+		shipyardGun = rowClicked;
 		Screen_Fill();
 		Trace("PDM shipyard: gun " + Screen_GunKey(shipyardGun));
 		return true;
@@ -996,12 +1035,12 @@ void Screen_ShipyardPick()
 	string other = shipyardPick;
 	Screen_ShipyardClick("S_SHIP0");
 	bool classOk = head != "" && other != "" && other != head && sti(PdmShipTypes.(head).class) != sti(PdmShipTypes.(other).class) && shipyardPick == head;
-	int gunBefore = shipyardGun;
+	// the first of class 5 (a fleut) takes the 16 pound: the row of it shows its numbers, the current row brings the 12 pound back
+	Screen_ShipyardClick("S_LBS0");
+	bool gunOk = shipyardGun == 1 && Screen_Value("S_SHOTWEIGHT") == "16" && Screen_Value("S_GOLDNUM0") == "+1920";
 	Screen_ShipyardClick("S_SHIP10");
-	bool gunOk = shipyardGun != gunBefore;
-	Screen_ShipyardClick("S_SHIP11");
-	if (classOk && gunOk && shipyardGun == gunBefore) { Trace("PDM shipyard: class and gun ok"); }
-	else { Trace("PDM shipyard: class and gun FAIL, " + head + ", " + other + ", gun " + shipyardGun); }
+	if (classOk && gunOk && shipyardGun == 0 && Screen_Value("S_SHOTWEIGHT") == "12") { Trace("PDM shipyard: class and gun ok"); }
+	else { Trace("PDM shipyard: class and gun FAIL, " + head + ", " + other + ", gun " + shipyardGun + ", " + Screen_Value("S_GOLDNUM0")); }
 	shipyardPick = "";
 	SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, "EDITSHIP", 1, 3);
 	Screen_ShipyardClick("EDITSHIP");

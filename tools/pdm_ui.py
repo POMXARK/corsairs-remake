@@ -632,7 +632,7 @@ class Converter:
                 x, y, l = self.field(key, dict(a, txt="" if "%" in text else a.get("txt", "")), S_WIDTH, h)
                 nodes.append(("FORMATEDTEXT", key.upper()))
                 # the shipyard: the class and the guns of the row of the type are switched by a click (ours, the original does it by arrows)
-                lines += l + (["command = click"] if out_name == "shipyard" and key.upper() in ("S_SHIP0", "S_SHIP10", "S_SHIP11") else []) + [""]
+                lines += l + (["command = click"] if out_name == "shipyard" and key.upper() in SHIPYARD_CLICK else []) + [""]
             elif low.startswith("t_"):
                 # the texts the screen shows in a message box (t_Exit = #YouWant2Exit#), for the scripts
                 if text_key(value) in self.strings:
@@ -718,6 +718,13 @@ class Converter:
             n, l = self.credits_text(out_name)
             nodes += n
             lines += l
+
+        if section == "ShipYard":
+            # the highlight of the selected row of the guns (the screenshots of the original): under the texts, the script shows one of them
+            for i, y in enumerate((306, 343, 363)):
+                nodes.append(("FORMATEDTEXT", f"GUNROW{i}"))
+                lines += [f"[GUNROW{i}]", f"position = 60,{y},228,{y + 18}", "font = pdm_logbook_16", "fontScale = 0.667", "lineSpace = 18",
+                          "color = 255,8,8,8", "alignment = left", "backColor = 96,255,196,0", "backOffset = 2,0,2,0", "wrapoff = 1", "bNotUse = 1", ""]
 
         head = [f"; converted by tools/pdm_ui.py from [{section}] of INI/{self.ini_name} of the original"]
         head += notes and ["; the layout of the original for the scripts of the screen:"] + notes
@@ -954,6 +961,8 @@ CHECKS = {"check"}
 # is small and under the frame of the background, the scripts show the header of a save in it
 FIELDS_OF = {"LoadGame": {"EditDesc": ("SaveGame", "EditDesc")}}
 SELECT_LISTS = {("LoadGame", "EditFiles"), ("SaveGame", "EditFiles"), ("ShipYard", "EditShip")}
+# the shipyard: the class, the current gun and the rows of the guns to buy take a click (the screenshots of the original show them selectable)
+SHIPYARD_CLICK = {"S_SHIP0", "S_SHIP10", "S_CALIBERSET", "S_LBSNUM0", "S_LBS0", "S_GOLDNUM0", "S_GOLD0", "S_LBSNUM1", "S_LBS1", "S_GOLDNUM1", "S_GOLD1"}
 # the screens without the help, the description and the face of the hero of [Common]
 NO_COMMON = {"MainMenu", "MainMap", "MessageBox", "Options", "KeyControls", "Credits"}
 # the width of the place of a value (s_Rank = txt:"%d",xr:490,...): the original prints it from a point (ours)
