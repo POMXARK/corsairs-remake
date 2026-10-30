@@ -288,7 +288,13 @@ class Converter:
             image = Image.open(f).convert("RGBA").resize((256, 256), Image.LANCZOS)
             write_tx(image, self.resource / f"textures/interfaces/pdm/ship_{f.name[:-7].lower()}.tga.tx",
                      mip_chain=False)
-        return [("PICTURE", "SHIPSPRITE")], ["[SHIPSPRITE]", "position = 310,135,489,285", "bNotUse = 1", ""]
+        # the picture of the gun (IMAGES/GOODS/GOODS/<file>64.tga, 64 x 64 as r_cannon of [ShipYard])
+        for name in ("culverin", "demicann", "demiculv"):
+            image = Image.open(self.pdm.find(f"IMAGES/GOODS/GOODS/{name}64.tga")).convert("RGBA")
+            write_tx(image, self.resource / f"textures/interfaces/pdm/cannon_{name}.tga.tx", mip_chain=False)
+        return ([("PICTURE", "SHIPSPRITE"), ("PICTURE", "CANNONSPRITE")],
+                ["[SHIPSPRITE]", "position = 310,135,489,285", "bNotUse = 1", "",
+                 "[CANNONSPRITE]", "position = 62,416,126,480", "bNotUse = 1", ""])
 
     def stamp(self, file, name):
         """A brush of alpha (MAP.dll mask_black*.tga) centred in a power of two texture; returns the texture name."""

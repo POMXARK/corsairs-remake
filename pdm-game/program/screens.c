@@ -453,6 +453,12 @@ void Screen_ShipText()
 		// the picture of the ship in its frame (the original IMAGES/GOODS/SHIPS, ship_<id> of tools/pdm_ui.py)
 		SendMessage(&GameInterface, "lslls", MSG_INTERFACE_MSG_TO_NODE, "SHIPSPRITE", 2, 0, "interfaces\\pdm\\ship_" + id + ".tga");
 		SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "SHIPSPRITE", 1);
+		// the picture of the gun in its frame (GOODS/GOODS/<file>64.tga of the original, cannon_<file>)
+		if (CheckAttribute(PdmCannons, "Demi_culverins.filename"))
+		{
+			SendMessage(&GameInterface, "lslls", MSG_INTERFACE_MSG_TO_NODE, "CANNONSPRITE", 2, 0, "interfaces\\pdm\\cannon_" + Town_Lower(PdmCannons.Demi_culverins.filename) + ".tga");
+			SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "CANNONSPRITE", 1);
+		}
 		Screen_ShipyardRight();
 	}
 }
