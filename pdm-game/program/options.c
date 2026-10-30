@@ -115,7 +115,7 @@ void Options_SaveSettings()
 {
 	int voice = 0;
 	if (optionsVoice) { voice = 1; }
-	WriteTextFile("save/settings.ini", "volume_fx = " + optionsVolFx + "\nvolume_music = " + optionsVolMusic + "\nvolume_voice = " + optionsVolVoice + "\nnpc_voice = " + voice + "\n");
+	WriteTextFile(RUN_SAVEDIR + "/settings.ini", "volume_fx = " + optionsVolFx + "\nvolume_music = " + optionsVolMusic + "\nvolume_voice = " + optionsVolVoice + "\nnpc_voice = " + voice + "\n");
 }
 
 void Options_Volumes()

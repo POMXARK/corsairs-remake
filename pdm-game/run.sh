@@ -93,6 +93,12 @@ python3 -I "$TOOLS/pdm_logic2c.py" "$DIR/data" "$DIR/program"
 echo "string StartScene = \"${SCENE:-menu}\";" > "$DIR/program/data/start.c"
 echo "string StartTown = \"${TOWN:-City_GrandaAvilia}\";" >> "$DIR/program/data/start.c"
 echo "int TownAuto = ${TOWN_AUTO:-0};" >> "$DIR/program/data/start.c"
+# the test mode of THIS run as a define: a save carries the TownAuto of the run that wrote it, a define it does not (save.c OnLoad)
+echo "#define RUN_TOWNAUTO ${TOWN_AUTO:-0}" >> "$DIR/program/data/start.c"
+# the saves of a test run never touch the saves of the player (they used to: a test save loaded from the menu ran the autotest)
+SAVEDIR=save; [ "${TOWN_AUTO:-0}" != 0 ] && SAVEDIR=save-test
+echo "#define RUN_SAVEDIR \"$SAVEDIR\"" >> "$DIR/program/data/start.c"
+echo "#define RUN_SAVEPFX \"$SAVEDIR\\\"" >> "$DIR/program/data/start.c"
 # TOWN_AUTO=50 and CAM=cx,cy,cz,hx,hy,hz: the hero is put at h, the camera looks at him from c (a look at a sign)
 IFS=, read -r CX CY CZ HX HY HZ <<< "${CAM:-0,0,0,0,0,0}"
 for v in CX CY CZ HX HY HZ; do echo "float Town$v = $(LC_NUMERIC=C printf %.3f "${!v}");" >> "$DIR/program/data/start.c"; done
@@ -117,11 +123,12 @@ WINDOW=()
 [ "${FULLSCREEN:-}" = 0 ] && WINDOW+=(--windowed)
 [ -n "${SCREEN:-}" ] && WINDOW+=(--size "$SCREEN")
 # the saves of the game (program/save.c: F3, F7, the save leaving a town)
-mkdir -p "$DIR/save"
+mkdir -p "$DIR/$SAVEDIR"
 cd "$DIR"
 # GDB=1: the engine under gdb, a crash prints its backtrace into $BT (default crash-bt.txt in the checkout root)
 if [ "${GDB:-0}" = 1 ]; then
-    exec gdb -q -batch -ex "handle SIGPIPE nostop noprint" -ex run -ex "bt 40" -ex "thread apply all bt 12" \
+    gdb -q -batch -ex "handle SIGPIPE nostop noprint" -ex run -ex "bt 40" -ex "thread apply all bt 12" \
         --args "$ENGINE" "${WINDOW[@]}" "${@:2}" 2>&1 | tee "${BT:-$DIR/../../crash-bt.txt}"
+    exit 0   # not exec: in a pipeline it would leave the script going on to start the engine a second time
 fi
 exec "$ENGINE" "${WINDOW[@]}" "${@:2}"

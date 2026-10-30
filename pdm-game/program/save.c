@@ -73,14 +73,14 @@ bool Save_Write(string file)
 
 void Save_Quick()
 {
-	if (Save_Write(SAVEFILE_QUICK)) { Hud_Log("Игра сохранена"); }
+	if (Save_Write(RUN_SAVEPFX + "quick")) { Hud_Log("Игра сохранена"); }
 	else { Trace("PDM save: not here"); }
 }
 
 void Save_Auto()
 {
 	if (!optionsAutosave) { return; }
-	Save_Write(SAVEFILE_AUTOSAVE);
+	Save_Write(RUN_SAVEPFX + "auto");
 }
 
 // the engine loads the file at the start of the next frame and calls OnLoad; a file that is not there is
@@ -123,6 +123,9 @@ void OnLoad()
 {
 	Trace("PDM save: loaded " + savefile_info + ", at " + saveX + ", " + saveZ);
 	Save_ClearScenes();
+	// the globals of the file include the test mode of the run that wrote it (TownAuto): a town with TownAuto 1..50
+	// walks by itself and quits ("autotest finds no door"). The mode is the one of this run (start.c, a define)
+	TownAuto = RUN_TOWNAUTO;
 	// the save carries the tables of its time; a file older than the table (the weather) has it empty
 	PdmWeather_Init();
 	Pdm_Base();
@@ -227,7 +230,7 @@ void Save_ScreenRow(string line)
 
 void Save_ScreenFill()
 {
-	GameInterface.SavePath = "save";
+	GameInterface.SavePath = RUN_SAVEDIR;
 	saveFileCount = 0;
 	saveFileFirst = 0;
 	saveFileRows = 0;
@@ -274,7 +277,7 @@ void Save_ScreenDesc()
 {
 	string file = Save_ScreenFile();
 	string text = "";
-	if (file != "") { SendMessage(&GameInterface, "lse", MSG_INTERFACE_GET_SAVE_DATA, "save\" + file, &text); }
+	if (file != "") { SendMessage(&GameInterface, "lse", MSG_INTERFACE_GET_SAVE_DATA, RUN_SAVEPFX + file, &text); }
 	if (file == "" && screenName == "savegame") { text = "Новая запись: game" + Save_FreeNumber(); }
 	Screen_Text("EDITDESC", text);
 }
@@ -311,7 +314,7 @@ bool Save_ScreenClick(string node)
 	string file = Save_ScreenFile();
 	if (node == "LB_LOAD")
 	{
-		if (file != "") { Save_Load("save\" + file); }
+		if (file != "") { Save_Load(RUN_SAVEPFX + file); }
 		return true;
 	}
 	if (node == "LB_DELETE")
@@ -347,8 +350,8 @@ void Save_ScreenYes()
 // again. The header (the place, the money and the picture of the game) goes after the globals of the file
 void Save_FromScreen(string file)
 {
-	if (!Save_Write("save\" + file)) { Trace("PDM save: not here"); return; }
-	SendMessage(&GameInterface, "lss", MSG_INTERFACE_DO_SAVE_DATA, "save\" + file, savefile_info);
+	if (!Save_Write(RUN_SAVEPFX + file)) { Trace("PDM save: not here"); return; }
+	SendMessage(&GameInterface, "lss", MSG_INTERFACE_DO_SAVE_DATA, RUN_SAVEPFX + file, savefile_info);
 	Hud_Log("Игра сохранена");
 	screenNext = "";
 	screenGoing = true;
@@ -390,7 +393,7 @@ void Save_AutoStep()
 	}
 	if (saveAutoStep == 1 || saveAutoStep == 4)
 	{
-		Save_Load(SAVEFILE_QUICK);
+		Save_Load(RUN_SAVEPFX + "quick");
 		return;
 	}
 	if (saveAutoStep == 2)
@@ -452,7 +455,7 @@ void Save_ScreensSelect()
 		}
 	}
 	string text = "";
-	SendMessage(&GameInterface, "lse", MSG_INTERFACE_GET_SAVE_DATA, "save\" + Save_ScreenFile(), &text);
+	SendMessage(&GameInterface, "lse", MSG_INTERFACE_GET_SAVE_DATA, RUN_SAVEPFX + Save_ScreenFile(), &text);
 	Trace("PDM save: autotest, " + saveFileCount + " files, the cursor on " + Save_ScreenFile() + ": " + text);
 }
 

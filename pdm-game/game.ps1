@@ -95,7 +95,7 @@ function Invoke-Package
     Copy-Item -Recurse "$Dir/resource" "$Dist/game/resource"
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$Dist/game/resource/techniques"
     Copy-Item -Recurse "$bin/resource/techniques" "$Dist/game/resource/techniques"
-    'string StartScene = "menu";', 'string StartTown = "City_GrandaAvilia";', 'int TownAuto = 0;', 'int SoundFxOnly = 0;', 'int StartVolFx = 80;', 'int StartVolMusic = 70;', 'int StartVolVoice = 100;', 'int StartNpcVoice = 1;' |
+    'string StartScene = "menu";', 'string StartTown = "City_GrandaAvilia";', 'int TownAuto = 0;', '#define RUN_TOWNAUTO 0', '#define RUN_SAVEDIR "save"', '#define RUN_SAVEPFX "save\"', 'int SoundFxOnly = 0;', 'int StartVolFx = 80;', 'int StartVolMusic = 70;', 'int StartVolVoice = 100;', 'int StartNpcVoice = 1;' |
         Set-Content -Encoding ascii "$Dist/game/program/data/start.c"
     # the engine looks for program/ and resource/ in its working folder
     "@echo off`r`ncd /d `"%~dp0game`"`r`nstart `"`" `"%~dp0bin\engine.exe`" %*`r`n" | Set-Content -Encoding ascii -NoNewline "$Dist/play.bat"

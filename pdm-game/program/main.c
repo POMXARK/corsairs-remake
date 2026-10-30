@@ -11,8 +11,8 @@
 // save.c, here for the files included before it: the files of the quick save and of the save made leaving a town,
 // the delay of that one, the autotest of saving and loading. SAVEFILE_, not SAVE_: the compiler does not tell
 // the case of names, SAVE_QUICK would be the function Save_Quick
-#define SAVEFILE_QUICK "save\quick"
-#define SAVEFILE_AUTOSAVE "save\auto"
+// the saves of a test run (TOWN_AUTO) go to save-test, not to the saves of the player: RUN_SAVEDIR, RUN_SAVEPFX of start.c (run.sh);
+// the quick save is RUN_SAVEPFX + "quick", the auto one RUN_SAVEPFX + "auto" (a define cannot hold the +)
 #define SAVEFILE_AUTO_MS 1000
 #define SAVEFILE_AUTO 12
 #define SAVEFILE_SCREENS_AUTO 13
@@ -154,7 +154,7 @@ void Pdm_Control()
 	// Escape on a screen goes back, the keys of the scene wait under it
 	if (control == "Pdm_Quit" && Screen_Escape()) { return; }
 	// F7 loads anywhere, even from the menu; F3 saves only in the game (save.c)
-	if (control == "Save_Load") { Save_Load(SAVEFILE_QUICK); return; }
+	if (control == "Save_Load") { Save_Load(RUN_SAVEPFX + "quick"); return; }
 	if (screenOverGame) { return; }
 	if (control == "Save_Quick") { Save_Quick(); return; }
 	if (control == "Screen_Status") { Screen_Status(); return; }

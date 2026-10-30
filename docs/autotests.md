@@ -205,3 +205,7 @@ corsairs-remake/pdm-game/autotests.sh build/Debug/engine sign-tavern-front sign-
 corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City_HighRock
 ```
 `autotests.sh` читает необязательное седьмое поле сценария — переменные `run.sh` словами `ИМЯ=значение` (здесь `CAM=…`). Автотест проверяет только, что модель вывесок загружена и `error.log` пуст; читаемость текста — по кадрам `sign-shots.sh` (зеркальный текст сразу виден). Запись иногда не стартует (`x11grab Failed to translate xcb geometry`): `sign-shots.sh` повторяет запуск до трёх раз.
+
+## Тестовые и игровые файлы не смешиваются
+
+Запуск с `TOWN_AUTO≠0` (любой автотест) пишет сохранения и `settings.ini` в `pdm-game/save-test/`, обычная игра — в `pdm-game/save/` (`run.sh` кладёт `RUN_SAVEDIR`/`RUN_SAVEPFX` в `start.c`). Режим теста берётся из запуска (`RUN_TOWNAUTO`), а не из файла сохранения: иначе сейв, записанный тестом, при загрузке из меню запускал автотест, и игра закрывалась (`autotest finds no door`). Новый тест, который пишет файлы, должен брать пути из `RUN_SAVEPFX`/`RUN_SAVEDIR`, а не из литерала `save\`.
