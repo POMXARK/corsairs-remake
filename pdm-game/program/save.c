@@ -128,6 +128,8 @@ void OnLoad()
 	TownAuto = RUN_TOWNAUTO;
 	// the save carries the tables of its time; a file older than the table (the weather) has it empty
 	PdmWeather_Init();
+	// the texts of the screens are static too: a save from before a new text came has none of it (the shipyard)
+	PdmScreens_Init();
 	Pdm_Base();
 	// the town keeps its handlers from its first start; landing after a load needs them as well
 	Town_Handlers();
@@ -380,6 +382,8 @@ void Save_AutoStep()
 	float x, y, z;
 	if (saveAutoStep == 0 || saveAutoStep == 3)
 	{
+		// a file of an older version: it has no texts of the shipyard, the load has to bring them back
+		if (saveAutoStep == 0) { DeleteAttribute(&PdmScreens, "shipyard.t"); }
 		saveAutoStep++;
 		Save_Quick();
 		if (saveFrom == "sea") { PostEvent("Sea_ToPort", 0); }
@@ -408,7 +412,8 @@ void Save_AutoStep()
 	}
 	SendMessage(&TownHero, "leee", MSG_CHARACTER_GETPOS, &x, &y, &z);
 	Trace("PDM save: autotest, the hero in " + townHere + " at " + x + ", " + z + ", saved at " + saveX + ", " + saveZ);
-	Trace("PDM: autotest done, save");
+	if (!CheckAttribute(&PdmScreens, "shipyard.t.money")) { Trace("PDM save: FAIL, the texts of the shipyard are not back after the load"); }
+	else { Trace("PDM: autotest done, save"); }
 	ExitProgram();
 }
 
