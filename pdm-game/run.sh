@@ -17,6 +17,7 @@
 # SCENE=sea TOWN_AUTO=13 saves from the menu over the game, loads that file from the list, deletes it, sets the
 # window to 1600x900 in the options and back, and quits;
 # SCENE=cutscene plays the intro movie and quits, SCENE=cutscene-<movie> one movie of DESC (bunt, death, scene8...); SCENE=story runs the self-test of the story machine (every action of the original) and quits.
+# GDB=1 runs the engine under gdb and writes the backtrace of a crash into crash-bt.txt (BT=<file> changes it).
 # The window (docs/build.md): FULLSCREEN=1 the full screen, FULLSCREEN=0 a window with a frame, SCREEN=1920x1080 its size;
 # by default engine.ini (a window of 1280x720). The engine options --fullscreen, --windowed, --size WxH do the same.
 # VOLUME_FX, VOLUME_MUSIC, VOLUME_VOICE (0..100) and NPC_VOICE=0|1 set the sound of the page "Настройки" at the start, as
@@ -118,4 +119,9 @@ WINDOW=()
 # the saves of the game (program/save.c: F3, F7, the save leaving a town)
 mkdir -p "$DIR/save"
 cd "$DIR"
+# GDB=1: the engine under gdb, a crash prints its backtrace into $BT (default crash-bt.txt in the checkout root)
+if [ "${GDB:-0}" = 1 ]; then
+    exec gdb -q -batch -ex "handle SIGPIPE nostop noprint" -ex run -ex "bt 40" -ex "thread apply all bt 12" \
+        --args "$ENGINE" "${WINDOW[@]}" "${@:2}" 2>&1 | tee "${BT:-$DIR/../../crash-bt.txt}"
+fi
 exec "$ENGINE" "${WINDOW[@]}" "${@:2}"
