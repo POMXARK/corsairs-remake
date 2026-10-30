@@ -441,6 +441,11 @@ class Converter:
         a value of the screen (s_Xxx). The text of txt:"#Key#" is there from the start."""
         name = self.font(a.get("font", "logbook,18"))
         x, y = self.position(a, w, h)
+        line = round(self.fonts[name][2])
+        if a.get("type") == "2" and h > line:
+            # type:2 of the original centres the text in its box, ours sits at the top of it (a title in a thin bar)
+            y += (h - line) // 2
+            h = line
         if align is None:
             align = "center" if "xo" in a else "right" if "xr" in a else "left"
         lines = [f"[{key.upper()}]", f"position = {x},{y},{x + w},{y + h}", f"font = {name}",
