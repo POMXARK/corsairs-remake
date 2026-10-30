@@ -5,7 +5,6 @@
 // check-hi.tga off (<NODE>_OFF of tools/pdm_ui.py over the button). What the game has not got yet (the mouse
 // inverted, the antialiasing, the simple textures, the gamma, the difficulty) is shown off and cannot be chosen.
 
-#define MSG_INTERFACE_SET_NODE_USING 45016
 // the sizes the resolution goes through; the current one is put among them if it is not one of them (ours)
 #define OPTIONS_SIZES "1280x720,1366x768,1600x900,1920x1080,2560x1440"
 #define OPTIONS_REOPEN_MS 200

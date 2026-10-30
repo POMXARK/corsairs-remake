@@ -279,6 +279,17 @@ class Converter:
         write_tx(canvas, self.resource / f"textures/interfaces/pdm/{name}.tga.tx", mip_chain=False)
         return f"interfaces\\pdm\\{name}.tga", w, h
 
+    def ship_portraits(self):
+        """The pictures of the ships (IMAGES/GOODS/SHIPS/<id>_lg.tga) as ship_<id> textures, stretched to the whole
+        power of two texture (the node stretches them back), and SHIPSPRITE, the frame of shipsprite_rect where the
+        script puts one (MSG_INTERFACE_MSG_TO_NODE, 2)."""
+        folder = self.pdm.find("IMAGES/GOODS/SHIPS")
+        for f in sorted(folder.glob("*_lg.tga"), key=lambda f: f.name.lower()):
+            image = Image.open(f).convert("RGBA").resize((256, 256), Image.LANCZOS)
+            write_tx(image, self.resource / f"textures/interfaces/pdm/ship_{f.name[:-7].lower()}.tga.tx",
+                     mip_chain=False)
+        return [("PICTURE", "SHIPSPRITE")], ["[SHIPSPRITE]", "position = 310,135,489,285", "bNotUse = 1", ""]
+
     def stamp(self, file, name):
         """A brush of alpha (MAP.dll mask_black*.tga) centred in a power of two texture; returns the texture name."""
         image = Image.open(self.pdm.find(self.base + file)).convert("RGBA")
@@ -587,6 +598,15 @@ class Converter:
                 y = self.position(a, 0, h)[1]
                 if y < 40:
                     notes.append(f"; {key} = {value}")  # a value inside a row of a list (s_OfficerName)
+                    # or a text the DLL puts where it wants (xl:0,yl:0): "Деньги %d" of the shipyard, for the scripts
+                    if y == 0 and text_key(a.get("txt", "")) in self.strings:
+                        self.messages.setdefault(out_name, {})[low[2:]] = self.strings[text_key(a["txt"])]
+                    if low == "s_money" and out_name == "shipyard":
+                        # where the DLL puts it: the right bottom of the screen (the screenshot of the original, ours)
+                        x, y, l = self.field("EditShipMoney", dict(a, xl="560", yl="530", font="logbook,20",
+                                                                  rgb="250,240,175", txt=""), 200, 30)
+                        nodes.append(("FORMATEDTEXT", "EDITSHIPMONEY"))
+                        lines += l + [""]
                     continue
                 # the text of the value: "Ранг %d", a unit after the value ("узлов") or nothing; the script
                 # puts the value in (PdmScreens), the node shows no %d before it
@@ -603,6 +623,10 @@ class Converter:
                     self.messages.setdefault(out_name, {})[low[2:]] = self.strings[text_key(value)]
             elif low == "titletxt":
                 pass
+            elif low.startswith("e_") and text_key(value.strip()) in self.strings:
+                # the messages of the screen (e_BuyButClass = #ShipYardBuyButClass#), for the scripts
+                self.messages.setdefault(out_name, {})[low[2:]] = self.strings[text_key(value.strip())]
+                notes.append(f"; {key} = {value}")
             else:
                 if low.startswith("p_"):
                     columns[key[2:].upper()] = int(re.split(r"[,/ \t]", value)[0])
@@ -666,6 +690,10 @@ class Converter:
                 lines += [f"[{node}_OFF]", f"position = {x},{y},{x + w},{y + h}", f"textureName = {tex}",
                           f"textureRect = 0,{(h + 2) / th:g},{w / tw:g},{(2 * h + 2) / th:g}", "bNotUse = 1", ""]
 
+        if out_name == "shipyard":
+            n, l = self.ship_portraits()
+            nodes += n
+            lines += l
         if section == "Options":
             n, l = self.options_volume()
             nodes += n
@@ -791,6 +819,10 @@ class Converter:
         a %s the scripts fill (the island of the trade and the shipyard), .s.<S_XXX>, the texts of the
         values of the screen, .list.<column> = LIST_<COLUMN>, the columns of its list, .t.<name>, the texts
         of its message boxes, and PdmScreens.goods / .items (names())."""
+        # the texts of the shipyard the DLL takes by name: the guns, "Ваш корабль", the boat
+        for key in ("Weapon0", "Weapon1", "Weapon2", "YourShip", "BoatWelcome"):
+            if "ShipYard" + key in self.strings:
+                self.messages.setdefault("shipyard", {})[key.lower()] = self.strings["ShipYard" + key]
         lines = [f'\tPdmScreens.{name}.title = {n};\n\tPdmScreens.{name}.text = "{text}";'
                  for name, (n, text) in sorted(self.places.items())]
         lines += [f'\tPdmScreens.{name}.s.{node} = "{text}";'

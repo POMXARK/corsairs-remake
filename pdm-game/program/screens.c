@@ -9,6 +9,7 @@
 // the town (the test without key presses).
 
 #define MSG_INTERFACE_SET_FORMATEDTEXT 45038
+#define MSG_INTERFACE_SET_NODE_USING 45016
 #define SCREEN_KEY 112
 #define SCREEN_AUTO_MS 2500
 // the scene is drawn by then, the log of the HUD (65535) is not
@@ -180,9 +181,10 @@ void Screen_Fill()
 	string ship = PlayerShipCard.name;
 	if (screenName == "shipyard")
 	{
-		// the original has no name here; its "Деньги N" stands at the right bottom, EDITFACEMONEY of the ini is elsewhere (gaps-plan 1.13)
+		// the original has no name here; its "Деньги N" stands at the right bottom (EDITSHIPMONEY, tools/pdm_ui.py)
 		Screen_Text("EDITFACENAME", "");
 		Screen_Text("EDITFACEMONEY", "");
+		Screen_Text("EDITSHIPMONEY", Screen_Put(PdmScreens.shipyard.t.money, PlayerCard.money));
 	}
 	else
 	{
@@ -375,16 +377,51 @@ string Screen_Board(string list)
 	return n + " + " + n;
 }
 
+// the best class the rank lets command (ours: the original counts it in TOWN.dll)
+int Screen_RankClass(int rank)
+{
+	if (rank >= 25) { return 1; }
+	if (rank >= 20) { return 2; }
+	if (rank >= 15) { return 3; }
+	if (rank >= 10) { return 4; }
+	if (rank >= 5) { return 5; }
+	return 6;
+}
+
+string Screen_Decimal(string value)
+{
+	if (screenName != "shipyard") { return value; }
+	if (findSubStr(value, ".", 0) >= 0) { return value; }
+	return value + ".0";
+}
+
+// what the shipyard of the original does not show for this hero: the sheathing and the refit buttons, the
+// rows of the gun prices (they stay empty there too)
+void Screen_ShipyardHide()
+{
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "LB_UPGRADE", false);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "LB_REFIT", false);
+	string nodes = "S_LBS0,S_LBS1,S_GOLD0,S_GOLD1";
+	int at = 0;
+	while (at < strlen(nodes))
+	{
+		int end = findSubStr(nodes, ",", at);
+		if (end < 0) { end = strlen(nodes); }
+		Screen_Text(strcut(nodes, at, end - 1), "");
+		at = end + 1;
+	}
+}
+
 // the right window of the shipyard: the types by class, "Ваш корабль" on top, the price and the rank under it
 // (the texts are of the screenshot of the original: they are not in the files read so far)
 void Screen_ShipyardRight()
 {
-	string list = "Ваш корабль\n";
+	string list = PdmScreens.shipyard.t.yourship + "\n";
 	int rank = sti(PlayerCard.rank);
 	int n = GetAttributesNum(&PdmShipTypes);
 	for (int c = 5; c <= 6; c++)
 	{
-		list = list + "\nКласс " + c + "\n";
+		list = list + "\n" + Screen_Put(PdmScreens.shipyard.t.classorder, "" + c) + "\n";
 		for (int i = 0; i < n; i++)
 		{
 			aref type;
@@ -395,11 +432,12 @@ void Screen_ShipyardRight()
 		}
 	}
 	Screen_Text("EDITSHIP", list);
-	Screen_Text("EDITSUMMA", "Цена корабля " + PlayerShipType.sellprice);
-	Screen_Text("EDITDAMAGES", "Урона на 0");
-	Screen_Text("EDITHELP", "Ваш ранг позволяет управлять вам кораблями до 6 класса");
+	Screen_Text("EDITSUMMA", Screen_Put(PdmScreens.shipyard.t.shipcost, PlayerShipType.sellprice));
+	Screen_Text("EDITDAMAGES", Screen_Put(PdmScreens.shipyard.t.shipdamages, "0"));
+	Screen_Text("EDITHELP", Screen_Put(PdmScreens.shipyard.t.buybutclass, "" + Screen_RankClass(rank)));
 	Screen_Text("EDITHULL", "100%");
 	Screen_Text("EDITRIG", "100%");
+	Screen_ShipyardHide();
 	Screen_Text("EDITHULLSUM", "0");
 	Screen_Text("EDITRIGSUM", "0");
 }
@@ -410,7 +448,13 @@ void Screen_ShipText()
 	string id = PlayerShipType.id;
 	if (CheckAttribute(PdmScreens, "ships." + id + ".name")) { Screen_Text("EDITSHIPTYPE", PdmScreens.ships.(id).name); }
 	if (CheckAttribute(PdmScreens, "ships." + id + ".about")) { Screen_Text("EDITDESC", PdmScreens.ships.(id).about); }
-	if (screenName == "shipyard") { Screen_ShipyardRight(); }
+	if (screenName == "shipyard")
+	{
+		// the picture of the ship in its frame (the original IMAGES/GOODS/SHIPS, ship_<id> of tools/pdm_ui.py)
+		SendMessage(&GameInterface, "lslls", MSG_INTERFACE_MSG_TO_NODE, "SHIPSPRITE", 2, 0, "interfaces\\pdm\\ship_" + id + ".tga");
+		SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "SHIPSPRITE", 1);
+		Screen_ShipyardRight();
+	}
 }
 
 // the numbers of the gun of the hero: "12,400,40,27" is the shot, the range, the reload and the weight
@@ -447,8 +491,9 @@ string Screen_Value(string node)
 	if (node == "S_TYPE") { return PlayerShipType.type; }
 	if (node == "S_CLASS") { return PlayerShipType.class; }
 	if (node == "S_HITPOINTS") { return PlayerShipType.hitpoint; }
-	if (node == "S_SPEEDRATE") { return PlayerShipType.speedrate; }
-	if (node == "S_TURNRATE") { return PlayerShipType.turnrate; }
+	// the shipyard shows them with a decimal: "9.0", "55.0"
+	if (node == "S_SPEEDRATE") { return Screen_Decimal(PlayerShipType.speedrate); }
+	if (node == "S_TURNRATE") { return Screen_Decimal(PlayerShipType.turnrate); }
 	if (node == "S_MAXCREW") { return PlayerShipType.maxcrew; }
 	if (node == "S_MINCREW") { return PlayerShipType.mincrew; }
 	if (node == "S_CAPACITY" || node == "S_MAXWEIGHT") { return PlayerShipType.capacity; }
