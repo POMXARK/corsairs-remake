@@ -569,7 +569,7 @@ bool Screen_ShipyardClick(string node)
 		string own = PlayerShipType.id;
 		PlayerCard.money = sti(PlayerCard.money) + Screen_ShipSellPrice(own);
 		shipyardSold = true;
-		Screen_Text("EDITSHIPMONEY", Screen_Put(PdmScreens.shipyard.t.money, PlayerCard.money));
+		Screen_Fill();
 		Trace("PDM shipyard: sold " + own + ", money " + PlayerCard.money);
 		return true;
 	}
@@ -584,8 +584,7 @@ bool Screen_ShipyardClick(string node)
 		PlayerShipCard.type_key = id;
 		makearef(PlayerShipType, PdmShipTypes.(id));
 		shipyardSold = false;
-		Screen_ShipText();
-		Screen_Text("EDITSHIPMONEY", Screen_Put(PdmScreens.shipyard.t.money, PlayerCard.money));
+		Screen_Fill();
 		Trace("PDM shipyard: bought " + id + ", money " + PlayerCard.money);
 		return true;
 	}
