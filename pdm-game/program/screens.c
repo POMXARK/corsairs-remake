@@ -795,18 +795,39 @@ int Screen_RigFix()
 	return shipyardRigFix;
 }
 
-bool Screen_ShipyardRepair(bool hull, bool rig)
+int Screen_RepairCost() { return Screen_RepairPrice(Screen_HullFix(), true) + Screen_RepairPrice(Screen_RigFix(), false); }
+
+// the arrows and Repair All of the original lower the chosen percent by one until the money is enough
+void Screen_TrimHull()
 {
-	int cost = 0;
+	shipyardHullFix = Screen_HullFix();
+	while (shipyardHullFix > 0 && sti(PlayerCard.money) < Screen_RepairCost()) { shipyardHullFix--; }
+}
+
+void Screen_TrimRig()
+{
+	shipyardRigFix = Screen_RigFix();
+	while (shipyardRigFix > 0 && sti(PlayerCard.money) < Screen_RepairCost()) { shipyardRigFix--; }
+}
+
+// Repair: the chosen percent of the hull and of the rig at once; Repair All: first the whole wear, then what the money allows
+bool Screen_ShipyardRepair(bool all)
+{
+	if (all)
+	{
+		shipyardHullFix = 100 - Screen_HullPercent();
+		shipyardRigFix = 100 - Screen_RigPercent();
+		Screen_TrimHull();
+		Screen_TrimRig();
+	}
 	int hullFix = Screen_HullFix();
 	int rigFix = Screen_RigFix();
-	if (hull) { cost = cost + Screen_RepairPrice(hullFix, true); }
-	if (rig) { cost = cost + Screen_RepairPrice(rigFix, false); }
-	if (cost == 0) { return true; }
+	int cost = Screen_RepairCost();
+	if (cost == 0 && hullFix == 0 && rigFix == 0) { return true; }
 	if (sti(PlayerCard.money) < cost) { Screen_Text("EDITHELP", PdmScreens.shipyard.t.buybutmoney); Trace("PDM shipyard: refused, no money for repair"); return true; }
 	PlayerCard.money = sti(PlayerCard.money) - cost;
-	if (hull) { PlayerShipCard.hull_hp = MakeInt((Screen_HullPercent() + hullFix) * stf(PlayerShipType.hitpoint) / 100.0); }
-	if (rig) { PlayerShipCard.rig = Screen_RigPercent() + rigFix; }
+	PlayerShipCard.hull_hp = MakeInt((Screen_HullPercent() + hullFix) * stf(PlayerShipType.hitpoint) / 100.0);
+	PlayerShipCard.rig = Screen_RigPercent() + rigFix;
 	shipyardHullFix = -1;
 	shipyardRigFix = -1;
 	Screen_Fill();
@@ -817,11 +838,11 @@ bool Screen_ShipyardRepair(bool hull, bool rig)
 bool Screen_ShipyardClick(string node)
 {
 	if (node == "LB_LEFTHULL") { shipyardHullFix = Screen_HullFix() - 10; if (shipyardHullFix < 0) { shipyardHullFix = 0; } Screen_Fill(); return true; }
-	if (node == "LB_RIGHTHULL") { shipyardHullFix = Screen_HullFix() + 10; Screen_Fill(); return true; }
+	if (node == "LB_RIGHTHULL") { shipyardHullFix = Screen_HullFix() + 10; Screen_TrimHull(); Screen_Fill(); return true; }
 	if (node == "LB_LEFTRIG") { shipyardRigFix = Screen_RigFix() - 10; if (shipyardRigFix < 0) { shipyardRigFix = 0; } Screen_Fill(); return true; }
-	if (node == "LB_RIGHTRIG") { shipyardRigFix = Screen_RigFix() + 10; Screen_Fill(); return true; }
-	if (node == "LB_REPAIR") { return Screen_ShipyardRepair(true, false); }
-	if (node == "LB_REPAIRALL") { return Screen_ShipyardRepair(true, true); }
+	if (node == "LB_RIGHTRIG") { shipyardRigFix = Screen_RigFix() + 10; Screen_TrimRig(); Screen_Fill(); return true; }
+	if (node == "LB_REPAIR") { return Screen_ShipyardRepair(false); }
+	if (node == "LB_REPAIRALL") { return Screen_ShipyardRepair(true); }
 	if (node == "EDITSHIP")
 	{
 		int row = SendMessage(&GameInterface, "lsl", MSG_INTERFACE_MSG_TO_NODE, "EDITSHIP", 11);
@@ -1108,13 +1129,24 @@ void Screen_ShipyardVerify()
 	Screen_ShipyardClick("LB_LEFTHULL");
 	Screen_ShipyardClick("LB_LEFTHULL");
 	if (Screen_HullFix() != 30) { Trace("PDM shipyard: arrows FAIL, fix " + Screen_HullFix()); }
-	Screen_ShipyardRepair(true, false);
+	shipyardRigFix = 0;
+	Screen_ShipyardRepair(false);
 	if (Screen_HullPercent() != 80) { Trace("PDM shipyard: partial FAIL, hull " + Screen_HullPercent()); }
 	before = sti(PlayerCard.money);
 	cost = Screen_RepairPrice(100 - Screen_HullPercent(), true) + Screen_RepairPrice(100 - Screen_RigPercent(), false);
-	Screen_ShipyardRepair(true, true);
+	Screen_ShipyardRepair(true);
 	if (Screen_HullPercent() == 100 && Screen_RigPercent() == 100 && sti(PlayerCard.money) == before - cost && cost > 0) { Trace("PDM shipyard: repair ok"); }
 	else { Trace("PDM shipyard: repair FAIL, hull " + Screen_HullPercent() + ", rig " + Screen_RigPercent() + ", money " + PlayerCard.money + ", want " + (before - cost)); }
+	// not enough money for the whole wear: Repair All repairs what the money allows
+	PlayerShipCard.hull_hp = sti(PlayerShipType.hitpoint) / 2;
+	PlayerShipCard.rig = 50;
+	shipyardHullFix = -1;
+	shipyardRigFix = -1;
+	PlayerCard.money = Screen_RepairPrice(50, false) / 2;
+	Screen_ShipyardRepair(true);
+	// the hull is lowered first, so the money goes to the rig
+	if (Screen_HullPercent() == 50 && Screen_RigPercent() > 50 && Screen_RigPercent() < 100 && sti(PlayerCard.money) >= 0 && sti(PlayerCard.money) < 10) { Trace("PDM shipyard: partial repair ok"); }
+	else { Trace("PDM shipyard: partial repair FAIL, hull " + Screen_HullPercent() + ", rig " + Screen_RigPercent() + ", money " + PlayerCard.money); }
 }
 
 // SCENE=screens: the pages of the menu, a new game, F1 in the town and its button "Корабль", the other
