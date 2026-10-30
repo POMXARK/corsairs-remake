@@ -7,7 +7,7 @@ location before they are merged by texture:
 - a tree (tree, tree2, tree3, kust2): the planes of one tree are found by their common foot; a trunk of rings and a
   crown of lumpy blobs take its place. The blobs are laid in the silhouette of the picture (its alpha), the leaves
   are the opaque part of the same picture with the holes filled, so the colours stay where they were;
-- a sign (viveska_*): the silhouette of its alpha is extruded to a board with a front and a back, the sides are
+- a sign (viveska_*, or tavern, ship_yard, store in High Rock): the silhouette of its alpha is extruded to a board with a front and a back, the sides are
   the colour of the picture edge.
 New pictures (leaves, bark) are handed back in `generated` and written next to the other textures.
 Every number comes from the position of the sprite, so a second run gives the same files.
@@ -21,6 +21,7 @@ from PIL import Image, ImageFilter
 TREES = {"tree", "tree2", "tree3", "kust2"}
 PALMS = {"palma-stvol"}
 SIGN_PREFIX = "viveska_"
+SIGN_NAMES = {"tavern", "ship_yard", "store"}   # the English towns (High Rock) name them without the prefix
 BARK = "pdm_bark.tga"
 
 BLOBS = 50        # most blobs in a crown
@@ -540,7 +541,7 @@ def build(meshes, image, generated, mesh_cls):
             trees.setdefault(stem, []).append(m)
         elif stem in PALMS and is_quad(m):
             palms.setdefault(stem, []).append(m)
-        elif stem.startswith(SIGN_PREFIX) and is_quad(m):
+        elif (stem.startswith(SIGN_PREFIX) or stem in SIGN_NAMES) and is_quad(m):
             signs.setdefault(stem, []).append(m)
         else:
             out.append(m)

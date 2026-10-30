@@ -193,6 +193,7 @@ void Town_Handlers()
 	SetEventHandler("Town_Tick", "Town_Tick", 0);
 	SetEventHandler("Town_Wander", "Town_Wander", 0);
 	SetEventHandler("Town_AutoGo", "Town_AutoGo", 0);
+	SetEventHandler("Town_CamLook", "Town_CamLook", 0);
 	SetEventHandler("Town_AutoWhere", "Town_AutoWhere", 0);
 	SetEventHandler("Town_AutoQuit", "Town_AutoQuit", 0);
 	SetEventHandler("Town_AutoTalk", "Town_AutoTalk", 0);
@@ -324,6 +325,7 @@ void Town_Load(string loc, string from)
 	// the autotest of saving (save.c) has no walk of its own
 	if (TownAuto == 20) { PostEvent("Town_WindWalk", 3000); }
 	else if (TownAuto == 30) { PostEvent("Town_CharWalk", 3000); }
+	else if (TownAuto == 50) { PostEvent("Town_CamLook", 3000); }
 	else if (TownAuto == 40 || TownAuto == 41) { PostEvent("TownFace_Start", 3000); }
 	else if (TownAuto && TownAuto != SAVEFILE_AUTO) { PostEvent("Town_AutoGo", 3000); }
 	Trace("PDM town: in " + loc + " from " + from + ", " + townNpcCount + " characters");
@@ -358,6 +360,14 @@ int Town_FindPoint(aref data, int pointType, string link)
 		if (link == "" || pointLink == link) { return i; }
 	}
 	return -1;
+}
+
+// TOWN_AUTO=50: the hero stands at (TownHX, TownHY, TownHZ), the camera looks at him from (TownCX, TownCY, TownCZ)
+void Town_CamLook()
+{
+	SendMessage(&TownHero, "lffff", MSG_CHARACTER_TELEPORT_AY, TownHX, TownHY, TownHZ, 0.0);
+	SendMessage(&TownCamera, "lfffl", MSG_CAMERA_TOPOS, TownCX, TownCY, TownCZ, 1);
+	Trace("PDM town: camera look from " + TownCX + ", " + TownCY + ", " + TownCZ);
 }
 
 void Town_Teleport(ref chr, aref data, int point)

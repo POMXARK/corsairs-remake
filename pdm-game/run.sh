@@ -92,6 +92,9 @@ python3 -I "$TOOLS/pdm_logic2c.py" "$DIR/data" "$DIR/program"
 echo "string StartScene = \"${SCENE:-menu}\";" > "$DIR/program/data/start.c"
 echo "string StartTown = \"${TOWN:-City_GrandaAvilia}\";" >> "$DIR/program/data/start.c"
 echo "int TownAuto = ${TOWN_AUTO:-0};" >> "$DIR/program/data/start.c"
+# TOWN_AUTO=50 and CAM=cx,cy,cz,hx,hy,hz: the hero is put at h, the camera looks at him from c (a look at a sign)
+IFS=, read -r CX CY CZ HX HY HZ <<< "${CAM:-0,0,0,0,0,0}"
+for v in CX CY CZ HX HY HZ; do echo "float Town$v = $(LC_NUMERIC=C printf %.3f "${!v}");" >> "$DIR/program/data/start.c"; done
 # HOUR=<0..24> starts the day of the sea at that hour (weather.ini periods), default 9
 echo "float StartHour = $(LC_NUMERIC=C printf %.2f "${HOUR:-9}");" >> "$DIR/program/data/start.c"
 # TOWN_AUTO=2 with TALK_NPC=<id> and TALK_ANGLE=<degrees>: the hero talks to that character from that side (talk-angles.sh)
