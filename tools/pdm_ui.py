@@ -611,7 +611,9 @@ class Converter:
         nodes, lines = [], []
         for group in ("SHIP", "SHOP"):
             area = areas.get(f"EDIT{group}TOVARS")
-            cols = sorted((x, name) for name, x in columns.items() if name.startswith(group))
+            # [Transfer]: the names of the goods of the other ship (p_ShipTovarName1) stand in its list, over the store column
+            cols = sorted((x, name) for name, x in columns.items()
+                          if (group == "SHOP") == (name.startswith("SHOP") or name.endswith("TOVARNAME1")) and name.startswith(("SHIP", "SHOP")))
             if area is None or not cols:
                 continue
             x, y, w, h, a = area

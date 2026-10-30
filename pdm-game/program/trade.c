@@ -31,6 +31,8 @@ string tradeHelp = "";
 object PdmStore;
 object PlayerFleet;
 
+object PrizeShip;
+
 int Trade_Goods()
 {
 	aref all;
@@ -453,6 +455,41 @@ void Trade_Lists()
 	string line = tradeHelp;
 	if (line == "") { line = Screen_Put(PdmScreens.trade.t.money, PlayerCard.money); }
 	Screen_Text("EDITHELP", line);
+}
+
+// [Transfer] of the ransack: the goods of the hero's hold on the left, of the prize ship (PrizeShip.cargo.n<i>) on the right,
+// one row a kind of goods that is on board, with the weight and the room of the hold above the lists
+void Trade_TransferLists()
+{
+	string names = "";
+	string onboard = "";
+	string otherNames = "";
+	string otherCount = "";
+	int all = Trade_Goods();
+	for (int i = 0; i < all; i++)
+	{
+		string id = Trade_Id(i);
+		string goods = Screen_Name("goods", PdmGoods.(id).filename, "name");
+		int mine = Trade_Onboard(i);
+		if (mine > 0)
+		{
+			names = names + goods + "\n";
+			onboard = onboard + mine + "\n";
+		}
+		string at = "n" + i;
+		if (CheckAttribute(&PrizeShip, "cargo." + at))
+		{
+			otherNames = otherNames + goods + "\n";
+			otherCount = otherCount + PrizeShip.cargo.(at) + "\n";
+		}
+	}
+	Screen_Text(PdmScreens.transfer.list.shiptovarname, names);
+	Screen_Text(PdmScreens.transfer.list.shiponboard, onboard);
+	Screen_Text(PdmScreens.transfer.list.shiptovarname1, otherNames);
+	Screen_Text(PdmScreens.transfer.list.shopstore, otherCount);
+	Screen_Text("EDITOURWEIGHT", "" + (Trade_Twentieths() / 20));
+	Screen_Text("EDITOURCAPACITY", "" + Trade_ShipCapacity());
+	Screen_Text("EDITOURMONEY", PlayerCard.money);
 }
 
 // the sale: the piece by piece, as many as the stock, the hold and the money allow

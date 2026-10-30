@@ -189,6 +189,7 @@ void Screen_Fill()
 	if (screenName == "credits") { Screen_Credits(); return; }
 	Screen_TitlePlace();
 	if (screenName == "trade") { Trade_Lists(); }
+	if (screenName == "transfer") { Trade_TransferLists(); }
 	// the name and the money under the face would read as the ones of the save under the cursor
 	if (screenName == "loadgame" || screenName == "savegame") { Save_ScreenFill(); return; }
 	if (!CheckAttribute(PlayerCard, "money")) { return; }
