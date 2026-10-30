@@ -658,15 +658,15 @@ string Screen_Value(string node)
 }
 
 
-// the price of a ship the shipyard asks (A of the original) and gives (B), in hundreds; the skill and the
-// reputation of the hero are not mapped yet (docs/original-vs-remake.md), so the spread is 0
+// the price of a ship the shipyard asks (A of the original) and gives (B), in hundreds;
 // the correction of the price of the original: |A-B| * 0.5 * (R+K) * 0.01, K the Commerce of the hero (skill 2 of
-// skills.idf: sailing, repair, commerce) times 5, up to 95; R (+0x3d8 of the hero, reputation?) is not known: 0 (ours)
+// skills.idf: sailing, repair, commerce) times 5, up to 95; R the reputation part of Trade_Rep (+0x3d8 of the hero)
 int Screen_PriceShift(string id)
 {
 	int k = 0;
 	if (CheckAttribute(PlayerCard, "skills.commerce")) { k = sti(PlayerCard.skills.commerce) * 5; }
 	if (k > 95) { k = 95; }
+	k = k + Trade_Rep();
 	int gap = sti(PdmShipTypes.(id).buyprice) - sti(PdmShipTypes.(id).sellprice);
 	if (gap < 0) { gap = -gap; }
 	return MakeInt(gap * 0.5 * k * 0.01);

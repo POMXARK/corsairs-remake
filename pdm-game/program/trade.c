@@ -12,10 +12,11 @@
 // The hero's skill shifts them: with t = the Trade skill * 5 (up to 95) the store asks A - (price - A) * t%, pays
 // B + (A' - B) * t%, never below 1 and never above what it asks. The prices stand while the window is open, only the stock
 // moves with each piece.
+// t = the Trade skill * 5 (up to 95) + the reputation part (Trade_Rep: reputation of the hero moved 5 away from 0, tenths cut,
+// times 10, within -30..30); when the two prices meet, the store pays one less with a chance of a half (rand).
 // Ours: the original counts the days since the last visit by the date of the game (the store fills up on the 1st and the 16th
 // of each month), the remake has no calendar: the first visit is a month, each next one fifteen days. The price modifier of
-// the island (a percent in the record of the island, 100 here) and the "reputation" part of t (field +0x3d8 of the hero) are
-// not known: 100% and 0.
+// the island is not known: 100%.
 
 #define TRADE_LINES 7
 
@@ -142,13 +143,26 @@ void Trade_SetStock(string island, int i, int n)
 	PdmStore.(island).(at) = n;
 }
 
-// the Trade skill of the hero (with the officers in the original: ours has no officers) * 5, up to 95
+// the reputation part of t: R (reputation of the hero, +0x3d8) moved 5 away from 0, tenths cut, times 10, within -30..30
+int Trade_Rep()
+{
+	int r = 0;
+	if (CheckAttribute(PlayerCard, "reputation")) { r = sti(PlayerCard.reputation); }
+	if (r < 0) { r = r - 5; } else { r = r + 5; }
+	r = (r / 10) * 10;
+	if (r > 30) { r = 30; }
+	if (r < -30) { r = -30; }
+	return r;
+}
+
+// t of the original: the Trade skill of the hero (with the officers in the original: ours has no officers) * 5, up to 95,
+// plus the reputation part
 int Trade_Skill()
 {
 	int k = 0;
 	if (CheckAttribute(PlayerCard, "skills.commerce")) { k = sti(PlayerCard.skills.commerce) * 5; }
 	if (k > 95) { k = 95; }
-	return k;
+	return k + Trade_Rep();
 }
 
 // the store of the island is filled when it is opened
@@ -201,35 +215,37 @@ void Trade_Fill(string island)
 		PdmStore.(island).(at) = a;
 		at = "b" + i;
 		PdmStore.(island).(at) = b;
+		// the prices of the window: the skill is applied once, when the store is opened; when the two meet the original
+		// takes a random piece off the price it pays
+		float t = Trade_Skill();
+		int ask = MakeInt(a - (p - a) * t * 0.01);
+		if (ask < 1) { ask = 1; }
+		int pay = MakeInt(b + (ask - b) * t * 0.01);
+		if (pay < 1) { pay = 1; }
+		if (pay > ask) { pay = ask; }
+		if (pay == ask) { pay = pay - rand(1); }
+		if (pay < 1) { pay = 1; }
+		at = "ask" + i;
+		PdmStore.(island).(at) = ask;
+		at = "pay" + i;
+		PdmStore.(island).(at) = pay;
 	}
 }
 
-// the price the store asks for the piece (A' of the skill)
+// the price the store asks for the piece (A' of the skill, fixed when the store was opened)
 int Trade_Price(string island, int i)
 {
-	string at = "a" + i;
+	string at = "ask" + i;
 	if (!CheckAttribute(PdmStore, island + "." + at)) { return 1; }
-	float a = sti(PdmStore.(island).(at));
-	float t = Trade_Skill();
-	int price = MakeInt(a - (Trade_Price0(i) - a) * t * 0.01);
-	if (price < 1) { price = 1; }
-	return price;
+	return sti(PdmStore.(island).(at));
 }
 
 // the price the store pays (B' of the skill)
 int Trade_SellPrice(string island, int i)
 {
-	string at = "b" + i;
+	string at = "pay" + i;
 	if (!CheckAttribute(PdmStore, island + "." + at)) { return 1; }
-	float b = sti(PdmStore.(island).(at));
-	int ask = Trade_Price(island, i);
-	float t = Trade_Skill();
-	int price = MakeInt(b + (ask - b) * t * 0.01);
-	if (price < 1) { price = 1; }
-	if (price > ask) { price = ask; }
-	// the original takes a random piece off when the two meet; ours a fixed one
-	if (price == ask && price > 1 && (ask + i) % 2 == 1) { price = price - 1; }
-	return price;
+	return sti(PdmStore.(island).(at));
 }
 
 // opening of the screen
