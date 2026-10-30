@@ -244,6 +244,8 @@ void Battle_AddShip(int i, float x, float z, float ay)
 	aref cannon = GetAttributeN(&PdmCannons, Battle_CannonLine(i));
 	SeaShips[i].SeaAI.Group.Name = group;
 	SeaShips[i].Ship.HP = sti(SeaShipTypes[i].HP);
+	if (i == seaHero && CheckAttribute(&PlayerShipCard, "hull_hp")) { SeaShips[i].Ship.HP = sti(PlayerShipCard.hull_hp); }
+	if (i == seaHero && CheckAttribute(&PlayerShipCard, "rig")) { SeaShips[i].Ship.SP = sti(PlayerShipCard.rig); }
 	SeaShips[i].Ship.Cannons.Type = 0;
 	Battle_SetCharge(i, Battle_Charge(i));
 	// the hero has the crew of his card, the others a full one until their card says (Battle_AddEnemy)

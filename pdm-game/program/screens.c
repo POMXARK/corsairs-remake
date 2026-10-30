@@ -440,13 +440,13 @@ void Screen_ShipyardRight()
 	}
 	Screen_Text("EDITSHIP", list);
 	Screen_Text("EDITSUMMA", Screen_Put(PdmScreens.shipyard.t.shipcost, PlayerShipType.sellprice));
-	Screen_Text("EDITDAMAGES", Screen_Put(PdmScreens.shipyard.t.shipdamages, "0"));
+	Screen_Text("EDITDAMAGES", Screen_Put(PdmScreens.shipyard.t.shipdamages, "" + (100 - Screen_HullPercent())));
 	Screen_Text("EDITHELP", Screen_Put(PdmScreens.shipyard.t.buybutclass, "" + Screen_RankClass(rank)));
-	Screen_Text("EDITHULL", "100%");
-	Screen_Text("EDITRIG", "100%");
+	Screen_Text("EDITHULL", Screen_HullPercent() + "%");
+	Screen_Text("EDITRIG", Screen_RigPercent() + "%");
 	Screen_ShipyardHide();
-	Screen_Text("EDITHULLSUM", "0");
-	Screen_Text("EDITRIGSUM", "0");
+	Screen_Text("EDITHULLSUM", "" + Screen_RepairPrice(100 - Screen_HullPercent()));
+	Screen_Text("EDITRIGSUM", "" + Screen_RepairPrice(100 - Screen_RigPercent()));
 }
 
 // the type and the description of the ship of the hero in the words of the original (tools/pdm_ui.py, GOODS/SHIPS)
@@ -559,8 +559,47 @@ void Screen_ShipyardStep(int step)
 
 // Sell: the hero gets the price B of the ship, the type is chosen from the list; Buy: needs the old ship sold
 // and the gold, the new one takes its place (the messages are the original ones)
+// the wear of the hero's ship (PlayerShipCard.hull_hp / rig, written by Sea_Release); no entry = whole
+int Screen_HullPercent()
+{
+	if (!CheckAttribute(PlayerShipCard, "hull_hp")) { return 100; }
+	int full = sti(PlayerShipType.hitpoint);
+	if (full <= 0) { return 100; }
+	return MakeInt(100.0 * sti(PlayerShipCard.hull_hp) / full);
+}
+
+int Screen_RigPercent()
+{
+	if (!CheckAttribute(PlayerShipCard, "rig")) { return 100; }
+	return sti(PlayerShipCard.rig);
+}
+
+// our price (the formula of the original is not found): the percent of wear of the buying price, a tenth of it
+int Screen_RepairPrice(int percent)
+{
+	if (percent < 0) { percent = 0; }
+	return MakeInt(percent * stf(PlayerShipType.buyprice) / 1000.0);
+}
+
+bool Screen_ShipyardRepair(bool hull, bool rig)
+{
+	int cost = 0;
+	if (hull) { cost = cost + Screen_RepairPrice(100 - Screen_HullPercent()); }
+	if (rig) { cost = cost + Screen_RepairPrice(100 - Screen_RigPercent()); }
+	if (cost == 0) { return true; }
+	if (sti(PlayerCard.money) < cost) { Screen_Text("EDITHELP", PdmScreens.shipyard.t.buybutmoney); Trace("PDM shipyard: refused, no money for repair"); return true; }
+	PlayerCard.money = sti(PlayerCard.money) - cost;
+	if (hull) { PlayerShipCard.hull_hp = sti(PlayerShipType.hitpoint); }
+	if (rig) { PlayerShipCard.rig = 100; }
+	Screen_Fill();
+	Trace("PDM shipyard: repaired for " + cost + ", money " + PlayerCard.money);
+	return true;
+}
+
 bool Screen_ShipyardClick(string node)
 {
+	if (node == "LB_REPAIR") { return Screen_ShipyardRepair(true, false); }
+	if (node == "LB_REPAIRALL") { return Screen_ShipyardRepair(true, true); }
 	if (node == "LB_SHIPUP") { Screen_ShipyardStep(-1); return true; }
 	if (node == "LB_SHIPDOWN") { Screen_ShipyardStep(1); return true; }
 	if (node == "LB_SELL")
@@ -582,6 +621,8 @@ bool Screen_ShipyardClick(string node)
 		if (sti(PlayerCard.money) < price) { Screen_Text("EDITHELP", PdmScreens.shipyard.t.buybutmoney); Trace("PDM shipyard: refused, no money"); return true; }
 		PlayerCard.money = sti(PlayerCard.money) - price;
 		PlayerShipCard.type_key = id;
+		DeleteAttribute(PlayerShipCard, "hull_hp");
+		DeleteAttribute(PlayerShipCard, "rig");
 		makearef(PlayerShipType, PdmShipTypes.(id));
 		shipyardSold = false;
 		Screen_Fill();
@@ -755,6 +796,14 @@ void Screen_ShipyardVerify()
 	int want = shipyardMoney + Screen_ShipSellPrice(shipyardOwn) - Screen_ShipBuyPrice(id);
 	if (PlayerShipType.id == id && sti(PlayerCard.money) == want && id != "") { Trace("PDM shipyard: actions ok"); }
 	else { Trace("PDM shipyard: actions FAIL, type " + PlayerShipType.id + ", pick " + id + ", money " + PlayerCard.money + ", want " + want); }
+	// a half-broken hull and sails: Repair All takes the price of both and makes them whole
+	PlayerShipCard.hull_hp = sti(PlayerShipType.hitpoint) / 2;
+	PlayerShipCard.rig = 50;
+	int before = sti(PlayerCard.money);
+	int cost = Screen_RepairPrice(100 - Screen_HullPercent()) + Screen_RepairPrice(100 - Screen_RigPercent());
+	Screen_ShipyardRepair(true, true);
+	if (Screen_HullPercent() == 100 && Screen_RigPercent() == 100 && sti(PlayerCard.money) == before - cost && cost > 0) { Trace("PDM shipyard: repair ok"); }
+	else { Trace("PDM shipyard: repair FAIL, hull " + Screen_HullPercent() + ", rig " + Screen_RigPercent() + ", money " + PlayerCard.money + ", want " + (before - cost)); }
 }
 
 // SCENE=screens: the pages of the menu, a new game, F1 in the town and its button "Корабль", the other

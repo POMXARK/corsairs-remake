@@ -553,6 +553,12 @@ void Sea_ToMap()
 // deletes what Sea_Start made, so that the next voyage starts afresh
 void Sea_Release()
 {
+	// the wear of the hero's ship stays on its card: the shipyard repairs it
+	if (seaHero >= 0 && seaHero < seaShipCount)
+	{
+		PlayerShipCard.hull_hp = makeint(stf(SeaShips[seaHero].Ship.HP));
+		if (CheckAttribute(&SeaShips[seaHero], "Ship.SP")) { PlayerShipCard.rig = makeint(stf(SeaShips[seaHero].Ship.SP)); }
+	}
 	seaSkyDir = "";
 	seaSkyUp = false;
 	seaActive = false;
