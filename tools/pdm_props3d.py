@@ -38,6 +38,10 @@ def is_quad(mesh):
     return len(mesh.vertices) <= 9 and len(mesh.triangles) == 4
 
 
+def is_sign(stem):
+    return stem.startswith(SIGN_PREFIX) or stem in SIGN_NAMES
+
+
 def positions(mesh):
     return np.array([v[0] for v in mesh.vertices], dtype=float)
 
@@ -541,7 +545,7 @@ def build(meshes, image, generated, mesh_cls):
             trees.setdefault(stem, []).append(m)
         elif stem in PALMS and is_quad(m):
             palms.setdefault(stem, []).append(m)
-        elif (stem.startswith(SIGN_PREFIX) or stem in SIGN_NAMES) and is_quad(m):
+        elif is_sign(stem) and is_quad(m):
             signs.setdefault(stem, []).append(m)
         else:
             out.append(m)

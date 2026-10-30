@@ -155,3 +155,24 @@ ffmpeg -loglevel error -y -i $V -vf "fps=1/10,scale=480:-1,tile=4x3" /tmp/sheet.
 3. Соседние автотесты, которые затрагивает изменение (бой → 7, 8, 9, 11).
 4. Запись с `sleep:N` → кадры через ffmpeg.
 5. Строка в test-commands.md, затем коммит.
+
+## Вывески с обеих сторон (TOWN_AUTO=50)
+
+Текст вывески должен читаться с обеих сторон доски. Проверка идёт без нажатий, камера и герой ставятся сценарием.
+
+**Как найти вывески и поставить камеру.** `tools/pdm_signs_find.py <Корсары> [City_…]` берёт модель города из оригинала, находит вывески теми же правилами, что конвертер (`pdm_props3d.is_sign`: `viveska_*`, в Хайроке `tavern`, `ship_yard`, `store`), и считает для каждой стороны доски строку `CAM=cx,cy,cz,hx,hy,hz`:
+- центр доски — середина её вершин; нормаль — векторное произведение рёбер (`pdm_props3d.sign_axes`);
+- камера c стоит в 2,5 м от доски по нормали (`side +1`) или против неё (`side -1`), на высоте доски + 0,2 м;
+- герой h стоит под доской на земле (y = 0: города лежат на нуле), поэтому доска и герой попадают в один кадр.
+
+**Как это играет игра.** `run.sh` с `TOWN_AUTO=50` и `CAM=…` пишет шесть чисел в `start.c` (`TownCX…TownHZ`). Через 3 с после входа в город `Town_CamLook` (`town.c`) телепортирует героя в h (`MSG_CHARACTER_TELEPORT_AY`) и ставит камеру в c с взглядом на героя (`MSG_CAMERA_TOPOS`, последний аргумент 1). Трасса `PDM town: camera look from …, signs model 1` показывает, что модель `<город>_signs.gm` загружена. Через 22 с — `PDM town: autotest done, sign look ok` и выход. Вывеску без модели (город без `_signs.gm`) тест не пропустит: в конце будет `no signs model`.
+
+**Команды.**
+```bash
+cd $W && . ./env.sh
+# сценарии autotest/scenarios.txt (sign-*: таверна, верфь Хайрока, магазин Granda Avilia; по две стороны)
+corsairs-remake/pdm-game/autotests.sh build/Debug/engine sign-tavern-front sign-tavern-back
+# кадры всех вывесок города (по кадру на сторону, в out/<город>-<текстура>-<n>.jpg; смотреть глазами)
+corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City_HighRock
+```
+`autotests.sh` читает необязательное седьмое поле сценария — переменные `run.sh` словами `ИМЯ=значение` (здесь `CAM=…`). Автотест проверяет только, что модель вывесок загружена и `error.log` пуст; читаемость текста — по кадрам `sign-shots.sh` (зеркальный текст сразу виден). Запись иногда не стартует (`x11grab Failed to translate xcb geometry`): `sign-shots.sh` повторяет запуск до трёх раз.

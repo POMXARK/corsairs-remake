@@ -20,3 +20,9 @@ save-screens|sea||13|PDM: autotest done, screens|120
 options-sea|sea||14|PDM options: autotest done|120
 options-close|menu||15|PDM close: autotest done|120
 sea-sail-to|sea||15|PDM: autotest done, sail to at sea|200
+sign-tavern-front|town|City_HighRock|50|autotest done, sign look ok|120|CAM=-3.02,2.57,6.32,-3.02,0,3.82
+sign-tavern-back|town|City_HighRock|50|autotest done, sign look ok|120|CAM=-3.02,2.57,1.32,-3.02,0,3.82
+sign-shipyard-front|town|City_HighRock|50|autotest done, sign look ok|120|CAM=-11.44,2.50,18.34,-8.94,0,18.34
+sign-shipyard-back|town|City_HighRock|50|autotest done, sign look ok|120|CAM=-6.44,2.50,18.34,-8.94,0,18.34
+sign-store-spa-front|town|City_GrandaAvilia|50|autotest done, sign look ok|120|CAM=19.91,2.08,-11.68,19.91,0,-14.18
+sign-store-spa-back|town|City_GrandaAvilia|50|autotest done, sign look ok|120|CAM=19.91,2.08,-16.68,19.91,0,-14.18

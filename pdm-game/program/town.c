@@ -63,6 +63,7 @@ object TownCamera;
 object TownTaken;
 object TownNpc[TOWN_MAX_NPC];
 int townNpcCount = 0;
+int townSigns = 0; // the model of the shop signs of the town was loaded
 bool townLoaded = false;
 // a loaded location counts up: a wander event of the location before it is dropped
 int townGen = 0;
@@ -194,6 +195,7 @@ void Town_Handlers()
 	SetEventHandler("Town_Wander", "Town_Wander", 0);
 	SetEventHandler("Town_AutoGo", "Town_AutoGo", 0);
 	SetEventHandler("Town_CamLook", "Town_CamLook", 0);
+	SetEventHandler("Town_CamQuit", "Town_CamQuit", 0);
 	SetEventHandler("Town_AutoWhere", "Town_AutoWhere", 0);
 	SetEventHandler("Town_AutoQuit", "Town_AutoQuit", 0);
 	SetEventHandler("Town_AutoTalk", "Town_AutoTalk", 0);
@@ -291,7 +293,7 @@ void Town_Load(string loc, string from)
 	// the vegetation on its own model: the crowns sway in the wind (WindLeaf technique)
 	SendMessage(&TownLocation, "lssl", MSG_LOCATION_ADD_MODEL, data.model + "_veg", "WindLeaf", 10);
 	// the shop signs on their own model: redone by pdm_world.py --signs without the BSP of the town
-	SendMessage(&TownLocation, "lssl", MSG_LOCATION_ADD_MODEL, data.model + "_signs", "DLightModel", 10);
+	townSigns = SendMessage(&TownLocation, "lssl", MSG_LOCATION_ADD_MODEL, data.model + "_signs", "DLightModel", 10);
 	if (!SendMessage(&TownLocation, "ls", MSG_LOCATION_SET_CHRS_PATCH, data.patch))
 	{
 		Trace("PDM town: patch " + data.patch + " not loaded");
@@ -367,7 +369,15 @@ void Town_CamLook()
 {
 	SendMessage(&TownHero, "lffff", MSG_CHARACTER_TELEPORT_AY, TownHX, TownHY, TownHZ, 0.0);
 	SendMessage(&TownCamera, "lfffl", MSG_CAMERA_TOPOS, TownCX, TownCY, TownCZ, 1);
-	Trace("PDM town: camera look from " + TownCX + ", " + TownCY + ", " + TownCZ);
+	Trace("PDM town: camera look from " + TownCX + ", " + TownCY + ", " + TownCZ + ", signs model " + townSigns);
+	PostEvent("Town_CamQuit", 22000); // the shots of sign-shots.sh are taken at 15 s
+}
+
+void Town_CamQuit()
+{
+	if (townSigns) { Trace("PDM town: autotest done, sign look ok"); }
+	else { Trace("PDM town: autotest done, sign look: no signs model"); }
+	ExitProgram();
 }
 
 void Town_Teleport(ref chr, aref data, int point)
