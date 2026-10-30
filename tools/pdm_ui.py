@@ -125,6 +125,11 @@ def find_faces(dirs):
     return faces
 
 
+CURSOR_FRAMES = 16      # frames of the turn of the cursor in its strip
+CURSOR_FRAME = 64       # one frame, px
+CURSOR_TIP = 8          # where the tip of the arrowhead is in a frame (the same in all of them), px
+
+
 def _cursor_imports():
     import numpy
     import cff2gm
@@ -132,65 +137,82 @@ def _cursor_imports():
     return numpy, cff2gm, tf2tx
 
 
-
-def render_cursor_model(cff, tf, size=48, ss=8, spin=1.57, tilt=0.3, roll=-0.78):
-    """The cursor of the original screens (MODELS/cursor.cff, a four-sided silver arrowhead, textured k_1n.tf) drawn
-    into a size x size picture: the interface of the original shows this model, not the flat IMAGES/cursor.tga that
-    the screen .ini name (the screenshots of the original). The tip is at the top left, lit from the same corner."""
+def render_cursor_model(cff, tf, frames=CURSOR_FRAMES, size=CURSOR_FRAME, ss=6, tilt=0.3, roll=-0.78):
+    """The cursor of the original screens (MODELS/cursor.cff, a four-sided silver arrowhead, textured k_1n.tf) as a
+    strip of `frames` pictures of size x size: the arrowhead turns round its axis (the screenshots of the original show
+    it flat, wide and thin in turn; it is not the flat IMAGES/cursor.tga that the screen .ini name). The tip stays in
+    one place, (CURSOR_TIP, CURSOR_TIP), and the light is fixed to the screen, so the faces flash as it turns."""
     np, cff2gm, tf2tx = _cursor_imports()
     meshes = cff2gm.cff_to_meshes(cff)
-    tex = np.asarray(tf2tx.tf_image(tf).convert('RGBA'), dtype=float)
-    th,tw=tex.shape[:2]
-    # model z (tip) -> screen up, then lean and roll
-    def rot(p):
-        x,y,z=p
-        c,s=math.cos(spin),math.sin(spin); x,y=x*c-y*s,x*s+y*c
-        # x-rotation: z->-y (tip up on screen, y down)
-        x,y,z=x,-z,y
-        # pitch toward viewer
-        c,s=math.cos(tilt),math.sin(tilt); y,z=y*c-z*s,y*s+z*c
-        c,s=math.cos(roll),math.sin(roll); x,y=x*c-y*s,x*s+y*c
-        return (x,y,z)
-    tris=[]
+    tex = np.asarray(tf2tx.tf_image(tf).convert("RGBA"), dtype=float)
+    th, tw = tex.shape[:2]
+    tris = []
     for m in meshes:
-        n=len(m.vertices)//2
-        for a,b,c in m.triangles[:len(m.triangles)//2]:
-            v=[m.vertices[i] for i in (a,b,c)]
-            tris.append([(rot(q[0]),q[2]) for q in v])
-    pts=np.array([p for t in tris for p,_ in t])
-    big=size*ss
-    # fit: bbox to size-4 px margin
-    mn=pts[:,:2].min(0); mx=pts[:,:2].max(0); k=(size-4)*ss/max(mx-mn)
-    img=np.zeros((big,big,4)); zb=np.full((big,big),-1e9)
-    L=np.array([-0.4,-0.5,0.75]); L/=np.linalg.norm(L)
-    for t in tris:
-        P=np.array([[(p[0]-mn[0])*k+2*ss,(p[1]-mn[1])*k+2*ss,p[2]] for p,_ in t]); UV=np.array([uv for _,uv in t])
-        e1=P[1]-P[0]; e2=P[2]-P[0]; nrm=np.cross(e1,e2); ln=np.linalg.norm(nrm)
-        if ln<1e-9: continue
-        nrm/=ln
-        if nrm[2]<0: nrm=-nrm   # two-sided
-        shade=0.55+0.6*max(0,float(nrm@L))
-        x0,x1=int(P[:,0].min()),int(P[:,0].max())+1; y0,y1=int(P[:,1].min()),int(P[:,1].max())+1
-        d=(P[1,0]-P[0,0])*(P[2,1]-P[0,1])-(P[2,0]-P[0,0])*(P[1,1]-P[0,1])
-        if abs(d)<1e-9: continue
-        for y in range(max(y0,0),min(y1,big)):
-            for x in range(max(x0,0),min(x1,big)):
-                w1=((x+.5-P[0,0])*(P[2,1]-P[0,1])-(P[2,0]-P[0,0])*(y+.5-P[0,1]))/d
-                w2=((P[1,0]-P[0,0])*(y+.5-P[0,1])-(x+.5-P[0,0])*(P[1,1]-P[0,1]))/d
-                w0=1-w1-w2
-                if min(w0,w1,w2)<0: continue
-                z=w0*P[0,2]+w1*P[1,2]+w2*P[2,2]
-                if z<=zb[y,x]: continue
-                zb[y,x]=z
-                u=(w0*UV[0,0]+w1*UV[1,0]+w2*UV[2,0]); v=(w0*UV[0,1]+w1*UV[1,1]+w2*UV[2,1])
-                c=tex[int(v*th)%th,int(u*tw)%tw]
-                img[y,x]=[min(255,c[0]*shade),min(255,c[1]*shade),min(255,c[2]*shade),255]
-    # box downsample, premultiplied
-    a=img[...,3:4]/255; rgb=img[...,:3]*a
-    rgb=rgb.reshape(size,ss,size,ss,3).sum((1,3)); al=a.reshape(size,ss,size,ss,1).sum((1,3))
-    out=np.zeros((size,size,4)); m=al[...,0]>0
-    out[m,:3]=rgb[m]/al[m]; out[...,3]=al[...,0]/(ss*ss)*255
-    return Image.fromarray(out.astype('uint8'),'RGBA')
+        for a, b, c in m.triangles[:len(m.triangles) // 2]:    # the second half is the back copy of the faces
+            tris.append([(m.vertices[i][0], m.vertices[i][2]) for i in (a, b, c)])
+    tip = max((p for t in tris for p, _ in t), key=lambda p: p[2])
+    length = tip[2] - min(p[2] for t in tris for p, _ in t)
+    k = (size - 2 * CURSOR_TIP) * ss / (length * math.cos(math.pi / 4))   # the length of it along the diagonal
+    light = np.array([-0.4, -0.5, 0.75])
+    light /= np.linalg.norm(light)
+    big = size * ss
+
+    def turned(p, spin):
+        x, y, z = p
+        c, s = math.cos(spin), math.sin(spin)
+        x, y = x * c - y * s, x * s + y * c             # round the axis of the arrowhead
+        x, y, z = x, -z, y                              # the tip goes up the screen (y is down)
+        c, s = math.cos(tilt), math.sin(tilt)
+        y, z = y * c - z * s, y * s + z * c             # leans to the viewer
+        c, s = math.cos(roll), math.sin(roll)
+        x, y = x * c - y * s, x * s + y * c             # and to the left
+        return x, y, z
+
+    origin = turned(tip, 0.0)
+    strip = Image.new("RGBA", (size * frames, size))
+    for f in range(frames):
+        spin = 2 * math.pi * f / frames
+        img = np.zeros((big, big, 4))
+        zbuf = np.full((big, big), -1e9)
+        for t in tris:
+            q = [turned(p, spin) for p, _ in t]
+            P = np.array([[(p[0] - origin[0]) * k + CURSOR_TIP * ss, (p[1] - origin[1]) * k + CURSOR_TIP * ss, p[2]]
+                          for p in q])
+            UV = np.array([uv for _, uv in t])
+            normal = np.cross(P[1] - P[0], P[2] - P[0])
+            length_n = np.linalg.norm(normal)
+            d = (P[1, 0] - P[0, 0]) * (P[2, 1] - P[0, 1]) - (P[2, 0] - P[0, 0]) * (P[1, 1] - P[0, 1])
+            if length_n < 1e-9 or abs(d) < 1e-9:
+                continue
+            normal /= length_n
+            if normal[2] < 0:
+                normal = -normal                        # both sides of a face are drawn
+            shade = 0.55 + 0.6 * max(0.0, float(normal @ light))
+            for y in range(max(int(P[:, 1].min()), 0), min(int(P[:, 1].max()) + 1, big)):
+                for x in range(max(int(P[:, 0].min()), 0), min(int(P[:, 0].max()) + 1, big)):
+                    w1 = ((x + .5 - P[0, 0]) * (P[2, 1] - P[0, 1]) - (P[2, 0] - P[0, 0]) * (y + .5 - P[0, 1])) / d
+                    w2 = ((P[1, 0] - P[0, 0]) * (y + .5 - P[0, 1]) - (x + .5 - P[0, 0]) * (P[1, 1] - P[0, 1])) / d
+                    w0 = 1 - w1 - w2
+                    if min(w0, w1, w2) < 0:
+                        continue
+                    z = w0 * P[0, 2] + w1 * P[1, 2] + w2 * P[2, 2]
+                    if z <= zbuf[y, x]:
+                        continue
+                    zbuf[y, x] = z
+                    u = w0 * UV[0, 0] + w1 * UV[1, 0] + w2 * UV[2, 0]
+                    v = w0 * UV[0, 1] + w1 * UV[1, 1] + w2 * UV[2, 1]
+                    c = tex[int(v * th) % th, int(u * tw) % tw]
+                    img[y, x] = [min(255, c[0] * shade), min(255, c[1] * shade), min(255, c[2] * shade), 255]
+        # a box filter down to the frame, the colours weighed by the cover
+        cover = img[..., 3:4] / 255
+        rgb = (img[..., :3] * cover).reshape(size, ss, size, ss, 3).sum((1, 3))
+        al = cover.reshape(size, ss, size, ss, 1).sum((1, 3))
+        out = np.zeros((size, size, 4))
+        inside = al[..., 0] > 0
+        out[inside, :3] = rgb[inside] / al[inside]
+        out[..., 3] = al[..., 0] / (ss * ss) * 255
+        strip.paste(Image.fromarray(out.astype("uint8"), "RGBA"), (f * size, 0))
+    return strip
 
 
 class Original:
@@ -956,17 +978,21 @@ class Converter:
         cff = self.pdm.find("MODELS/cursor.cff")
         tf = self.pdm.find("TEXTURES/k_1n.tf")
         if cff is not None and tf is not None:
-            cursor = render_cursor_model(cff, tf)
-            tex, _, _ = self.texture(cursor, "cursor")
+            strip = render_cursor_model(cff, tf)
+            tex, _, _ = self.texture(strip, "cursor")
+            # the strip is a texture of the power of two; the engine turns the frames at frames:(count,ms,width px)
+            pointer = (f"{tex},10,size:({CURSOR_FRAME},{CURSOR_FRAME}),pos:({CURSOR_TIP - CURSOR_FRAME // 2},"
+                       f"{CURSOR_TIP - CURSOR_FRAME // 2}),frames:({CURSOR_FRAMES},80)")
         else:
             cursor = self.image(dict(self.ini["Common"])["cursor"])
             tex, _, _ = self.texture(self.keyed(cursor), "cursor")
+            pointer = f"{tex},10,size:({cursor.width},{cursor.height}),pos:(0,0)"
         (ini / "interfaces/interfaces.ini").write_text(
             "; converted by tools/pdm_ui.py. bDynamicScaling puts the 800x600 screens of the original in the\n"
             "; middle of a wider window; without [PC_SCREEN] the screen rect is upside down and nothing is drawn\n"
             "[PC_SCREEN]\nbDynamicScaling = 1\n\n"
             "[COMMON]\nRepeatDelay = 250\nmouseDblClickInterval = 600\n"
-            f"MousePointer = {tex},10,size:({cursor.width},{cursor.height}),pos:(0,0)\nBlindTime = 1.0\n",
+            f"MousePointer = {pointer}\nBlindTime = 1.0\n",
             encoding="utf-8")
         (ini / "interfaces/defaultnode.ini").write_text(
             "; converted by tools/pdm_ui.py: the defaults of the nodes of the original screens\n"
