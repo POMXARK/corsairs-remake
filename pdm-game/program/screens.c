@@ -846,6 +846,11 @@ string Screen_TourNext(string list)
 void Screen_TourTrade(string name)
 {
 	if (name != "trade") { return; }
+	// the tour has no town under it: the store of Highrock stands in
+	if (townIsland == "") { townIsland = Town_IslandOf("City_HighRock"); }
+	// the clicks reach nobody: the menu handler is gone with the menu, the screens of the game are not opened by Screen_Open here
+	SetEventHandler("ievnt_command", "Screen_Command", 0);
+	Trace("PDM tour trade: island " + townIsland);
 	PlayerCard.money = 500;
 	string keys = "LB_TOVARDOWN,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_RIGHT,LB_BUY,LB_LEFT,LB_SELL,LB_TOVARDOWN,LB_ALL,LB_BUY";
 	int at = 0;
