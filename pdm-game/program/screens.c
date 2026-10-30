@@ -580,6 +580,15 @@ void Screen_Sship(string id)
 	int hp = sti(PlayerShipType.hitpoint);
 	if (CheckAttribute(PlayerShipCard, "hull_hp")) { hp = sti(PlayerShipCard.hull_hp); }
 	Screen_Text("EDITHULLHP", hp + " " + PdmScreens.sship.t.hp);
+	// the calibers the ship can carry: the ones of the guns of the shipyard it may change to (Screen_GunMax)
+	string calibers = "";
+	for (int g = 0; g <= Screen_GunMax(); g++)
+	{
+		if (g > 0) { calibers = calibers + ", "; }
+		string gk = Screen_GunKey(g);
+		calibers = calibers + Screen_Nth(PdmCannons.(gk).params, 0);
+	}
+	Screen_Text("S_CALIBERALLOWED", calibers);
 }
 
 // the type and the description of the ship of the hero in the words of the original (tools/pdm_ui.py, GOODS/SHIPS)
