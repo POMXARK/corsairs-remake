@@ -212,3 +212,6 @@ corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City
 ## Тестовые и игровые файлы не смешиваются
 
 Запуск с `TOWN_AUTO≠0` (любой автотест) пишет сохранения и `settings.ini` в `pdm-game/save-test/`, обычная игра — в `pdm-game/save/` (`run.sh` кладёт `RUN_SAVEDIR`/`RUN_SAVEPFX` в `start.c`). Режим теста берётся из запуска (`RUN_TOWNAUTO`), а не из файла сохранения: иначе сейв, записанный тестом, при загрузке из меню запускал автотест, и игра закрывалась (`autotest finds no door`). Новый тест, который пишет файлы, должен брать пути из `RUN_SAVEPFX`/`RUN_SAVEDIR`, а не из литерала `save\`.
+
+## status-screens (TOWN_AUTO=22)
+В городе Хайрок: F1, затем кнопки «Корабль», «Трюм», «Сундук», «Журнал» с паузой 1,5 с. Маркер `PDM status: pages ok`, имена страниц — в `compile.log` (`PDM screen: sship` …). Кадры — из видео `shots.sh` (игра сама закрывается через ~8 с). Сделано нами для проверки; в оригинале страницы открывает скрипт игры.

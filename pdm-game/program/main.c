@@ -28,6 +28,8 @@
 #define SHIPYARD_ID 19
 // the same with the store owner and the screen of the trade (trade.c, Trade_Check)
 #define STORE_ID 21
+// F1 in the town and the pages of the status: ship, goods, chest, log book (screens.c, Screen_StatusAuto)
+#define STATUS_ID 22
 
 object Render;
 object Scene;

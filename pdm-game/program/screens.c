@@ -54,6 +54,7 @@ void Screen_Init()
 	SetEventHandler("Screen_ShipyardPick", "Screen_ShipyardPick", 0);
 	SetEventHandler("Trade_Verify", "Trade_Verify", 0);
 	SetEventHandler("Screen_Pending", "Screen_Pending", 0);
+	SetEventHandler("Screen_StatusAuto", "Screen_StatusAuto", 0);
 	SetEventHandler("Screen_Tour", "Screen_Tour", 0);
 	SetEventHandler("Screen_Credits", "Screen_CreditsStep", 0);
 	SetEventHandler("PdmStory_Interface", "Screen_Launch", 0);
@@ -226,7 +227,8 @@ void Screen_Fill()
 		if (findSubStr(text, "%", 0) >= 0) { text = Screen_Put(text, value); }
 		else
 		{
-			if (text == "") { text = value; } else { text = value + " " + text; }
+			// the page of the ship has its units in the titles on the right (title11..15): the value alone
+			if (text == "" || screenName == "sship") { text = value; } else { text = value + " " + text; }
 		}
 		Screen_Text(node, text);
 	}
@@ -571,7 +573,12 @@ void Screen_ShipText()
 {
 	string id = Screen_ViewId();
 	if (CheckAttribute(PdmScreens, "ships." + id + ".name")) { Screen_Text("EDITSHIPTYPE", PdmScreens.ships.(id).name); }
-	if (CheckAttribute(PdmScreens, "ships." + id + ".about")) { Screen_Text("EDITDESC", PdmScreens.ships.(id).about); }
+	// the description of the ship stands under the ship in the parchment of its page, the other pages have none of it
+	if (CheckAttribute(PdmScreens, "ships." + id + ".about"))
+	{
+		if (screenName == "sship") { Screen_Text("EDITSHIPDESC", PdmScreens.ships.(id).about); }
+		if (screenName == "shipyard") { Screen_Text("EDITDESC", PdmScreens.ships.(id).about); }
+	}
 	if (screenName == "shipyard")
 	{
 		// the picture of the ship in its frame (the original IMAGES/GOODS/SHIPS, ship_<id> of tools/pdm_ui.py)
@@ -1018,6 +1025,34 @@ void Screen_Status()
 		if (!townLoaded || townTalkNpc >= 0) { return; }
 	}
 	Screen_Open("sstuff");
+}
+
+// TOWN_AUTO=22: F1, then the buttons of the status one after the other; every page is named in the log, the screen
+// stays long enough for a picture, then the game quits
+void Screen_StatusAuto()
+{
+	int step = GetEventData();
+	string buttons = "F1,LB_SHIP,LB_GOODS,LB_CHEST,LB_LOGBOOK";
+	int at = 0;
+	for (int i = 0; i < step; i++)
+	{
+		int comma = findSubStr(buttons, ",", at);
+		if (comma < 0) { at = strlen(buttons); break; }
+		at = comma + 1;
+	}
+	if (at >= strlen(buttons))
+	{
+		Trace("PDM status: pages ok");
+		PostEvent("Town_AutoQuit", 500);
+		return;
+	}
+	int end = findSubStr(buttons, ",", at);
+	if (end < 0) { end = strlen(buttons); }
+	string b = strcut(buttons, at, end - 1);
+	if (b == "F1") { Screen_Status(); }
+	else { Screen_Click(b); }
+	Trace("PDM status: " + b + " -> '" + screenName + "'");
+	PostEvent("Screen_StatusAuto", 1500, "l", step + 1);
 }
 
 // Pdm_LaunchInterface("TOWN", "trade"): the dialog is open, the screen comes when it closes

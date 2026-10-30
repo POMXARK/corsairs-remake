@@ -978,6 +978,13 @@ void Town_AutoPlan()
 		Town_PlanAdd("talk", "", "PdmA_SHIPYARD");
 		return;
 	}
+	// 22: F1 on the spot, the pages of the status one after the other (screens.c, Screen_StatusAuto); it quits itself
+	if (TownAuto == STATUS_ID)
+	{
+		PlayerCard.money = 500;
+		PostEvent("Screen_StatusAuto", 1500, "l", 0);
+		return;
+	}
 	// 21: to the store, the owner's dialog, its link opens the trade (trade.c, Trade_Check)
 	if (TownAuto == STORE_ID)
 	{
@@ -1011,6 +1018,7 @@ void Town_AutoGo()
 {
 	if (townPlanStep >= townPlanCount)
 	{
+		if (TownAuto == STATUS_ID) { return; }
 		Trace("PDM town: autotest done in " + townHere + ", money " + Pdm_Count(PlayerCard, "money") + ", reputation "
 			+ Pdm_Count(PlayerCard, "reputation") + ", experience " + Pdm_Count(PlayerCard, "experience"));
 		PostEvent("Town_AutoQuit", 3000);
