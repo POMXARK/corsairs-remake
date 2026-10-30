@@ -63,6 +63,14 @@ void Sound_Music(string alias)
 		false, true, false, SOUND_FADE_MS, 0, 1.0);
 }
 
+// no music: the movies bring their own sounds
+void Sound_MusicStop()
+{
+	if (soundMusicId != 0) { SendMessage(&Sound, "lll", MSG_SOUND_STOP, soundMusicId, SOUND_FADE_MS); }
+	soundMusic = "";
+	soundMusicId = 0;
+}
+
 // the music of the towns of a nation (its index in nations.idf, as PdmIslands.<island>.nation)
 void Sound_TownMusic(int nation)
 {
