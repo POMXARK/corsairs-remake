@@ -502,6 +502,13 @@ void Screen_ShipyardRight()
 			if (CheckAttribute(PdmScreens, "ships." + id + ".name")) { Screen_ShipyardRow(PdmScreens.ships.(id).name, id); }
 		}
 	}
+	// the row of the picked type is the active one (a refill puts the cursor on the first row)
+	int cursor = 0;
+	for (int r = 0; r < shipyardRowCount; r++)
+	{
+		if (shipyardPick != "" && Screen_Nth(shipyardRows, r) == shipyardPick) { cursor = r; }
+	}
+	SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, "EDITSHIP", 1, cursor);
 	Screen_Text("EDITSUMMA", Screen_Put(PdmScreens.shipyard.t.shipcost, PlayerShipType.sellprice));
 	Screen_Text("EDITDAMAGES", Screen_Put(PdmScreens.shipyard.t.shipdamages, "" + (100 - Screen_HullPercent())));
 	Screen_Text("EDITHELP", Screen_Put(PdmScreens.shipyard.t.buybutclass, "" + Screen_RankClass(rank)));
