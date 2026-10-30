@@ -422,7 +422,7 @@ void Screen_ShipyardHide()
 {
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "LB_UPGRADE", false);
 	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, "LB_REFIT", false);
-	string nodes = "S_LBS0,S_LBS1,S_GOLD0,S_GOLD1";
+	string nodes = "S_LBS1,S_GOLD1";
 	int at = 0;
 	while (at < strlen(nodes))
 	{
@@ -431,6 +431,36 @@ void Screen_ShipyardHide()
 		Screen_Text(strcut(nodes, at, end - 1), "");
 		at = end + 1;
 	}
+}
+
+void Screen_Use(string nodes, bool on)
+{
+	int at = 0;
+	while (at < strlen(nodes))
+	{
+		int end = findSubStr(nodes, ",", at);
+		if (end < 0) { end = strlen(nodes); }
+		SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_NODE_USING, strcut(nodes, at, end - 1), on);
+		at = end + 1;
+	}
+}
+
+// the middle window of the shipyard: the repair of the ship of the hero, or (a type picked from the list) the
+// price of it and the answer of the shipyard, as on the screenshot of the original
+void Screen_ShipyardMode()
+{
+	bool buy = shipyardPick != "";
+	Screen_Use("LB_REPAIR,LB_REPAIRALL,LB_LEFTHULL,LB_RIGHTHULL,LB_LEFTRIG,LB_RIGHTRIG,S_HULL,S_RIG,EDITHULL,EDITRIG,EDITHULLSUM,EDITRIGSUM", !buy);
+	Screen_Use("EDITSUMMANEW,EDITBUY", buy);
+	Screen_Use("LB_SELL", !shipyardSold);
+	Screen_Use("LB_BUY", buy && shipyardSold);
+	if (!buy) { Screen_Text("EDITCANNON", PdmScreens.shipyard.t.weapon0); return; }
+	Screen_Text("EDITCANNON", PdmScreens.shipyard.t.weapon0);
+	Screen_Text("EDITSUMMANEW", Screen_Put(PdmScreens.shipyard.t.shipcost, Screen_ShipBuyPrice(shipyardPick)));
+	if (shipyardSold) { Screen_Text("EDITBUY", ""); }
+	else { Screen_Text("EDITBUY", PdmScreens.shipyard.t.buybutsell); }
+	Screen_Text("EDITSUMMA", "");
+	Screen_Text("EDITDAMAGES", "");
 }
 
 // the right window of the shipyard: the types by class, "Ваш корабль" on top, the price and the rank under it
@@ -462,12 +492,13 @@ void Screen_ShipyardRight()
 	Screen_ShipyardHide();
 	Screen_Text("EDITHULLSUM", "" + Screen_RepairPrice(Screen_HullFix()));
 	Screen_Text("EDITRIGSUM", "" + Screen_RepairPrice(Screen_RigFix()));
+	Screen_ShipyardMode();
 }
 
 // the type and the description of the ship of the hero in the words of the original (tools/pdm_ui.py, GOODS/SHIPS)
 void Screen_ShipText()
 {
-	string id = PlayerShipType.id;
+	string id = Screen_ViewId();
 	if (CheckAttribute(PdmScreens, "ships." + id + ".name")) { Screen_Text("EDITSHIPTYPE", PdmScreens.ships.(id).name); }
 	if (CheckAttribute(PdmScreens, "ships." + id + ".about")) { Screen_Text("EDITDESC", PdmScreens.ships.(id).about); }
 	if (screenName == "shipyard")
@@ -504,10 +535,18 @@ string Screen_First(string list)
 	return strcut(list, 0, at - 1);
 }
 
+// the type the screen describes: the one picked in the list of the shipyard, else the ship of the hero
+string Screen_ViewId()
+{
+	if (screenName == "shipyard" && shipyardPick != "") { return shipyardPick; }
+	return PlayerShipType.id;
+}
+
 // the value of an s_ node of the original the game knows, "" for the others (the shipyard and the trade show
 // the ship of the hero until they have their own, P9)
 string Screen_Value(string node)
 {
+	string vid = Screen_ViewId();
 	if (screenName == "trade" && Trade_Value(node) != "") { return Trade_Value(node); }
 	if (node == "S_CAPTAIN") { return PlayerCard.name; }
 	if (node == "S_RANK") { return PlayerCard.rank; }
@@ -515,23 +554,25 @@ string Screen_Value(string node)
 	if (node == "S_MONEY") { return PlayerCard.money; }
 	if (node == "S_REPUTATION") { return PlayerCard.reputation; }
 	if (node == "S_CREWNUM") { return PlayerShipCard.crew; }
-	if (node == "S_CREWALLOWED") { return PlayerShipType.maxcrew; }
-	if (node == "S_TYPE") { return PlayerShipType.type; }
-	if (node == "S_CLASS") { return PlayerShipType.class; }
-	if (node == "S_HITPOINTS") { return PlayerShipType.hitpoint; }
+	if (node == "S_CREWALLOWED") { return PdmShipTypes.(vid).maxcrew; }
+	if (node == "S_TYPE") { return PdmShipTypes.(vid).type; }
+	if (node == "S_CLASS") { return PdmShipTypes.(vid).class; }
+	if (node == "S_HITPOINTS") { return PdmShipTypes.(vid).hitpoint; }
 	// the shipyard shows them with a decimal: "9.0", "55.0"
-	if (node == "S_SPEEDRATE") { return Screen_Decimal(PlayerShipType.speedrate); }
-	if (node == "S_TURNRATE") { return Screen_Decimal(PlayerShipType.turnrate); }
-	if (node == "S_MAXCREW") { return PlayerShipType.maxcrew; }
-	if (node == "S_MINCREW") { return PlayerShipType.mincrew; }
-	if (node == "S_CAPACITY" || node == "S_MAXWEIGHT") { return PlayerShipType.capacity; }
+	if (node == "S_SPEEDRATE") { return Screen_Decimal(PdmShipTypes.(vid).speedrate); }
+	if (node == "S_TURNRATE") { return Screen_Decimal(PdmShipTypes.(vid).turnrate); }
+	if (node == "S_MAXCREW") { return PdmShipTypes.(vid).maxcrew; }
+	if (node == "S_MINCREW") { return PdmShipTypes.(vid).mincrew; }
+	if (node == "S_CAPACITY" || node == "S_MAXWEIGHT") { return PdmShipTypes.(vid).capacity; }
 	if (node == "S_WEIGHT" || node == "S_TOTALWEIGHT") { return "" + Screen_Cargo(); }
-	if (node == "S_GUNPORTS") { return PlayerShipType.cannonstotal; }
-	if (node == "S_BOARD") { return Screen_Board(PlayerShipType.deckcannons); }
-	if (node == "S_STERN") { return "" + Screen_Deck(PlayerShipType.cannonback); }
+	if (node == "S_GUNPORTS") { return PdmShipTypes.(vid).cannonstotal; }
+	if (node == "S_BOARD") { return Screen_Board(PdmShipTypes.(vid).deckcannons); }
+	if (node == "S_STERN") { return "" + Screen_Deck(PdmShipTypes.(vid).cannonback); }
 	if (node == "S_CALIBERSET" || node == "S_SHOTWEIGHT" || node == "S_FIRERANGE" || node == "S_RELOADRATE") { return Screen_Cannon(node); }
-	if (node == "S_BOARDNUM") { return "" + Screen_Deck(PlayerShipType.deckcannons); }
-	if (node == "S_STERNNUM") { return "" + Screen_Deck(PlayerShipType.cannonback); }
+	if (node == "S_LBSNUM0") { return Screen_Nth(PdmCannons.Culverins.params, 0); }
+	if (node == "S_GOLDNUM0") { return "+" + (sti(PdmGoods.Culverins.price) * sti(PdmShipTypes.(vid).cannonstotal)); }
+	if (node == "S_BOARDNUM") { return "" + Screen_Deck(PdmShipTypes.(vid).deckcannons); }
+	if (node == "S_STERNNUM") { return "" + Screen_Deck(PdmShipTypes.(vid).cannonback); }
 	return "";
 }
 
@@ -585,8 +626,7 @@ void Screen_ShipyardStep(int step)
 		if (cc == 5 || cc == 6) { shipyardPick = cand.id; break; }
 	}
 	string id = shipyardPick;
-	Screen_Text("EDITSUMMA", Screen_Put(PdmScreens.shipyard.t.shipcost, Screen_ShipBuyPrice(id)));
-	if (CheckAttribute(PdmScreens, "ships." + id + ".name")) { Screen_Text("EDITSHIPTYPE", PdmScreens.ships.(id).name); }
+	Screen_Fill();
 	Trace("PDM shipyard: pick " + id);
 }
 
@@ -672,15 +712,16 @@ bool Screen_ShipyardClick(string node)
 	{
 		if (shipyardPick == "") { Screen_ShipyardStep(1); }
 		string id = shipyardPick;
-		if (!shipyardSold) { Screen_Text("EDITHELP", PdmScreens.shipyard.t.buybutsell); Trace("PDM shipyard: refused, sell the old ship"); return true; }
+		if (!shipyardSold) { Screen_Text("EDITBUY", PdmScreens.shipyard.t.buybutsell); Trace("PDM shipyard: refused, sell the old ship"); return true; }
 		int price = Screen_ShipBuyPrice(id);
-		if (sti(PlayerCard.money) < price) { Screen_Text("EDITHELP", PdmScreens.shipyard.t.buybutmoney); Trace("PDM shipyard: refused, no money"); return true; }
+		if (sti(PlayerCard.money) < price) { Screen_Text("EDITBUY", PdmScreens.shipyard.t.buybutmoney); Trace("PDM shipyard: refused, no money"); return true; }
 		PlayerCard.money = sti(PlayerCard.money) - price;
 		PlayerShipCard.type_key = id;
 		DeleteAttribute(PlayerShipCard, "hull_hp");
 		DeleteAttribute(PlayerShipCard, "rig");
 		makearef(PlayerShipType, PdmShipTypes.(id));
 		shipyardSold = false;
+		shipyardPick = "";
 		Screen_Fill();
 		Trace("PDM shipyard: bought " + id + ", money " + PlayerCard.money);
 		return true;
@@ -848,9 +889,9 @@ void Screen_ShipyardCheck(string name)
 // the buttons in the test: the first Buy is refused (the old ship stands), Sell gives B, Buy takes A of the picked one
 void Screen_ShipyardVerify()
 {
-	string id = shipyardPick;
+	string id = PlayerShipType.id;
 	int want = shipyardMoney + Screen_ShipSellPrice(shipyardOwn) - Screen_ShipBuyPrice(id);
-	if (PlayerShipType.id == id && sti(PlayerCard.money) == want && id != "") { Trace("PDM shipyard: actions ok"); }
+	if (shipyardPick == "" && id != shipyardOwn && sti(PlayerCard.money) == want) { Trace("PDM shipyard: actions ok"); }
 	else { Trace("PDM shipyard: actions FAIL, type " + PlayerShipType.id + ", pick " + id + ", money " + PlayerCard.money + ", want " + want); }
 	// a half-broken hull and sails: Repair All takes the price of both and makes them whole
 	PlayerShipCard.hull_hp = sti(PlayerShipType.hitpoint) / 2;
