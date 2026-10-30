@@ -410,6 +410,29 @@ int Screen_RankClass(int rank)
 	return c;
 }
 
+// the ship type is on sale: its class is in the range of the rank (one above the limit down to 6, TOWN.dll 0x10004f8a)
+// and the type is in the list of the shipyard of the island (<island>.sht, PdmYard)
+bool Screen_YardHas(aref type)
+{
+	int c = sti(type.class);
+	int low = Screen_RankClass(Screen_HeroRank()) - 1;
+	if (low < 1) { low = 1; }
+	if (c < low || c > 6) { return false; }
+	if (townIsland != "" && CheckAttribute(PdmYard, townIsland))
+	{
+		string key = type.filename;
+		if (!CheckAttribute(PdmYard, townIsland + "." + key)) { return false; }
+	}
+	return true;
+}
+
+int Screen_YardLow()
+{
+	int low = Screen_RankClass(Screen_HeroRank()) - 1;
+	if (low < 1) { low = 1; }
+	return low;
+}
+
 int Screen_HeroRank()
 {
 	if (CheckAttribute(PlayerCard, "rank")) { return sti(PlayerCard.rank); }
@@ -512,15 +535,15 @@ void Screen_ShipyardRight()
 	Screen_ShipyardRow(PdmScreens.shipyard.t.yourship, "-");
 	Screen_ShipyardRow(" ", "-");
 	int n = GetAttributesNum(&PdmShipTypes);
-	for (int c = 5; c <= 6; c++)
+	for (int c = Screen_YardLow(); c <= 6; c++)
 	{
-		if (c == 6) { Screen_ShipyardRow(" ", "-"); }
+		if (c > Screen_YardLow()) { Screen_ShipyardRow(" ", "-"); }
 		Screen_ShipyardRow(Screen_Put(PdmScreens.shipyard.t.classorder, "" + c), "class" + c);
 		for (int i = 0; i < n; i++)
 		{
 			aref type;
 			type = GetAttributeN(&PdmShipTypes, i);
-			if (sti(type.class) != c) { continue; }
+			if (sti(type.class) != c || !Screen_YardHas(type)) { continue; }
 			string id = type.id;
 			if (CheckAttribute(PdmScreens, "ships." + id + ".name")) { Screen_ShipyardRow(PdmScreens.ships.(id).name, id); }
 		}
@@ -695,13 +718,13 @@ int Screen_ShipSellPrice(string id)
 void Screen_ShipyardClass(int c)
 {
 	string vid = Screen_ViewId();
-	if (c == 0) { c = 5; if (sti(PdmShipTypes.(vid).class) == 5) { c = 6; } }
+	if (c == 0) { c = 6; if (sti(PdmShipTypes.(vid).class) == 6) { c = Screen_YardLow(); } }
 	int n = GetAttributesNum(&PdmShipTypes);
 	for (int i = 0; i < n; i++)
 	{
 		aref type;
 		type = GetAttributeN(&PdmShipTypes, i);
-		if (sti(type.class) != c) { continue; }
+		if (sti(type.class) != c || !Screen_YardHas(type)) { continue; }
 		shipyardPick = type.id;
 		break;
 	}
@@ -720,8 +743,7 @@ void Screen_ShipyardStep(int step)
 	{
 		aref type;
 		type = GetAttributeN(&PdmShipTypes, i);
-		int c = sti(type.class);
-		if (c != 5 && c != 6) { continue; }
+		if (!Screen_YardHas(type)) { continue; }
 		if (type.id == shipyardPick) { at = i; }
 	}
 	int k = at;
@@ -732,8 +754,7 @@ void Screen_ShipyardStep(int step)
 		if (k < 0) { k = n - 1; }
 		aref cand;
 		cand = GetAttributeN(&PdmShipTypes, k);
-		int cc = sti(cand.class);
-		if (cc == 5 || cc == 6) { shipyardPick = cand.id; break; }
+		if (Screen_YardHas(cand)) { shipyardPick = cand.id; break; }
 	}
 	string id = shipyardPick;
 	shipyardGun = 0;
