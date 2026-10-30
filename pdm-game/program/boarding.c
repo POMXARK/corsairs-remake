@@ -547,12 +547,30 @@ void Board_End()
 	Board_Release();
 	if (TownAuto == 8)
 	{
+		if (won) { Board_Prize(); }
 		Trace("PDM: autotest done, boarding, won " + won);
 		ExitProgram();
 		return;
 	}
-	if (won) { Sea_Start(boardIsland); }
+	if (won) { Board_Prize(); Sea_Start(boardIsland); }
 	else { Menu_Start(); }
+}
+
+// the won ship goes to the fleet if the rules of the ransack allow it (RANSACK.dll ShipExchange, docs/original-vs-remake.md):
+// the crews together reach the minimal crews, the class is in the range of the rank; the crew left on it is the enemy's
+void Board_Prize()
+{
+	string shipKey = PdmCharacters.(boardEnemyKey).ship_key;
+	string typeKey = PdmShips.(shipKey).type_key;
+	int theirs = sti(PdmShips.(shipKey).crew);
+	if (battleEnemyCrew >= 0) { theirs = battleEnemyCrew; }
+	theirs = theirs - sti(BoardEnemy.crew_lost);
+	int ours = sti(PlayerShipCard.crew) - sti(BoardHero.crew_lost);
+	string myType = PlayerShipCard.type_key;
+	string why = Screen_PrizeCheck(ours, sti(PdmShipTypes.(myType).mincrew), theirs, sti(PdmShipTypes.(typeKey).mincrew), sti(PdmShipTypes.(typeKey).class), Screen_HeroRank());
+	if (why != "") { Trace("PDM prize: refused, " + why); return; }
+	Trade_AddShip(typeKey, PdmShips.(shipKey).name);
+	Trace("PDM prize: taken " + typeKey);
 }
 
 ref Board_ShadowDensity()
