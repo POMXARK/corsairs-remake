@@ -973,6 +973,7 @@ void Town_AutoPlan()
 	// 19: to the shipyard, the owner's dialog, its link "верфь" opens the screen (screens.c, Screen_ShipyardCheck)
 	if (TownAuto == SHIPYARD_ID)
 	{
+		PlayerCard.money = 5000;	// a test hero has none: the screen shows "Деньги N", the buttons check the gold
 		Town_PlanAdd("go", "shipyard", "");
 		Town_PlanAdd("talk", "", "PdmA_SHIPYARD");
 		return;
