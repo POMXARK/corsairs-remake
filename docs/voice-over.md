@@ -284,7 +284,7 @@ rm -r $D && python3 -I tools/pdm_voice_lines.py pdm-game --bind            # у�
 
 ### Стартовые значения из окружения
 
-`run.sh` / `run.ps1` / `game.sh` / `game.ps1` читают `VOLUME_FX`, `VOLUME_MUSIC`, `VOLUME_VOICE` (0–100) и `NPC_VOICE` (0/1): сначала переменная окружения, затем `pdm-game/settings.ini`, затем умолчание 80/70/100/1. Windows: `set VOLUME_FX=60` перед запуском `run.ps1`. Значения со страницы настроек в `settings.ini` не пишутся (скрипты не умеют писать файлы) — они действуют до выхода.
+`run.sh` / `run.ps1` / `game.sh` / `game.ps1` читают `VOLUME_FX`, `VOLUME_MUSIC`, `VOLUME_VOICE` (0–100) и `NPC_VOICE` (0/1): сначала переменная окружения, затем `pdm-game/save/settings.ini` (его пишет страница «Настройки» при каждом клике на громкость и на голоса), затем `pdm-game/settings.ini`, затем умолчание 80/70/100/1. Windows: `set VOLUME_FX=60` перед запуском `run.ps1`. Запись делает функция скриптов движка `WriteTextFile(путь, текст)` (`\n` в тексте — перевод строки).
 
 ## Запись видео из игры (F9)
 

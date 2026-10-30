@@ -109,6 +109,15 @@ int Options_Step(int volume, int step)
 	return v;
 }
 
+// the volumes and the voices of the characters to save/settings.ini (run.sh / run.ps1 read it next launch,
+// after the variables of the shell, before settings.ini)
+void Options_SaveSettings()
+{
+	int voice = 0;
+	if (optionsVoice) { voice = 1; }
+	WriteTextFile("save/settings.ini", "volume_fx = " + optionsVolFx + "\nvolume_music = " + optionsVolMusic + "\nvolume_voice = " + optionsVolVoice + "\nnpc_voice = " + voice + "\n");
+}
+
 void Options_Volumes()
 {
 	for (int i = 0; i < 3; i++)
@@ -146,6 +155,7 @@ bool Options_Slider(string node)
 	if (!known) { return false; }
 	Options_Volumes();
 	Sound_Volume();
+	Options_SaveSettings();
 	return true;
 }
 
@@ -156,7 +166,7 @@ bool Options_Click(string node)
 	if (node == "LB_WINDOWED") { optionsFull = !optionsFull; Options_Check(node, optionsFull); return true; }
 	if (node == "LB_SOUNDON") { optionsFx = !optionsFx; Options_Check(node, optionsFx); Sound_Volume(); return true; }
 	if (node == "LB_MUSICON") { optionsMusic = !optionsMusic; Options_Check(node, optionsMusic); Sound_Volume(); return true; }
-	if (node == "LB_VOICEON") { optionsVoice = !optionsVoice; Options_Check(node, optionsVoice); return true; }
+	if (node == "LB_VOICEON") { optionsVoice = !optionsVoice; Options_Check(node, optionsVoice); Options_SaveSettings(); return true; }
 	if (Options_Slider(node)) { return true; }
 	if (node == "LB_AUTOSAVE") { optionsAutosave = !optionsAutosave; Options_Check(node, optionsAutosave); return true; }
 	if (node == "LB_APPLY") { Options_Apply(); return true; }
@@ -254,6 +264,8 @@ void Opt_AutoStep()
 	if (step < 5) { PostEvent("Opt_AutoStep", OPTIONS_AUTO_STEP_MS); }
 	if (step == 0) { Screen_GameMenu(); return; }
 	if (step == 1) { Opt_AutoClick("LB_OPTIONS"); return; }
+	// the volumes of the page are saved on every click (save/settings.ini, read by the next launch)
+	if (step == 2) { Opt_AutoClick("LB_FXDOWN"); Opt_AutoClick("LB_VOICEDOWN"); Trace("PDM options: autotest, volumes " + optionsVolFx + " " + optionsVolMusic + " " + optionsVolVoice); }
 	if (step == 2 || step == 4) { Opt_AutoApply(); return; }
 	Trace("PDM options: autotest done, the interface of " + optionsAutoInterface + " units stayed while the window moved to " + Options_Current());
 	ExitProgram();

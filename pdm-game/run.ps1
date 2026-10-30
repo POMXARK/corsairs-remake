@@ -23,11 +23,12 @@ function Get-Env([string]$Name, [string]$Default) { $v = [Environment]::GetEnvir
 $Parts = (Get-Env 'PARTS' 'all') -replace '\s', ''
 $Selected = $Parts -ne 'all'
 function Test-Part([string]$Name) { ($Parts -eq 'all') -or ((($Parts -split ',').Contains($Name))) }
-# the volume and the voices of the characters: the variable, else settings.ini, else the default (0..100)
+# the volume and the voices of the characters: the variable, else save/settings.ini (the page of the options writes it), else settings.ini, else the default (0..100)
 function Get-Setting([string]$Name, [string]$Key, [string]$Default)
 {
     $v = Get-Env $Name ''
     if (-not $v -and (Test-Path "$Demo/settings.ini")) { $m = Select-String -Path "$Demo/settings.ini" -Pattern "^$Key\s*=\s*(\d+)" | Select-Object -First 1; if ($m) { $v = $m.Matches[0].Groups[1].Value } }
+    if (-not $v -and (Test-Path "$Demo/save/settings.ini")) { $m = Select-String -Path "$Demo/save/settings.ini" -Pattern "^$Key\s*=\s*(\d+)" | Select-Object -First 1; if ($m) { $v = $m.Matches[0].Groups[1].Value } }
     $v = $v -replace '[^0-9]', ''
     if ($v) { $v } else { $Default }
 }

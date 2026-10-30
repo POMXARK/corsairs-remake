@@ -98,8 +98,9 @@ echo "float StartHour = $(LC_NUMERIC=C printf %.2f "${HOUR:-9}");" >> "$DIR/prog
 echo "string TalkNpc = \"${TALK_NPC:-}\";" >> "$DIR/program/data/start.c"
 echo "int TalkAngle = ${TALK_ANGLE:-0};" >> "$DIR/program/data/start.c"
 echo "int SoundFxOnly = ${SOUND_FX_ONLY:-0};" >> "$DIR/program/data/start.c"
-# the volume and the voices of the characters: the variable, else settings.ini, else the default (0..100)
-setting() { local v="${!1:-}"; [ -n "$v" ] || v=$(sed -n "s/^$2[[:space:]]*=[[:space:]]*//p" "$DIR/settings.ini" 2>/dev/null | head -1); v="${v//[^0-9]/}"; echo "${v:-$3}"; }
+# the volume and the voices of the characters: the variable, else save/settings.ini (the page "Настройки" writes it), else settings.ini, else the default (0..100)
+setting() { local v="${!1:-}"; [ -n "$v" ] || v=$(sed -n "s/^$2[[:space:]]*=[[:space:]]*//p" "$DIR/save/settings.ini" 2>/dev/null | head -1);
+        [ -n "$v" ] || v=$(sed -n "s/^$2[[:space:]]*=[[:space:]]*//p" "$DIR/settings.ini" 2>/dev/null | head -1); v="${v//[^0-9]/}"; echo "${v:-$3}"; }
 echo "int StartVolFx = $(setting VOLUME_FX volume_fx 80);" >> "$DIR/program/data/start.c"
 echo "int StartVolMusic = $(setting VOLUME_MUSIC volume_music 70);" >> "$DIR/program/data/start.c"
 echo "int StartVolVoice = $(setting VOLUME_VOICE volume_voice 100);" >> "$DIR/program/data/start.c"
