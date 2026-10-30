@@ -415,8 +415,9 @@ int Screen_RankClass(int rank)
 string Screen_Decimal(string value)
 {
 	if (screenName != "shipyard") { return value; }
-	if (findSubStr(value, ".", 0) >= 0) { return value; }
-	return value + ".0";
+	// "%.1f" of TOWN.dll: one decimal, rounded
+	int tenths = MakeInt(stf(value) * 10.0 + 0.5);
+	return "" + (tenths / 10) + "." + (tenths - (tenths / 10) * 10);
 }
 
 // what the shipyard of the original does not show for this hero: the sheathing and the refit buttons, the
