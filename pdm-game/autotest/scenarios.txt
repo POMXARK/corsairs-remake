@@ -28,4 +28,5 @@ sign-store-spa-front|town|City_GrandaAvilia|50|autotest done, sign look ok|120|C
 sign-store-spa-back|town|City_GrandaAvilia|50|autotest done, sign look ok|120|CAM=19.91,2.08,-16.68,19.91,0,-14.18
 menu-arrows|menu||16|PDM menu: arrows ok|60
 store-screen|town|City_HighRock|21|PDM store: sell ok|120
+store-fleet|town|City_HighRock|21|PDM store: fleet ok|120
 shipyard-screen|town|City_HighRock|19|PDM shipyard: repair ok|120

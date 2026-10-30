@@ -191,6 +191,7 @@ void Screen_Fill()
 	if (!CheckAttribute(PlayerCard, "money")) { return; }
 	string name = PlayerCard.name;
 	string ship = PlayerShipCard.name;
+	if (screenName == "trade") { ship = Trade_ShipName(); }
 	if (screenName == "shipyard")
 	{
 		// the original has no name here; its "Деньги N" stands at the right bottom (EDITSHIPMONEY, tools/pdm_ui.py)
@@ -362,9 +363,6 @@ string Screen_Put(string text, string value)
 // the weight in the hold: the goods of the ship of the hero
 int Screen_Cargo()
 {
-	if (!CheckAttribute(PlayerShipCard, "cargo")) { return 0; }
-	aref cargo;
-	makearef(cargo, PlayerShipCard.cargo);
 	return Trade_Load();
 }
 
@@ -611,6 +609,7 @@ string Screen_First(string list)
 string Screen_ViewId()
 {
 	if (screenName == "shipyard" && shipyardPick != "") { return shipyardPick; }
+	if (screenName == "trade") { return Trade_ShipType(); }
 	return PlayerShipType.id;
 }
 

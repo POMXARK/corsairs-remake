@@ -28,6 +28,7 @@ int tradeStage = 0;
 // the line under the lists: what the last press did ("" shows the money, as the original)
 string tradeHelp = "";
 object PdmStore;
+object PlayerFleet;
 
 int Trade_Goods()
 {
@@ -102,11 +103,74 @@ int Trade_Step(int i)
 	return 1;
 }
 
+// The fleet of the hero: the flagship (PlayerShipCard) and up to seven companions PlayerFleet.s1..s7 (type_key, name,
+// cargo.n<i>) — TOWN.dll lists the hero and the non-empty slots +0x130..+0x148 of him. PlayerFleet.n is the count with the
+// flagship. The arrows PrevShip/NextShip of the store move tradeShip along the list.
+int tradeShip = 0;
+
+int Trade_Ships()
+{
+	if (!CheckAttribute(PlayerFleet, "n")) { return 1; }
+	return sti(PlayerFleet.n);
+}
+
+// the companion slot of the ship tradeShip
+string Trade_Slot()
+{
+	return "s" + tradeShip;
+}
+
+string Trade_ShipName()
+{
+	if (tradeShip == 0) { return PlayerShipCard.name; }
+	string sk = Trade_Slot();
+	return PlayerFleet.(sk).name;
+}
+
+// the key of the type of the ship in PdmShipTypes
+string Trade_ShipType()
+{
+	if (tradeShip == 0) { return PlayerShipType.id; }
+	string sk = Trade_Slot();
+	return PlayerFleet.(sk).type_key;
+}
+
+int Trade_ShipCapacity()
+{
+	string tk = Trade_ShipType();
+	return sti(PdmShipTypes.(tk).capacity);
+}
+
+// a companion for the fleet (tests; the ways to get one: the shipyard, a prize, a quest)
+void Trade_AddShip(string typeKey, string name)
+{
+	int k = Trade_Ships();
+	if (k > 7) { return; }
+	string sk = "s" + k;
+	PlayerFleet.(sk).type_key = typeKey;
+	PlayerFleet.(sk).name = name;
+	PlayerFleet.n = k + 1;
+}
+
 int Trade_Onboard(int i)
 {
 	string at = "n" + i;
-	if (!CheckAttribute(PlayerShipCard, "cargo." + at)) { return 0; }
-	return sti(PlayerShipCard.cargo.(at));
+	if (tradeShip == 0)
+	{
+		if (!CheckAttribute(PlayerShipCard, "cargo." + at)) { return 0; }
+		return sti(PlayerShipCard.cargo.(at));
+	}
+	string sk = Trade_Slot();
+	if (!CheckAttribute(PlayerFleet, sk + ".cargo." + at)) { return 0; }
+	return sti(PlayerFleet.(sk).cargo.(at));
+}
+
+void Trade_SetOnboard(int i, int n)
+{
+	string at = "n" + i;
+	if (tradeShip == 0) { PlayerShipCard.cargo.(at) = n; return; }
+	string sk = Trade_Slot();
+	PlayerFleet.(sk).cargo.(at) = n;
 }
 
 // the weight of the hold in twentieths of a centner: the shot weighs by twenty pieces, the rest by the piece
@@ -252,6 +316,7 @@ int Trade_SellPrice(string island, int i)
 void Trade_Begin()
 {
 	tradeSel = 0;
+	tradeShip = 0;
 	tradeTop = 0;
 	tradeQty = 0;
 	tradeHelp = "";
@@ -265,7 +330,7 @@ int Trade_MaxBuy(int i)
 	int stock = Trade_Stock(townIsland, i);
 	int step = Trade_Step(i);
 	int w = Trade_Weight(i);
-	int free = sti(PlayerShipType.capacity) * 20 - Trade_Twentieths();
+	int free = Trade_ShipCapacity() * 20 - Trade_Twentieths();
 	int price = Trade_Price(townIsland, i);
 	int money = sti(PlayerCard.money);
 	int q = stock;
@@ -367,11 +432,11 @@ void Trade_Buy()
 	int price = Trade_Price(townIsland, i);
 	string at = "n" + i;
 	PlayerCard.money = sti(PlayerCard.money) - q * price;
-	PlayerShipCard.cargo.(at) = Trade_Onboard(i) + q;
+	Trade_SetOnboard(i, Trade_Onboard(i) + q);
 	Trade_SetStock(townIsland, i, Trade_Stock(townIsland, i) - q);
 	tradeHelp = why;
 	tradeQty = 0;
-	Trace("PDM trade: bought " + q + " of " + Trade_Id(i) + " for " + (q * price) + " at " + townIsland + ", money " + PlayerCard.money + ", load " + Trade_Load() + "/" + PlayerShipType.capacity + " " + why);
+	Trace("PDM trade: bought " + q + " of " + Trade_Id(i) + " for " + (q * price) + " at " + townIsland + ", money " + PlayerCard.money + ", load " + Trade_Load() + "/" + Trade_ShipCapacity() + " " + why);
 }
 
 void Trade_Sell()
@@ -383,11 +448,11 @@ void Trade_Sell()
 	int price = Trade_SellPrice(townIsland, i);
 	string at = "n" + i;
 	PlayerCard.money = sti(PlayerCard.money) + q * price;
-	PlayerShipCard.cargo.(at) = Trade_Onboard(i) - q;
+	Trade_SetOnboard(i, Trade_Onboard(i) - q);
 	Trade_SetStock(townIsland, i, Trade_Stock(townIsland, i) + q);
 	tradeHelp = why;
 	tradeQty = 0;
-	Trace("PDM trade: sold " + q + " of " + Trade_Id(i) + " for " + (q * price) + " at " + townIsland + ", money " + PlayerCard.money + ", load " + Trade_Load() + "/" + PlayerShipType.capacity + " " + why);
+	Trace("PDM trade: sold " + q + " of " + Trade_Id(i) + " for " + (q * price) + " at " + townIsland + ", money " + PlayerCard.money + ", load " + Trade_Load() + "/" + Trade_ShipCapacity() + " " + why);
 }
 
 // a button of the screen; true if it was one of the trade
@@ -413,6 +478,8 @@ bool Trade_Click(string node)
 		tradeQty = Trade_Onboard(i);
 		if (tradeQty < 1) { tradeQty = Trade_MaxBuy(i); }
 	}
+	else if (node == "LB_PREVSHIP") { if (tradeShip > 0) { tradeShip--; tradeQty = 0; tradeHelp = ""; } }
+	else if (node == "LB_NEXTSHIP") { if (tradeShip < Trade_Ships() - 1) { tradeShip++; tradeQty = 0; tradeHelp = ""; } }
 	else if (node == "LB_BUY") { Trade_Buy(); }
 	else if (node == "LB_SELL") { Trade_Sell(); }
 	else { return false; }
@@ -437,6 +504,9 @@ void Trade_Check(string name)
 	if (Trade_Price(townIsland, i) < 1) { empty = empty + "price "; }
 	if (empty == "") { Trace("PDM store: values ok, the island " + townIsland + ", " + Trade_Rows() + " goods"); }
 	else { Trace("PDM store: FAIL, " + empty); }
+	// a companion for the test (ours): the same type as the flagship
+	string tk = PlayerShipCard.type_key;
+	Trade_AddShip(tk, "Companion");
 	tradeMoney0 = sti(PlayerCard.money);
 	tradeStock0 = Trade_Stock(townIsland, i);
 	tradeOnboard0 = Trade_Onboard(i);
@@ -446,7 +516,7 @@ void Trade_Check(string name)
 	PostEvent("ievnt_command", 700, "ss", "click", "LB_RIGHT");
 	PostEvent("ievnt_command", 900, "ss", "click", "LB_BUY");
 	PostEvent("Trade_Verify", 1200);
-	PostEvent("Town_AutoQuit", 4000);
+	PostEvent("Town_AutoQuit", 6000);
 }
 
 // after the purchase: the money fell by the price, the hold and the stock moved by the same quantity; then the sale of it
@@ -466,7 +536,23 @@ void Trade_Verify()
 		PostEvent("Trade_Verify", 700);
 		return;
 	}
-	int earned = sti(PlayerCard.money) - tradeMoney1;
-	if (Trade_Onboard(i) == 0 && earned > 0) { Trace("PDM store: sell ok, " + earned + " earned"); }
-	else { Trace("PDM store: sell FAIL, onboard " + Trade_Onboard(i) + ", earned " + earned); }
+	if (tradeStage == 1)
+	{
+		tradeStage = 2;
+		int earned1 = sti(PlayerCard.money) - tradeMoney1;
+		if (Trade_Onboard(i) == 0 && earned1 > 0) { Trace("PDM store: sell ok, " + earned1 + " earned"); }
+		else { Trace("PDM store: sell FAIL, onboard " + Trade_Onboard(i) + ", earned " + earned1); }
+		// the next ship of the fleet: the purchase goes into its hold, the flagship stays empty
+		PostEvent("ievnt_command", 100, "ss", "click", "LB_NEXTSHIP");
+		PostEvent("ievnt_command", 300, "ss", "click", "LB_RIGHT");
+		PostEvent("ievnt_command", 500, "ss", "click", "LB_BUY");
+		PostEvent("Trade_Verify", 900);
+		return;
+	}
+	int second = Trade_Onboard(i);
+	tradeShip = 0;
+	int flag = Trade_Onboard(i);
+	tradeShip = 1;
+	if (second > 0 && flag == 0 && Trade_ShipName() == "Companion") { Trace("PDM store: fleet ok, " + second + " in the hold of " + Trade_ShipName() + ", flagship " + flag); }
+	else { Trace("PDM store: fleet FAIL, " + second + " in the second, " + flag + " in the flagship, ship " + tradeShip); }
 }
