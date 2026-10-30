@@ -1050,6 +1050,16 @@ void Screen_Status()
 	Screen_Open("sstuff");
 }
 
+// the prize ship of the ransack (RANSACK.dll 0x10007cc4, 0x10007d83): "" if it may be taken, else the refusal.
+// The crews of both ships together must reach the sum of their minimal crews; the ship class must not be above the rank
+// (class >= 6 - (rank - 1) / 2), else the change asks about lower skills (RanSack_GetShipButSkills)
+string Screen_PrizeCheck(int myCrew, int myMin, int prizeCrew, int prizeMin, int prizeClass, int rank)
+{
+	if (myCrew + prizeCrew < myMin + prizeMin) { return "crew"; }
+	if (prizeClass < Screen_RankClass(rank)) { return "skills"; }
+	return "";
+}
+
 // TOWN_AUTO=22: F1, then the buttons of the status one after the other; every page is named in the log, the screen
 // stays long enough for a picture, then the game quits
 void Screen_StatusAuto()
@@ -1082,6 +1092,13 @@ void Screen_StatusAuto()
 	}
 	else { Screen_Click(b); }
 	Trace("PDM status: " + b + " -> '" + screenName + "'");
+	if (b == "@shipexchange")
+	{
+		string pc = Screen_PrizeCheck(10, 20, 5, 10, 3, 1);
+		string pk = Screen_PrizeCheck(30, 20, 5, 10, 1, 1);
+		string po = Screen_PrizeCheck(40, 20, 20, 10, 6, 1);
+		Trace("PDM prize: " + pc + "," + pk + "," + po + ",ok");
+	}
 	PostEvent("Screen_StatusAuto", 1500, "l", step + 1);
 }
 
