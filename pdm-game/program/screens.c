@@ -379,10 +379,22 @@ string Screen_Nth(string list, int n)
 	return Screen_First(rest);
 }
 
+// the guns of a "a,b,c" list of decks (a ship has them on one deck: "0,5,0") — the sum
+int Screen_Deck(string list)
+{
+	int sum = 0;
+	for (int i = 0; i < 3; i++)
+	{
+		string n = Screen_Nth(list, i);
+		if (n != "") { sum = sum + sti(n); }
+	}
+	return sum;
+}
+
 // "4 + 4": the guns of the board are on both sides
 string Screen_Board(string list)
 {
-	string n = Screen_First(list);
+	int n = Screen_Deck(list);
 	return n + " + " + n;
 }
 
@@ -516,18 +528,36 @@ string Screen_Value(string node)
 	if (node == "S_WEIGHT" || node == "S_TOTALWEIGHT") { return "" + Screen_Cargo(); }
 	if (node == "S_GUNPORTS") { return PlayerShipType.cannonstotal; }
 	if (node == "S_BOARD") { return Screen_Board(PlayerShipType.deckcannons); }
-	if (node == "S_STERN") { return Screen_First(PlayerShipType.cannonback); }
+	if (node == "S_STERN") { return "" + Screen_Deck(PlayerShipType.cannonback); }
 	if (node == "S_CALIBERSET" || node == "S_SHOTWEIGHT" || node == "S_FIRERANGE" || node == "S_RELOADRATE") { return Screen_Cannon(node); }
-	if (node == "S_BOARDNUM") { return Screen_First(PlayerShipType.deckcannons); }
-	if (node == "S_STERNNUM") { return Screen_First(PlayerShipType.cannonback); }
+	if (node == "S_BOARDNUM") { return "" + Screen_Deck(PlayerShipType.deckcannons); }
+	if (node == "S_STERNNUM") { return "" + Screen_Deck(PlayerShipType.cannonback); }
 	return "";
 }
 
 
 // the price of a ship the shipyard asks (A of the original) and gives (B), in hundreds; the skill and the
 // reputation of the hero are not mapped yet (docs/original-vs-remake.md), so the spread is 0
-int Screen_ShipBuyPrice(string id) { return (sti(PdmShipTypes.(id).buyprice) / 100) * 100; }
-int Screen_ShipSellPrice(string id) { return (sti(PdmShipTypes.(id).sellprice) / 100) * 100; }
+// the correction of the price of the original: |A-B| * 0.5 * (R+K) * 0.01, K the Commerce of the hero (skill 2 of
+// skills.idf: sailing, repair, commerce) times 5, up to 95; R (+0x3d8 of the hero, reputation?) is not known: 0 (ours)
+int Screen_PriceShift(string id)
+{
+	int k = 0;
+	if (CheckAttribute(PlayerCard, "skills.commerce")) { k = sti(PlayerCard.skills.commerce) * 5; }
+	if (k > 95) { k = 95; }
+	int gap = sti(PdmShipTypes.(id).buyprice) - sti(PdmShipTypes.(id).sellprice);
+	if (gap < 0) { gap = -gap; }
+	return MakeInt(gap * 0.5 * k * 0.01);
+}
+
+int Screen_ShipBuyPrice(string id) { return ((sti(PdmShipTypes.(id).buyprice) - Screen_PriceShift(id)) / 100) * 100; }
+
+int Screen_ShipSellPrice(string id)
+{
+	int price = sti(PdmShipTypes.(id).sellprice) + Screen_PriceShift(id);
+	if (price > sti(PdmShipTypes.(id).buyprice)) { price = sti(PdmShipTypes.(id).buyprice); }
+	return (price / 100) * 100;
+}
 
 // the next type of the list "Класс 5/6" after the chosen one (step -1: the previous)
 void Screen_ShipyardStep(int step)
