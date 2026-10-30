@@ -428,7 +428,8 @@ def sign_mesh(mesh, img, mesh_cls, thick_k=SIGN_THICK):
         quad = []
         for (i, jj) in ((i0, j), (i1, j), (i1, j + 1), (i0, j + 1)):
             u, v = uv(i, jj)
-            # the back is the same picture seen from behind: mirrored along the board
+            # the faces are seen from opposite sides, so one of them is mirrored along the board: in the
+            # engine's left-handed frame it is the face of the normal, and the text reads right from both sides
             if side:
                 u = 1 - u
             quad.append(out.vertex(point(i, jj, side), n, (u, v)))
@@ -525,11 +526,13 @@ def palm_meshes(group, img, name, generated, mesh_cls):
 
 def build(meshes, image, generated, mesh_cls):
     """The meshes of a location with the sprites replaced. image(stem) is the RGBA picture of a texture,
-    generated receives {name: PIL image} of the new textures. Returns (out, veg, counts): out is the
-    non-vegetation meshes, veg the trees and palms (they get their own .gm, rendered with the wind
-    technique), counts the numbers modelled."""
+    generated receives {name: PIL image} of the new textures. Returns (out, veg, board, counts): out is the
+    non-vegetation, non-sign meshes, veg the trees and palms (they get their own .gm, rendered with the wind
+    technique), board the signs (their own .gm: they are redone without the BSP of the town), counts the
+    numbers modelled."""
     out = []
     veg = []
+    board = []
     trees, signs, palms = {}, {}, {}
     for m in meshes:
         stem = stem_of(m)
@@ -571,8 +574,8 @@ def build(meshes, image, generated, mesh_cls):
             seen.append(key)
             made = sign_mesh(m, img, mesh_cls)
             if made:
-                out.append(made)
+                board.append(made)
                 counts["signs"] += 1
             else:
-                out.append(m)
-    return out, veg, counts
+                board.append(m)
+    return out, veg, board, counts

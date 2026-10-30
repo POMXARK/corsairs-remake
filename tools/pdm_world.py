@@ -808,6 +808,7 @@ class World:
         self.lines = []
         self.pictures = {}
         self.generated = {}
+        self.signs_only = False
 
     def texture(self, stem):
         self.used_textures.add(stem.lower())
@@ -837,6 +838,26 @@ class World:
         tiles = inset_tiles(meshes)
         # the textures need the tiles of every model, the cached ones too
         self.tile_textures |= {Path(t).stem.lower() for t in tiles}
+        locations = self.out / "models" / "locations"
+        if self.signs_only:
+            # only the signs: no BSP of the town, its .gm stays (docs/pdm-formats.md, signs)
+            if not (locations / f"{stem}.gm").exists():
+                return self.model_full(stem, meshes)
+            _, _, board, props = pdm_props3d.build(meshes, self.picture, self.generated, Mesh)
+            self.write_signs(board, stem, props)
+            self.done_models[stem] = 0
+            return stem
+        return self.model_full(stem, meshes)
+
+    def write_signs(self, board, stem, props):
+        path = self.out / "models" / "locations" / f"{stem}_signs.gm"
+        if board:
+            write_gm(merge_by_texture(board, stem + "_signs"), path, bsp=True)
+            print(f"  {stem}: {props['signs']} signs modelled")
+        elif path.exists():
+            path.unlink()
+
+    def model_full(self, stem, meshes):
         if (self.out / "models" / "locations" / f"{stem}.gm").exists():
             # the BSP of a town takes a minute: models written before are kept (RECONVERT=1 redoes them)
             self.done_models[stem] = 0
@@ -845,9 +866,10 @@ class World:
             print(f"  {stem}: {seams} triangles split at T-junctions")
         if tiles:
             print(f"  {stem}: {len(tiles)} textures laid once, kept off their edges")
-        meshes, veg, props = pdm_props3d.build(meshes, self.picture, self.generated, Mesh)
-        if any(props.values()):
-            print(f"  {stem}: {props['trees']} trees and {props['signs']} signs modelled")
+        meshes, veg, board, props = pdm_props3d.build(meshes, self.picture, self.generated, Mesh)
+        if props["trees"]:
+            print(f"  {stem}: {props['trees']} trees modelled")
+        self.write_signs(board, stem, props)
         meshes = merge_by_texture(meshes, stem)
         write_gm(meshes, self.out / "models" / "locations" / f"{stem}.gm", bsp=True)
         # the vegetation gets its own .gm: the engine renders it with the wind technique (WindLeaf)
@@ -939,17 +961,25 @@ def main():
     res = Path(sys.argv[1])
     res = res / "RESOURCE" if (res / "RESOURCE").is_dir() else res
     world = World(res, Path(sys.argv[2]))
+    names = sys.argv[3:]
+    if names[:1] == ["--signs"]:
+        # only the signs of the towns again (their own _signs.gm), without the town models and the script
+        world.signs_only = True
+        names = names[1:]
     locs = sorted((res / "WORLDS" / "locations").glob("*.loc"))
-    if sys.argv[3:]:
-        wanted = {n.lower() for n in sys.argv[3:]}
+    if names:
+        wanted = {n.lower() for n in names}
         locs = [p for p in locs if p.stem.lower() in wanted]
     for path in locs:
         print(world.location(path))
+    if world.signs_only:
+        print(f"{len(locs)} locations, signs only")
+        return
     for line in world.characters():
         print(line)
     missing = world.write_textures()
     # the table of all the locations is written only from all of them: a few would drop the rest
-    if not sys.argv[3:]:
+    if not names and not world.signs_only:
         world.write_script()
     print(f"{len(locs)} locations, {len(world.done_models)} models, {len(world.used_textures)} textures"
           + (f", missing {' '.join(missing)}" if missing else ""))

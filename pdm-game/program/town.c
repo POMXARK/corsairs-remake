@@ -289,6 +289,8 @@ void Town_Load(string loc, string from)
 	}
 	// the vegetation on its own model: the crowns sway in the wind (WindLeaf technique)
 	SendMessage(&TownLocation, "lssl", MSG_LOCATION_ADD_MODEL, data.model + "_veg", "WindLeaf", 10);
+	// the shop signs on their own model: redone by pdm_world.py --signs without the BSP of the town
+	SendMessage(&TownLocation, "lssl", MSG_LOCATION_ADD_MODEL, data.model + "_signs", "DLightModel", 10);
 	if (!SendMessage(&TownLocation, "ls", MSG_LOCATION_SET_CHRS_PATCH, data.patch))
 	{
 		Trace("PDM town: patch " + data.patch + " not loaded");
