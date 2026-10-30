@@ -26,3 +26,4 @@ sign-shipyard-front|town|City_HighRock|50|autotest done, sign look ok|120|CAM=-1
 sign-shipyard-back|town|City_HighRock|50|autotest done, sign look ok|120|CAM=-6.44,2.50,18.34,-8.94,0,18.34
 sign-store-spa-front|town|City_GrandaAvilia|50|autotest done, sign look ok|120|CAM=19.91,2.08,-11.68,19.91,0,-14.18
 sign-store-spa-back|town|City_GrandaAvilia|50|autotest done, sign look ok|120|CAM=19.91,2.08,-16.68,19.91,0,-14.18
+menu-arrows|menu||16|PDM menu: arrows ok|60

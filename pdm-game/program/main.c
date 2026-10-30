@@ -22,6 +22,8 @@
 // the same page in a live scene, but it also CLOSES after the resolution change, so the world keeps
 // rendering in the new window for a while (docs/dynamic-resolution.md, the picture after the close)
 #define OPTCLOSE_ID 15
+// the arrows of the main menu step over the unselectable items (menu.c, Menu_ArrowsStart)
+#define MENUARROWS_ID 16
 
 object Render;
 object Scene;

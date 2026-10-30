@@ -21,6 +21,35 @@
 4. Трассы с числами, по которым видно, что механика сработала (корпус, паруса, команда, координаты), а не только «шаг пройден».
 5. Строка в таблицу test-commands.md: что делает тест и какие строки лога ждать.
 
+## Что делает каждый сценарий
+
+Каждый сценарий — строка `pdm-game/autotest/scenarios.txt`; новый тест добавляется сюда и в этот список (одна строка: что делает и по какому маркеру считается пройденным).
+
+| Сценарий | Что делает | Маркер |
+|---|---|---|
+| `story` | прогоняет все сюжетные действия и диалоги без графики (`Story_SelfTest`) | `PDM story test: … actions run` |
+| `screens` | обходит страницы экранов (торговля, верфь, настройки…) таймером `Screen_Tour` | `PDM trade: bought` (**сейчас FAIL**, маркер не появляется, разобраться) |
+| `town-tavern` / `town-talk` / `town-quest` | таверна, разговор с NPC, взятие квеста в городе | `PDM town: autotest done` |
+| `town-land` | высадка и ходьба по городу Highrock | `PDM town: autotest done` |
+| `town-face` | лица NPC при разговоре (камера на лицо) | `PDM face: autotest done` |
+| `sea-out` / `sea-port` / `sea-map` | выход в море, возврат в порт, переход на карту мира | `PDM: sea …` |
+| `battle-fire` / `battle-board` / `battle-sail` / `battle-fort` | залп, абордаж, парусная погоня, бой с фортом | `PDM: autotest done, battle…` |
+| `save-sea` | автосохранение в море и загрузка его обратно | `PDM: autotest done, save` |
+| `save-screens` | то же через страницы «Сохранить»/«Загрузить» | `PDM: autotest done, screens` |
+| `options-sea` / `options-close` | смена разрешения на странице «Настройки» (из меню и над живой сценой) | `PDM options: …`, `PDM close: …` |
+| `sea-sail-to` | «Плыть к» на панели моря (см. раздел выше) | `PDM: autotest done, sail to at sea` |
+| `sign-*` | кадры вывесок с обеих сторон (раздел ниже) | `autotest done, sign look ok` |
+| `menu-arrows` | стрелки главного меню (раздел ниже) | `PDM menu: arrows ok` |
+
+## Стрелки главного меню (menu-arrows, TOWN_AUTO=16)
+
+Проверяет, что клавиши ↑/↓ в главном меню без игры перешагивают неактивные пункты «Сохранить» и «Продолжить» (`SET_SELECTABLE 0`, `screens.c`), а не застревают на них. Без нажатий клавиш: `Menu_ArrowsStep` (`menu.c`) шлёт `MSG_INTERFACE_MENU_ACTION` (`downstep`/`upstep`, как клавиша) и читает узел через `MSG_INTERFACE_GET_CURRENT_NODE`. Ожидаемый путь вниз: `LB_NEWGAME → LB_LOADGAME → LB_OPTIONS → LB_CREDITS → LB_EXIT`, вверх — тем же путём обратно. Шаг 0 только читает стартовый узел (`activate` нажал бы кнопку и запустил игру). Проверяемый код: `inode.cpp:CINODE::DoAction` в движке.
+
+```bash
+pdm-game/autotests.sh build/Debug/engine menu-arrows
+# в compile.log: «PDM menu: arrows step N, at <узел>, expected <узел>» и «PDM menu: arrows ok» (или «arrows FAIL»)
+```
+
 ## Сценарий «Плыть к» (TOWN_AUTO=15)
 
 Тест нажимает «Плыть к» на командной панели моря так же, как игрок, а не вызывает обработчик запуска. Цепочка в `program/autotest/sea_sail.c`: `Press` → `Step3` → `Step4` → `Step5` → `End`. Каждый шаг ставит следующий через `PostEvent`, каждое нажатие — `SendMessage(&BattleInterface, "ls", 46105, ...)`:

@@ -8,6 +8,8 @@
 #define MSG_INTERFACE_RELEASE 45011
 #define MSG_INTERFACE_SET_SELECTABLE 45024
 #define MSG_INTERFACE_MSG_TO_NODE 45045
+#define MSG_INTERFACE_MENU_ACTION 45062
+#define MSG_INTERFACE_GET_CURRENT_NODE 45028
 #define INTERFACE_EXECUTE 4
 #define INTERFACE_REALIZE 5
 #define INVERSE_CONTROL 4
@@ -54,6 +56,49 @@ void Menu_Start()
 		PostEvent("ievnt_command", 6000, "ss", "click", "LB_NEWGAME");
 	}
 	if (StartScene == "screens") { PostEvent("Screen_Tour", SCREEN_AUTO_MS); }
+	if (StartScene == "menu" && TownAuto == MENUARROWS_ID) { Menu_ArrowsStart(); }
+}
+
+// The test of the arrows (autotests.md, "menu-arrows"): "Сохранить" and "Продолжить" are not selectable
+// without a game, and the arrows have to step over them, as in the original. Every step presses one
+// command like the key does (MSG_INTERFACE_MENU_ACTION) and reads the current node back.
+// the node expected after the step N (step 0 selects the first one); steps 1-4 press "down", 5-8 "up"
+string Menu_ArrowsNode(int step)
+{
+	if (step == 0 || step == 8) { return "LB_NEWGAME"; }
+	if (step == 1 || step == 7) { return "LB_LOADGAME"; }
+	if (step == 2 || step == 6) { return "LB_OPTIONS"; }
+	if (step == 3 || step == 5) { return "LB_CREDITS"; }
+	return "LB_EXIT";
+}
+int menuArrowsStep = 0;
+bool menuArrowsFail = false;
+
+void Menu_ArrowsStart()
+{
+	SetEventHandler("Menu_ArrowsStep", "Menu_ArrowsStep", 0);
+	PostEvent("Menu_ArrowsStep", 1000);
+}
+
+void Menu_ArrowsStep()
+{
+	string current = "";
+	// step 0 only reads where the menu starts ("activate" would press the button)
+	if (menuArrowsStep > 0)
+	{
+		string command = "downstep";
+		if (menuArrowsStep > 4) { command = "upstep"; }
+		SendMessage(&GameInterface, "lss", MSG_INTERFACE_MENU_ACTION, command, "");
+	}
+	SendMessage(&GameInterface, "le", MSG_INTERFACE_GET_CURRENT_NODE, &current);
+	string expected = Menu_ArrowsNode(menuArrowsStep);
+	Trace("PDM menu: arrows step " + menuArrowsStep + ", at " + current + ", expected " + expected);
+	if (current != expected) { menuArrowsFail = true; }
+	menuArrowsStep++;
+	if (menuArrowsStep < 9) { PostEvent("Menu_ArrowsStep", 500); return; }
+	if (menuArrowsFail) { Trace("PDM menu: arrows FAIL"); } else { Trace("PDM menu: arrows ok"); }
+	Trace("PDM menu: autotest done, arrows");
+	ExitProgram();
 }
 
 void Menu_Command()

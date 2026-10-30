@@ -160,3 +160,11 @@ unchanged current item. Record with `gdigrab -i desktop` (the `-i title=` source
 `Failed to capture image (error 8)` for this window) and take the frames at
 `trace time - recording start` as the `storm-capture-crop` skill prescribes; the game area of this
 demo sits at `crop=1140:850:950:430` in the 2560x1440 desktop grab. Captures stay in `C:\temp\shots`.
+
+## Готовый тест стрелок в игре (corsairs-remake)
+
+`pdm-game/program/menu.c:Menu_ArrowsStep`, сценарий `menu-arrows` (`TOWN_AUTO=16`, `docs/autotests.md`): те же две
+сообщения, что описаны выше, но на главном меню игры. Проверяет, что `downstep`/`upstep` перешагивают
+пункты с `SET_SELECTABLE 0` (`inode.cpp:CINODE::DoAction`). Шаблон для теста любого другого меню:
+шаг 0 только читает узел (`activate` на кнопке нажимает её и может запустить игру), дальше по шагу
+`MENU_ACTION` + `GET_CURRENT_NODE` и сравнение с ожидаемым узлом. Прогон: `pdm-game/autotests.sh <engine> menu-arrows`.
