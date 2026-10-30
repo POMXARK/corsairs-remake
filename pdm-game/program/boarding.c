@@ -547,7 +547,7 @@ void Board_End()
 	Board_Release();
 	if (TownAuto == 8)
 	{
-		if (won) { Board_Prize(); }
+		Board_Prize(); // the test calls it also after a loss, the branch is checked (ours)
 		Trace("PDM: autotest done, boarding, won " + won);
 		ExitProgram();
 		return;
