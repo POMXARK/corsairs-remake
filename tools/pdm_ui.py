@@ -911,6 +911,22 @@ class Converter:
         write_fonts({name: (ttf, size, outline) for name, (size, outline, _, ttf) in self.fonts.items()},
                     self.resource, f"converted by tools/pdm_ui.py: the fonts of INI/fonts.ini of the original: {used}",
                     shadow=False)  # the original prints with GDI, without a shadow (ours: No_shadow)
+        self.widen_spaces()
+
+    def widen_spaces(self):
+        """The word gap of a free font is narrow at the small sizes of the lists (the words run together):
+        a quarter of the height is added to Spacebar of every font of INI/fonts.ini (ours)."""
+        path = self.resource / "ini/fonts.ini"
+        text = path.read_text(encoding="utf-8")
+        for name, (size, outline, _, ttf) in self.fonts.items():
+            head = f"[{name.upper()}]"
+            start = text.index(head)
+            end = text.find("\n[", start + 1)
+            end = len(text) if end < 0 else end
+            body = re.sub(r"Spacebar = (\d+)", lambda m: f"Spacebar = {int(m.group(1)) + round(size * 0.25)}",
+                          text[start:end], count=1)
+            text = text[:start] + body + text[end:]
+        path.write_text(text, encoding="utf-8")
 
 
 # the screens of the game; the common files (interfaces.ini, pictures, strings) list what is converted,
