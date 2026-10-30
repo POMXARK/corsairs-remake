@@ -312,6 +312,14 @@ int Trade_SellPrice(string island, int i)
 	return sti(PdmStore.(island).(at));
 }
 
+// the arrows of the fleet are dimmed at the ends of the list (TOWN.dll disables PrevShip at the first ship and NextShip at
+// the last one)
+void Trade_Arrows()
+{
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_PREVSHIP", tradeShip > 0);
+	SendMessage(&GameInterface, "lsl", MSG_INTERFACE_SET_SELECTABLE, "LB_NEXTSHIP", tradeShip < Trade_Ships() - 1);
+}
+
 // opening of the screen
 void Trade_Begin()
 {
@@ -507,6 +515,8 @@ void Trade_Check(string name)
 	// a companion for the test (ours): the same type as the flagship
 	string tk = PlayerShipCard.type_key;
 	Trade_AddShip(tk, "Companion");
+	// the prices are random: the money has to pay three steps of any of them (ours, test only)
+	PlayerCard.money = 5000;
 	tradeMoney0 = sti(PlayerCard.money);
 	tradeStock0 = Trade_Stock(townIsland, i);
 	tradeOnboard0 = Trade_Onboard(i);

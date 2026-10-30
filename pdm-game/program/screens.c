@@ -208,6 +208,7 @@ void Screen_Fill()
 	Screen_Text("EDITSHIPTYPENAME", PlayerShipType.type);
 	Screen_ShipText();
 	Screen_Lists();
+	if (screenName == "trade") { Trade_Arrows(); }
 	// the values of the screen in the texts of the original: "Ранг %d", "9 узлов"
 	if (!CheckAttribute(PdmScreens, screenName + ".s")) { return; }
 	aref values;
