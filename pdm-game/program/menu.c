@@ -49,10 +49,7 @@ void Menu_Start()
 	SetEventHandler("ievnt_command", "Menu_Command", 0);
 	SetEventHandler("Menu_NewGame", "Menu_NewGame", 0);
 	Screen_Show("mainmenu");
-	// the test of one screen (SHIPYARD_ID) starts in the game, without the music of the menu
-	bool quiet = false;
-	if (StartScene == "screens" && TownAuto == SHIPYARD_ID) { quiet = true; }
-	if (!quiet) { Sound_Music("Main"); }
+	Sound_Music("Main");
 	Trace("PDM menu: main menu");
 	if (StartScene == "menu-newgame")
 	{

@@ -109,7 +109,7 @@ if (-not (Test-Pattern 'PdmCut.intro' "$Demo/program/data/pdm_cutscenes.c")) { I
 # the screens of the interface, the dialog window and the voices; again for screens made before the fog of
 # the map or the font of the notes of the toolbar
 $MainMap = "$Demo/resource/ini/interfaces/mainmap.ini"
-if (-not ((Test-Path $MainMap) -and ((Get-Content -Raw $MainMap) -match 'fogStamp') -and (Test-Pattern 'LB_VOICEON_OFF' "$Demo/resource/ini/interfaces/options.ini") -and (Test-Pattern 'PDM_HUD_18' "$Demo/resource/ini/fonts.ini") -and (Test-Path "$Demo/program/data/pdm_screens.c") -and (Test-Path "$Demo/program/data/pdm_voices.c")))
+if (-not ((Test-Path $MainMap) -and ((Get-Content -Raw $MainMap) -match 'fogStamp') -and (Test-Pattern 'LB_VOICEON_OFF' "$Demo/resource/ini/interfaces/options.ini") -and (Test-Pattern 'PDM_HUD_18' "$Demo/resource/ini/fonts.ini") -and (Test-Pattern 'PdmScreens.ships' "$Demo/program/data/pdm_screens.c") -and (Test-Path "$Demo/program/data/pdm_voices.c")))
 {
     Invoke-Python "$Tools/pdm_ui.py" $Pdm $Demo
 }

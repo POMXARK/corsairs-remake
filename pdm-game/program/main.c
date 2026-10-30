@@ -24,8 +24,8 @@
 #define OPTCLOSE_ID 15
 // the arrows of the main menu step over the unselectable items (menu.c, Menu_ArrowsStart)
 #define MENUARROWS_ID 16
-// SCENE=screens shows only the shipyard and checks its values (screens.c, Screen_ShipyardCheck)
-#define SHIPYARD_ID 18
+// SCENE=town: the dialog with the shipyard owner opens the screen of the shipyard, its values are checked (screens.c, Screen_ShipyardCheck)
+#define SHIPYARD_ID 19
 
 object Render;
 object Scene;

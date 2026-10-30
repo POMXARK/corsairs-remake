@@ -120,6 +120,7 @@ void Screen_Show(string name)
 	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\" + name + ".ini");
 	Screen_Fill();
 	Trace("PDM screen: " + name);
+	Screen_ShipyardCheck(name);
 }
 
 void Screen_Text(string node, string text)
@@ -177,8 +178,17 @@ void Screen_Fill()
 	if (!CheckAttribute(PlayerCard, "money")) { return; }
 	string name = PlayerCard.name;
 	string ship = PlayerShipCard.name;
-	Screen_Text("EDITFACENAME", name);
-	Screen_Text("EDITFACEMONEY", PlayerCard.money);
+	if (screenName == "shipyard")
+	{
+		// the original has no name here; its "Деньги N" stands at the right bottom, EDITFACEMONEY of the ini is elsewhere (gaps-plan 1.13)
+		Screen_Text("EDITFACENAME", "");
+		Screen_Text("EDITFACEMONEY", "");
+	}
+	else
+	{
+		Screen_Text("EDITFACENAME", name);
+		Screen_Text("EDITFACEMONEY", PlayerCard.money);
+	}
 	Screen_Text("EDITSHIPNAME", ship);
 	Screen_Text("EDITSHIPTYPENAME", PlayerShipType.type);
 	Screen_ShipText();
@@ -365,12 +375,42 @@ string Screen_Board(string list)
 	return n + " + " + n;
 }
 
+// the right window of the shipyard: the types by class, "Ваш корабль" on top, the price and the rank under it
+// (the texts are of the screenshot of the original: they are not in the files read so far)
+void Screen_ShipyardRight()
+{
+	string list = "Ваш корабль\n";
+	int rank = sti(PlayerCard.rank);
+	int n = GetAttributesNum(&PdmShipTypes);
+	for (int c = 5; c <= 6; c++)
+	{
+		list = list + "\nКласс " + c + "\n";
+		for (int i = 0; i < n; i++)
+		{
+			aref type;
+			type = GetAttributeN(&PdmShipTypes, i);
+			if (sti(type.class) != c) { continue; }
+			string id = type.id;
+			if (CheckAttribute(PdmScreens, "ships." + id + ".name")) { list = list + PdmScreens.ships.(id).name + "\n"; }
+		}
+	}
+	Screen_Text("EDITSHIP", list);
+	Screen_Text("EDITSUMMA", "Цена корабля " + PlayerShipType.sellprice);
+	Screen_Text("EDITDAMAGES", "Урона на 0");
+	Screen_Text("EDITHELP", "Ваш ранг позволяет управлять вам кораблями до 6 класса");
+	Screen_Text("EDITHULL", "100%");
+	Screen_Text("EDITRIG", "100%");
+	Screen_Text("EDITHULLSUM", "0");
+	Screen_Text("EDITRIGSUM", "0");
+}
+
 // the type and the description of the ship of the hero in the words of the original (tools/pdm_ui.py, GOODS/SHIPS)
 void Screen_ShipText()
 {
 	string id = PlayerShipType.id;
 	if (CheckAttribute(PdmScreens, "ships." + id + ".name")) { Screen_Text("EDITSHIPTYPE", PdmScreens.ships.(id).name); }
 	if (CheckAttribute(PdmScreens, "ships." + id + ".about")) { Screen_Text("EDITDESC", PdmScreens.ships.(id).about); }
+	if (screenName == "shipyard") { Screen_ShipyardRight(); }
 }
 
 // the numbers of the gun of the hero: "12,400,40,27" is the shot, the range, the reload and the weight
@@ -546,7 +586,8 @@ void Screen_TourTrade(string name)
 	}
 }
 
-// TOWN_AUTO=18: the values of the shipyard must be there (the log tells the empty ones)
+// TOWN_AUTO=19: the hero talks to the shipyard owner in the town and picks "верфь"; the values of the screen must be
+// there (the log tells the empty ones), then the game quits
 void Screen_ShipyardCheck(string name)
 {
 	if (TownAuto != SHIPYARD_ID || name != "shipyard") { return; }
@@ -568,6 +609,7 @@ void Screen_ShipyardCheck(string name)
 	if (!CheckAttribute(PdmScreens, "ships." + id + ".about")) { empty = empty + "about "; }
 	if (empty == "") { Trace("PDM shipyard: values ok"); }
 	else { Trace("PDM shipyard: FAIL, empty " + empty); }
+	PostEvent("Town_AutoQuit", 3000);
 }
 
 // SCENE=screens: the pages of the menu, a new game, F1 in the town and its button "Корабль", the other
@@ -578,7 +620,6 @@ void Screen_Tour()
 	if (screenTourStage == 0)
 	{
 		name = Screen_TourNext(screenTourMenu);
-		if (TownAuto == SHIPYARD_ID) { name = ""; }
 		screenMessage = PdmScreens.mainmenu.t.exit;
 		if (name != "") { Screen_Show(name); PostEvent("Screen_Tour", SCREEN_AUTO_MS); return; }
 		screenTourStage = 1;
@@ -599,11 +640,7 @@ void Screen_Tour()
 	if (screenTourStage == 2)
 	{
 		name = Screen_TourNext(screenTourGame);
-		if (TownAuto == SHIPYARD_ID)
-		{
-			if (screenTourAt == 0 || name != "shipyard") { while (name != "shipyard" && name != "") { name = Screen_TourNext(screenTourGame); } }
-		}
-		if (name != "") { Screen_Show(name); Screen_TourTrade(name); Screen_ShipyardCheck(name); PostEvent("Screen_Tour", SCREEN_AUTO_MS); return; }
+		if (name != "") { Screen_Show(name); Screen_TourTrade(name); PostEvent("Screen_Tour", SCREEN_AUTO_MS); return; }
 		screenTourStage = 3;
 		Screen_Escape();
 		PostEvent("Screen_Tour", SCREEN_AUTO_MS);

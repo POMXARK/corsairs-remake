@@ -970,6 +970,13 @@ void Town_AutoPlan()
 	// a place its menu offers only the street and the sea, so each one is left by the street, the way
 	// the original builds the menu from the reload list of the loaded location (landinterface.c:520);
 	// at the end the tavern and the sea from it
+	// 19: to the shipyard, the owner's dialog, its link "верфь" opens the screen (screens.c, Screen_ShipyardCheck)
+	if (TownAuto == SHIPYARD_ID)
+	{
+		Town_PlanAdd("go", "shipyard", "");
+		Town_PlanAdd("talk", "", "PdmA_SHIPYARD");
+		return;
+	}
 	if (TownAuto == 10)
 	{
 		Town_PlanAdd("hud", "store", "");
