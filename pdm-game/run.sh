@@ -67,7 +67,7 @@ fi
 [ -f "$DIR/resource/textures/cinema/binocular.tga.tx" ] || python3 -I "$TOOLS/make_binocular.py" "$DIR/resource"
 # the screens of the interface (INI/menu.ini, the world map of INI/map.ini), their pictures, texts and fonts, the dialog window and the voices;
 # again for a map made before its fog
-grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'LB_VOICEON_OFF' "$DIR/resource/ini/interfaces/options.ini" && grep -qs 'PDM_HUD_18' "$DIR/resource/ini/fonts.ini" && grep -qs 'PdmScreens.trade.t.exporting' "$DIR/program/data/pdm_screens.c" && grep -qs 'PdmScreens.ships' "$DIR/program/data/pdm_screens.c" && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
+grep -qs 'MSGSCROLL' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'LB_VOICEON_OFF' "$DIR/resource/ini/interfaces/options.ini" && grep -qs 'PDM_HUD_18' "$DIR/resource/ini/fonts.ini" && grep -qs 'PdmScreens.trade.t.exporting' "$DIR/program/data/pdm_screens.c" && grep -qs 'PdmScreens.ships' "$DIR/program/data/pdm_screens.c" && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
 # the towns and interiors (WORLDS/locations/*.loc), their patches and the characters with animation
 # eyes.ini comes with the eye grid of the heads (the blink): the characters of an older world are converted again alone (pdm_character.py all), and the boarding after them
 WORLD_NEW=0
@@ -89,6 +89,8 @@ python3 -I "$TOOLS/pdm_data2c.py" "$DIR/data" "$DIR/program"
 python3 -I "$TOOLS/pdm_logic2c.py" "$DIR/data" "$DIR/program"
 # what the islands export, import and forbid in their stores (the .gst of the original)
 python3 -I "$TOOLS/pdm_trade.py" "$PDM" "$DIR"
+# the encounters of the world map: patterns, grids of the nations, their texts (mapparam.ini)
+python3 -I "$TOOLS/pdm_encounters.py" "$PDM" "$DIR"
 # the neural voice-over of the speeches (docs/voice-over.md): binds the files that exist, none is fine
 [ -f "$DIR/program/data/pdm_voice_lines.c" ] || python3 -I "$TOOLS/pdm_voice_lines.py" "$DIR"
 # the scene to start with: menu, sea (the hero on his ship), review (all ship types side by side) or story

@@ -32,3 +32,4 @@ store-fleet|town|City_HighRock|21|PDM store: fleet ok|120
 shipyard-screen|town|City_HighRock|19|PDM shipyard: repair ok|120
 status-screens|town|City_HighRock|22|PDM status: pages ok|120
 ransack-screens|town|City_HighRock|23|PDM status: pages ok|120
+map-encounter|sea||24|PDM encounter: autotest done, enemy [0-9]+|200

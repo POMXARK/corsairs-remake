@@ -81,7 +81,7 @@ void Board_SeaTick()
 void Board_Start()
 {
 	if (!Board_Can()) { return; }
-	boardEnemyKey = BATTLE_ENEMY;
+	boardEnemyKey = Battle_EnemyKey();
 	boardIsland = PlayerCard.address.island;
 	if (seaIsland != "") { boardIsland = seaIsland; }
 	Sea_Release();

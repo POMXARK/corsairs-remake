@@ -105,9 +105,19 @@ int battleBroadsides = 0;
 int battleEnemyCrew = -1;
 string battleChargeNames[HUD_CHARGES] = {"ядра", "картечь", "книппели", "бомбы"};
 
+// the enemy of the battle is a ship of the world map met on the way (encounter.c), not the pirate of the first battle
+bool battleEncounter = false;
+
+string Battle_EnemyKey()
+{
+	if (battleEncounter) { return "PdmEnc"; }
+	return BATTLE_ENEMY;
+}
+
 // SCENE=battle: at sea by the island of the hero, the enemy coming
 void Battle_Start()
 {
+	battleEncounter = false;
 	seaBattle = true;
 	Sea_Start(PlayerCard.address.island);
 }
@@ -272,7 +282,7 @@ void Battle_AddEnemy(float x, float z, float ay)
 	// TOWN_AUTO=11: no enemy ship, the fort of the island is the enemy (fort.c)
 	if (TownAuto == 11 && Fort_Auto()) { return; }
 	// an attribute name in .(...) has to be a variable
-	string enemyKey = BATTLE_ENEMY;
+	string enemyKey = Battle_EnemyKey();
 	aref card;
 	makearef(card, PdmCharacters.(enemyKey));
 	string shipKey = card.ship_key;
@@ -308,7 +318,7 @@ void Battle_AddEnemy(float x, float z, float ay)
 	// TOWN_AUTO=9: the hero gives "Плыть к" and is brought to the enemy
 	if (TownAuto == 9) { PostEvent("Battle_SailTo", 1000); }
 	// the autotests of the ships are without the fort: it would sink the enemy before the hero fires (11 tests it)
-	if (TownAuto == 0) { Fort_Create(seaIsland); }
+	if (TownAuto == 0 && !battleEncounter) { Fort_Create(seaIsland); }
 	// the autotests: the camera behind the hero, aside of the line to the enemy so that the hull does not
 	// cover it (SHIP_CAMERA Target), far and a little above, so that both ships and the fort beyond are seen
 	if (TownAuto != 0)

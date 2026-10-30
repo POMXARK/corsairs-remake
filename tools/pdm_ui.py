@@ -651,7 +651,7 @@ class Converter:
         title_attrs = attrs(dict(self.ini["Common"]).get("EditTitle", ""))
         for key, value in entries:
             low = key.lower()
-            if section == "MainMap" and low in ("map_pos", "map_rect", "editisland"):
+            if section == "MainMap" and low in ("map_pos", "map_rect", "editisland", "editmessages", "lb_ok", "lb_yes", "lb_no"):
                 chart[low] = value
                 continue
             if low == "background":
@@ -931,6 +931,30 @@ class Converter:
             nodes.append(("PICTURE", name))
             lines += [f"[{name}]", "position = 0,0,0,0", f"textureName = {back}", f"textureRect = 0,0,1,{bv:g}", ""]
         nodes += [("PICTURE", "MAP"), ("PICTURE", "SHIP"), ("FORMATEDTEXT", "ISLANDS")]
+        # the message of an encounter (MAP.dll SetMessages): the scroll map_message.tga with EditMessages on it and the buttons
+        # lb_Ok / lb_Yes ("В бой") / lb_No ("Игнорировать"); all of them are of no size until map.c shows them (Map_Message)
+        scroll = self.keyed(Image.open(self.pdm.find(self.base + "map_message.tga")).convert("RGBA"))
+        mtex, mw, mh = self.texture(scroll, "map_message")
+        nodes.append(("PICTURE", "MSGSCROLL"))
+        lines += ["[MSGSCROLL]", "position = 0,0,0,0", f"textureName = {mtex}",
+                  f"textureRect = 0,0,{scroll.width / mw:g},{scroll.height / mh:g}", ""]
+        # over the scroll, so it is made here and not with the other fields
+        am = attrs(chart["editmessages"])
+        _, _, l = self.field("EditMessages", am, int(am["dx"]), int(am["dy"]))
+        nodes.append(("FORMATEDTEXT", "EDITMESSAGES"))
+        lines += l + [""]
+        # TEXTBUTTON like the buttons of a message box (a FORMATEDTEXT button showed no text in the frame, ours); the texts are
+        # lbMapOK / lbMapEngage / lbMapIgnore of interface.ini, the dark brown of EditMessages, red when pressed
+        places = {"lb_ok": ("350,371,450,401", "lbMapOK"), "lb_yes": ("265,365,385,395", "lbMapEngage"),
+                  "lb_no": ("415,365,535,395", "lbMapIgnore")}
+        for key in ("lb_ok", "lb_yes", "lb_no"):
+            b = attrs(chart[key])
+            bfont = "pdm_logbook_19"  # the font of the buttons of a message box; the seadogs font draws twice as big (ours)
+            nodes.append(("TEXTBUTTON", key.upper()))
+            lines += [f"[{key.upper()}]", "position = -2000,-2000,-1900,-1970", f"string = {places[key][1]}", f"font = {bfont}",
+                      f"fontScale = {1 / FONT_OVERSAMPLE:.3f}", "strOffset = 6", "fontColor = 255,49,24,0",
+                      "fontColorSelected = 255,150,20,10", "fontColorPressed = 255,245,41,34",
+                      "command = click", "command = activate", "command = deactivate", ""]
         lines += ["[MAP]", f"position = {x},{y},{x + w},{y + h}", f"textureName = {tex}",
                  f"textureRect = 0,0,{w / tw:g},{h / th:g}", f"fogTexture = {fog}"]
         lines += [f"fogStamp = {stamp}" for stamp in stamps]

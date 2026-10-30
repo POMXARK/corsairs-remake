@@ -1,0 +1,379 @@
+// The encounters of the world map: ships of the nations that meet the hero at sea (MAP.dll, docs/original-vs-remake.md).
+// Data of mapparam.ini and interface.ini come from tools/pdm_encounters.py (data\pdm_encounters.c):
+//   PdmEncGrid.n<nation>.c<col>_<row>  the pattern of the nation in the cell of the map (20 x 15 cells of 60 px)
+//   PdmEncIsland.r<dy>_<dx>            the pattern round an island, the island at 2_2
+//   PdmPattern.p<n>                    merchants mc and warships wc, with the classes of their ships from u (big) to d (small)
+// While the hero sails, the time he spent is summed up; it is checked against the limit of the original
+// ENC_BASE_MS / (rand * 0.05 + closeness to islands + 0.01), the limit is rolled again every tick. Over the limit a nation
+// with a pattern in the cell is picked and a message comes up (the scroll of the map): the sail of a nation or of pirates
+// (types 0, 1, 2: "Напасть" / "Пропустить"), or the attack (types 3, 4: "Да", then the battle).
+// Ours, and not in the original yet (docs/gaps-plan.md): the war of the nations (relations, every nation not pirate only
+// shows its sail), the condition of the ships in the attack, the storm, the pay of the crew, the whole squadron
+// (the battle has the first ship of the pattern only), the ships fighting each other (type 9).
+
+#define ENC_BASE_MS 2000.0
+#define ENC_CELL 60.0
+#define ENC_ATTACK_ROLL 300
+#define ENC_ATTACK_MIN 30
+#define ENC_TRIES 64
+// the layer of the islands after the four nations (nations.idf: england, pirate, france, spain)
+#define ENC_NATIONS 4
+#define ENC_PIRATE 1
+// the window in the 800 x 600 of the screen (map_message.tga 564 x 351, centred; the text and buttons by map.ini of the original)
+#define ENC_SCROLL_L 118
+#define ENC_SCROLL_T 124
+#define ENC_SCROLL_R 682
+#define ENC_SCROLL_B 475
+#define ENC_AUTO_MS 1500
+#define ENC_AUTO_QUIT_MS 6000
+
+int encAcc = 0;
+bool encShown = false;
+// the type of the message (Mapparammessage<n>), the nation and the pattern met
+int encType = -1;
+int encNation = ENC_PIRATE;
+int encPattern = 0;
+// the nearest island of the place of the meeting: the sea of the battle is the sea of it
+string encIsland = "";
+// the ship of the battle: a type of PdmShipTypes and the nation; the battle takes the card from here (Battle_EnemyKey)
+string encShipType = "";
+int encCount = 0;
+// TOWN_AUTO=24: the first tick forces the attack of pirates, the autotest answers by itself
+int encForce = 0;
+int encPick[5];
+int encPats[5];
+object MapEncText;
+
+string Enc_Text(string key)
+{
+	if (!CheckAttribute(&PdmEncText, key)) { return ""; }
+	return PdmEncText.(key);
+}
+
+// text with the first %s replaced
+string Enc_Format(string text, string arg)
+{
+	int at = findSubStr(text, "%s", 0);
+	if (at < 0) { return text; }
+	string head = "";
+	if (at > 0) { head = strcut(text, 0, at - 1); }
+	string tail = "";
+	if (at + 2 < strlen(text)) { tail = strcut(text, at + 2, strlen(text) - 1); }
+	return head + arg + tail;
+}
+
+// "английск", "пиратск", ... (mapEnglish ...): the stem to which the text adds its ending
+string Enc_Adjective(int nation)
+{
+	if (nation == 0) { return Enc_Text("mapEnglish"); }
+	if (nation == 1) { return Enc_Text("mapPirates"); }
+	if (nation == 2) { return Enc_Text("mapFrench"); }
+	return Enc_Text("mapSpanish");
+}
+
+string Enc_Noun(int nation)
+{
+	if (nation == 0) { return Enc_Text("mapEnglish1"); }
+	if (nation == 1) { return Enc_Text("mapPirates1"); }
+	if (nation == 2) { return Enc_Text("mapFrench1"); }
+	return Enc_Text("mapSpanish1");
+}
+
+// the pattern of the nation in the cell, 0 none
+int Enc_NationPattern(int nation, int col, int row)
+{
+	string path = "n" + nation + ".c" + col + "_" + row;
+	if (!CheckAttribute(&PdmEncGrid, path)) { return 0; }
+	return sti(PdmEncGrid.(path));
+}
+
+// the pattern round the nearest island if the hero is in its 5 x 5 cells, 0 none
+int Enc_IslandPattern(int col, int row, int iconCol, int iconRow)
+{
+	int dx = col - iconCol + 2;
+	int dy = row - iconRow + 2;
+	if (dx < 0 || dx > 4 || dy < 0 || dy > 4) { return 0; }
+	string path = "r" + dy + "_" + dx;
+	if (!CheckAttribute(&PdmEncIsland, path)) { return 0; }
+	return sti(PdmEncIsland.(path));
+}
+
+// the sum of 1 / d^2 over the islands from the place of the hero in cells (at most 1) and the nearest island; the
+// cell of an island is the first number of its map_cell (row * 20 + column), its middle is the point
+float Enc_Closeness(float x, float y)
+{
+	float sum = 0.0;
+	float best = 10000.0;
+	encIsland = "";
+	string at, key, cell;
+	int number;
+	float fx, fy, d;
+	for (int i = 0; i < mapIslandCount; i++)
+	{
+		at = "i" + i;
+		key = MapIslands.(at);
+		cell = PdmIslands.(key).map_cell;
+		number = sti(strcut(cell, 0, findSubStr(cell, ",", 0) - 1));
+		fx = (number % 20) + 0.5;
+		fy = makeint(number / 20) + 0.5;
+		d = (x - fx) * (x - fx) + (y - fy) * (y - fy);
+		if (d < best) { best = d; encIsland = key; }
+		if (d > 0.0001) { sum = sum + 1.0 / d; }
+	}
+	if (sum > 1.0) { sum = 1.0; }
+	return sum;
+}
+
+// a tick of the sail: ms since the last one
+void Enc_Tick(int ms)
+{
+	if (encShown) { return; }
+	encAcc = encAcc + ms;
+	float x = mapX / ENC_CELL;
+	float y = mapY / ENC_CELL;
+	float close = Enc_Closeness(x, y);
+	float limit = ENC_BASE_MS / (rand(13) * 0.05 + close + 0.01);
+	if (encForce == 1)
+	{
+		encForce = 2;
+		encAcc = makeint(limit) + 1;
+	}
+	if (encAcc < limit) { return; }
+	int col = makeint(x);
+	int row = makeint(y);
+	// the layers with a pattern in this cell: the four nations and the island
+	int layers = 0;
+	int i;
+	int p;
+	for (i = 0; i < ENC_NATIONS; i++)
+	{
+		p = Enc_NationPattern(i, col, row);
+		if (p > 0) { encPick[layers] = i; encPats[layers] = p; layers++; }
+	}
+	if (encIsland != "" && CheckAttribute(&PdmIslands, encIsland + ".nation"))
+	{
+		string cell = PdmIslands.(encIsland).map_cell;
+		int number = sti(strcut(cell, 0, findSubStr(cell, ",", 0) - 1));
+		p = Enc_IslandPattern(col, row, number % 20, makeint(number / 20));
+		if (p > 0) { encPick[layers] = sti(PdmIslands.(encIsland).nation); encPats[layers] = p; layers++; }
+	}
+	if (encForce == 2)
+	{
+		encForce = 3;
+		layers = 1;
+		encPick[0] = ENC_PIRATE;
+		encPats[0] = 21;
+	}
+	if (layers == 0) { return; }
+	int at = rand(layers - 1);
+	Enc_Meet(encPick[at], encPats[at]);
+}
+
+// a meeting with the pattern of the nation: the type of the message by the rules of the original, then the window
+void Enc_Meet(int nation, int pattern)
+{
+	encAcc = 0;
+	encNation = nation;
+	encPattern = pattern;
+	string pat = "p" + pattern;
+	int mc = sti(PdmPattern.(pat).mc);
+	int wc = sti(PdmPattern.(pat).wc);
+	encCount = wc;
+	if (wc == 0) { encCount = mc; }
+	bool attack = false;
+	if (nation == ENC_PIRATE)
+	{
+		// a pirate attacks when the roll is over ENC_ATTACK_MIN (the original adds more when the hero is at war: ours
+		// the war is not yet), else his sail is only seen
+		attack = rand(ENC_ATTACK_ROLL - 1) > ENC_ATTACK_MIN;
+		encType = 2;
+		if (attack) { encType = 4; }
+	}
+	else
+	{
+		// the sail of a nation: merchants in the pattern are the type 1, the warships the type 0; the attack of a nation
+		// needs war with it, which the remake does not have yet
+		encType = 0;
+		if (mc > 0 && wc == 0) { encType = 1; }
+	}
+	if (encForce == 3) { encType = 4; encForce = 0; }
+	string text = Enc_Message(encType, nation, pattern, encCount);
+	Trace("PDM encounter: nation " + nation + ", pattern " + pattern + ", type " + encType + ", " + encCount + " ship(s) at " + encIsland);
+	Enc_Show(encType, text);
+}
+
+string Enc_Message(int type, int nation, int pattern, int count)
+{
+	string key = "Mapparammessage" + type;
+	string text = Enc_Text(key);
+	if (type == 0 || type == 1 || type == 3) { return Enc_Format(text, Enc_Adjective(nation)); }
+	if (type == 2 || type == 4) { return text; }
+	return text;
+}
+
+// the window: the scroll, the text and the buttons ("Да" for an attack; "Напасть" and "Пропустить" for a sail)
+void Enc_Show(int type, string text)
+{
+	encShown = true;
+	int e = mapEdge;
+	int t = mapTopEdge;
+	if (type == 4 || type == 3)
+	{
+		// the attack: as the attack of pirates the text of the count and the nation too, the original puts it into MapMessageAttack
+		string line = Enc_Text("attack" + encCount);
+		if (line == "") { line = Enc_Text("attack1"); }
+		text = Enc_Format(Enc_Text("MapMessageAttack"), Enc_Format(line, Enc_Adjective(encNation)));
+		if (encNation == ENC_PIRATE) { text = Enc_Text("Mapparammessage4"); }
+	}
+	Enc_Node("MSGSCROLL", ENC_SCROLL_L + e, ENC_SCROLL_T + t, ENC_SCROLL_R + e, ENC_SCROLL_B + t);
+	Enc_Node("EDITMESSAGES", 240 + e, 190 + t, 550 + e, 340 + t);
+	Enc_SetText("EDITMESSAGES", text);
+	if (type == 3 || type == 4)
+	{
+		Enc_Node("LB_OK", 350 + e, 371 + t, 450 + e, 401 + t);
+	}
+	else
+	{
+		Enc_Node("LB_YES", 265 + e, 365 + t, 385 + e, 395 + t);
+		Enc_Node("LB_NO", 415 + e, 365 + t, 535 + e, 395 + t);
+	}
+	if (TownAuto == 24) { PostEvent("Enc_Auto", ENC_AUTO_MS); }
+}
+
+void Enc_Node(string node, int left, int top, int right, int bottom)
+{
+	Map_MoveNode(node, left, top, right, bottom);
+}
+
+// the text of a node: replaces the string of the group 0, the first call adds it
+void Enc_SetText(string node, string text)
+{
+	string key = "enc_" + node;
+	if (CheckAttribute(&MapEncText, key))
+	{
+		SendMessage(&GameInterface, "lslle", MSG_INTERFACE_MSG_TO_NODE, node, 10, 0, &text);
+		return;
+	}
+	MapEncText.(key) = "1";
+	SendMessage(&GameInterface, "lsle", MSG_INTERFACE_MSG_TO_NODE, node, 0, &text);
+}
+
+// the window goes away: the scroll and the text shrink to nothing, the buttons (their text shows even at no size) go off the screen
+void Enc_Hide()
+{
+	Enc_Node("MSGSCROLL", 0, 0, 0, 0);
+	Enc_Node("EDITMESSAGES", 0, 0, 0, 0);
+	Enc_Node("LB_OK", -2000, -2000, -1900, -1970);
+	Enc_Node("LB_YES", -2000, -2000, -1900, -1970);
+	Enc_Node("LB_NO", -2000, -2000, -1900, -1970);
+	encShown = false;
+}
+
+// the buttons of the window: "Да" and "Напасть" go to the battle, "Пропустить" sails on
+void Enc_Command(string node)
+{
+	if (!encShown) { return; }
+	if (node == "LB_NO")
+	{
+		Trace("PDM encounter: ignored");
+		Enc_Hide();
+		return;
+	}
+	if (node == "LB_OK" || node == "LB_YES") { Enc_Battle(); }
+}
+
+// TOWN_AUTO=24: the enemy of the pattern is at sea, the battle is on
+void Enc_AutoQuit()
+{
+	Trace("PDM encounter: autotest done, enemy " + battleEnemy + " of " + encShipType);
+	// the sea AI asks the script for the balls of the ships every frame, after ExitProgram it gets no answer and asserts
+	Battle_Release();
+	ExitProgram();
+}
+
+void Enc_Auto()
+{
+	if (encShown) { Enc_Command("LB_OK"); }
+}
+
+// the type of the first ship of the pattern: a random one of PdmShipTypes of the classes from u to d with the flag of the
+// kind in weapon_type (1 war, 2 merchant), up to ENC_TRIES draws as the original does
+string Enc_ShipType(int pattern, bool war)
+{
+	string pat = "p" + pattern;
+	int up = sti(PdmPattern.(pat).wu);
+	int down = sti(PdmPattern.(pat).wd);
+	int flag = 1;
+	if (!war)
+	{
+		up = sti(PdmPattern.(pat).mu);
+		down = sti(PdmPattern.(pat).md);
+		flag = 2;
+	}
+	int n = GetAttributesNum(&PdmShipTypes);
+	string found = "";
+	aref type;
+	for (int i = 0; i < ENC_TRIES; i++)
+	{
+		type = GetAttributeN(&PdmShipTypes, rand(n - 1));
+		int shipClass = sti(type.class);
+		int kind = sti(type.weapon_type);
+		if (shipClass < up || shipClass > down) { continue; }
+		if (makeint(kind / flag) % 2 == 0) { continue; }
+		found = GetAttributeName(type);
+		break;
+	}
+	return found;
+}
+
+// the card of the captain and the ship of the battle (ours: the unnamed captain)
+void Enc_MakeEnemy(string typeKey, int nation)
+{
+	string key = "PdmEnc";
+	DeleteAttribute(&PdmCharacters, key);
+	DeleteAttribute(&PdmShips, key);
+	PdmShips.(key).type_key = typeKey;
+	PdmShips.(key).name = PdmShipTypes.(typeKey).type;
+	PdmShips.(key).class = PdmShipTypes.(typeKey).class;
+	PdmShips.(key).crew = PdmShipTypes.(typeKey).maxcrew;
+	PdmShips.(key).hull_hp = PdmShipTypes.(typeKey).hitpoint;
+	PdmShips.(key).skills.soldier = "1";
+	PdmShips.(key).skills.cannoneer = "1";
+	PdmShips.(key).skills.sailor = "1";
+	string base = BATTLE_ENEMY;
+	PdmCharacters.(key).id = "Captain";
+	PdmCharacters.(key).name = "Капитан";
+	PdmCharacters.(key).nation = nation;
+	PdmCharacters.(key).relation = "3";
+	PdmCharacters.(key).kind = "2";
+	PdmCharacters.(key).model = PdmCharacters.(base).model;
+	PdmCharacters.(key).ship_key = key;
+	PdmCharacters.(key).address.island = "";
+	PdmCharacters.(key).skills.combat = "4";
+	PdmCharacters.(key).skills.defence = "4";
+	PdmCharacters.(key).skills.sailing = "4";
+	PdmCharacters.(key).skills.accuracy = "4";
+	PdmCharacters.(key).skills.reload = "4";
+}
+
+// the battle: the sea of the nearest island, the first ship of the pattern coming at the hero
+void Enc_Battle()
+{
+	Enc_Hide();
+	string pat = "p" + encPattern;
+	bool war = sti(PdmPattern.(pat).wc) > 0;
+	if (encType == 1) { war = false; }
+	string typeKey = Enc_ShipType(encPattern, war);
+	if (typeKey == "") { typeKey = Enc_ShipType(encPattern, !war); }
+	if (typeKey == "")
+	{
+		Trace("PDM encounter: no ship of the pattern " + encPattern);
+		return;
+	}
+	Enc_MakeEnemy(typeKey, encNation);
+	encShipType = typeKey;
+	Trace("PDM encounter: battle, " + typeKey + " of nation " + encNation + " near " + encIsland);
+	Map_Fight(encIsland);
+	// TOWN_AUTO=24: the battle has started, the test is done
+	if (TownAuto == 24) { PostEvent("Enc_AutoQuit", ENC_AUTO_QUIT_MS); }
+}

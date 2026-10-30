@@ -469,7 +469,8 @@ void Sea_Start(string islandKey)
 	seaFromMap = false;
 	// TOWN_AUTO=4: the autotest sails out and comes back by itself; 6: out to the world map once
 	if (TownAuto == 4) { PostEvent("Sea_ToPort", SEA_AUTO_PORT_MS); }
-	if (TownAuto == 6 && !seaAutoMapDone) { seaAutoMapDone = true; PostEvent("Sea_ToMap", SEA_AUTO_MAP_MS); }
+	bool autoMap = TownAuto == 6 || TownAuto == 24;
+	if (autoMap && !seaAutoMapDone) { seaAutoMapDone = true; PostEvent("Sea_ToMap", SEA_AUTO_MAP_MS); }
 	// TOWN_AUTO=15: the button "Плыть к" pressed once, as the battle's TOWN_AUTO=9 presses Battle_SailTo
 	// (the event stands for the Tab's press, never simulated keys, as the interface autotests do)
 	// the autotest of the button lives in autotest\sea_sail.c: this is its first press

@@ -54,6 +54,9 @@ int mapViewX = MAP_VIEW_X;
 int mapViewY = MAP_VIEW_Y;
 int mapViewW = MAP_VIEW_W;
 int mapViewH = MAP_VIEW_H;
+// how far the 800 x 600 rect moved in on a wider or a higher window: the window of the encounter is placed by it (encounter.c)
+int mapEdge = 0;
+int mapTopEdge = 0;
 // the left top of the map picture in the window (Map_View)
 float mapLeft = 0.0;
 float mapTop = 0.0;
@@ -93,6 +96,10 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	Menu_InterfaceKeys();
 	mapFrom = fromIsland;
 	mapTarget = "";
+	encShown = false;
+	encAcc = 0;
+	DeleteAttribute(&MapEncText, "");
+	if (TownAuto == 24) { encForce = 1; }
 	if (fromIsland != "" && CheckAttribute(&PdmIslands, fromIsland + ".map_cell"))
 	{
 		mapX = atX;
@@ -109,6 +116,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	SetEventHandler("Map_Arrive", "Map_Arrive", 0);
 	SetEventHandler("Map_Exit", "Map_Exit", 0);
 	SetEventHandler("Map_AutoSail", "Map_AutoSail", 0);
+	SetEventHandler("Enc_Auto", "Enc_Auto", 0);
 	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\mainmap.ini");
 	Map_Layout();
 	Map_FillIslands();
@@ -161,6 +169,8 @@ void Map_Layout()
 	int top = 0;
 	if (CheckAttribute(&GameInterface, "ScreenLeft")) { edge = sti(GameInterface.ScreenLeft); }
 	if (CheckAttribute(&GameInterface, "ScreenTop")) { top = sti(GameInterface.ScreenTop); }
+	mapEdge = edge;
+	mapTopEdge = top;
 	int width = 800 + 2 * edge;
 	int height = 600 + 2 * top;
 	mapViewX = MAP_VIEW_X;
@@ -334,6 +344,9 @@ void Map_SailTo(int index)
 void Map_Tick()
 {
 	if (!mapActive) { return; }
+	// the window of an encounter stops the ship until it is answered (encounter.c)
+	if (encShown) { PostEvent("Map_Tick", MAP_TICK_MS); return; }
+	if (encForce == 1) { Enc_Tick(MAP_TICK_MS); }
 	if (mapTarget != "")
 	{
 		float dx = mapToX - mapX;
@@ -360,6 +373,7 @@ void Map_Tick()
 		mapY = mapY + dy * step / d;
 		Map_Fog();
 		Map_View();
+		Enc_Tick(MAP_TICK_MS);
 	}
 	PostEvent("Map_Tick", MAP_TICK_MS);
 }
@@ -376,6 +390,8 @@ void Map_Command()
 	string command = GetEventData();
 	string node = GetEventData();
 	if (command != "click" && command != "activate") { return; }
+	if (node == "LB_OK" || node == "LB_YES" || node == "LB_NO") { Enc_Command(node); return; }
+	if (encShown) { return; }
 	if (node == "MAP") { Map_Click(); return; }
 	int index = SendMessage(&GameInterface, "lsl", MSG_INTERFACE_MSG_TO_NODE, "ISLANDS", 11);
 	if (node == "LB_ISLANDUP" && index > 0) { index--; }
@@ -419,6 +435,7 @@ void Map_Release()
 	DelEventHandler("Map_Arrive", "Map_Arrive");
 	DelEventHandler("Map_Exit", "Map_Exit");
 	DelEventHandler("Map_AutoSail", "Map_AutoSail");
+	DelEventHandler("Enc_Auto", "Enc_Auto");
 	SendMessage(&GameInterface, "l", MSG_INTERFACE_RELEASE);
 	DeleteClass(&GameInterface);
 }
@@ -429,6 +446,18 @@ void Map_Arrive()
 	string island = mapTarget;
 	Map_Release();
 	Trace("PDM map: arrived at " + island);
+	Sea_Arrive(island, mapX, mapY, mapAY);
+}
+
+// an encounter that is fought: the sea of the island nearest to the place, the enemy of the pattern (encounter.c, battle.c)
+void Map_Fight(string island)
+{
+	if (!mapActive) { return; }
+	Map_Release();
+	Trace("PDM map: encounter, battle near " + island);
+	battleEncounter = true;
+	SetEventHandler("Enc_AutoQuit", "Enc_AutoQuit", 0);
+	seaBattle = true;
 	Sea_Arrive(island, mapX, mapY, mapAY);
 }
 

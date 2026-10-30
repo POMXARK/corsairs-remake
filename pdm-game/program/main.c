@@ -44,6 +44,7 @@ aref PlayerShipType;
 
 #include "data\pdm_data.c"
 #include "data\pdm_trade.c"
+#include "data\pdm_encounters.c"
 #include "data\start.c"
 #include "data\pdm_logic.c"
 #include "data\pdm_world.c"
@@ -70,6 +71,7 @@ aref PlayerShipType;
 #include "cutscene.c"
 #include "menu.c"
 #include "map.c"
+#include "encounter.c"
 #include "trade.c"
 #include "screens.c"
 #include "save.c"
@@ -85,6 +87,7 @@ void Main()
 {
 	PdmData_Init();
 	PdmTrade_Init();
+	PdmEncounters_Init();
 	Trace("PDM main: pdm_data.c done");
 	PdmLogic_Init();
 	Trace("PDM main: pdm_logic.c done");
