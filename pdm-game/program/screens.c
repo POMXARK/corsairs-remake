@@ -34,6 +34,9 @@ string screenTourGame = "sgoods,sship,logbook,schest,trade,shipyard,crew,tavern,
 string shipyardPick = "";
 bool shipyardSold = false;
 int shipyardMoney = 0;
+// the percent of hull and rig the player chose to repair with the arrows (-1: all the wear)
+int shipyardHullFix = -1;
+int shipyardRigFix = -1;
 string shipyardOwn = "";
 string screenMessage = "";
 string screenMessageYes = "";
@@ -445,8 +448,8 @@ void Screen_ShipyardRight()
 	Screen_Text("EDITHULL", Screen_HullPercent() + "%");
 	Screen_Text("EDITRIG", Screen_RigPercent() + "%");
 	Screen_ShipyardHide();
-	Screen_Text("EDITHULLSUM", "" + Screen_RepairPrice(100 - Screen_HullPercent()));
-	Screen_Text("EDITRIGSUM", "" + Screen_RepairPrice(100 - Screen_RigPercent()));
+	Screen_Text("EDITHULLSUM", "" + Screen_RepairPrice(Screen_HullFix()));
+	Screen_Text("EDITRIGSUM", "" + Screen_RepairPrice(Screen_RigFix()));
 }
 
 // the type and the description of the ship of the hero in the words of the original (tools/pdm_ui.py, GOODS/SHIPS)
@@ -581,16 +584,35 @@ int Screen_RepairPrice(int percent)
 	return MakeInt(percent * stf(PlayerShipType.buyprice) / 1000.0);
 }
 
+// the chosen percent, never above the wear
+int Screen_HullFix()
+{
+	int wear = 100 - Screen_HullPercent();
+	if (shipyardHullFix < 0 || shipyardHullFix > wear) { return wear; }
+	return shipyardHullFix;
+}
+
+int Screen_RigFix()
+{
+	int wear = 100 - Screen_RigPercent();
+	if (shipyardRigFix < 0 || shipyardRigFix > wear) { return wear; }
+	return shipyardRigFix;
+}
+
 bool Screen_ShipyardRepair(bool hull, bool rig)
 {
 	int cost = 0;
-	if (hull) { cost = cost + Screen_RepairPrice(100 - Screen_HullPercent()); }
-	if (rig) { cost = cost + Screen_RepairPrice(100 - Screen_RigPercent()); }
+	int hullFix = Screen_HullFix();
+	int rigFix = Screen_RigFix();
+	if (hull) { cost = cost + Screen_RepairPrice(hullFix); }
+	if (rig) { cost = cost + Screen_RepairPrice(rigFix); }
 	if (cost == 0) { return true; }
 	if (sti(PlayerCard.money) < cost) { Screen_Text("EDITHELP", PdmScreens.shipyard.t.buybutmoney); Trace("PDM shipyard: refused, no money for repair"); return true; }
 	PlayerCard.money = sti(PlayerCard.money) - cost;
-	if (hull) { PlayerShipCard.hull_hp = sti(PlayerShipType.hitpoint); }
-	if (rig) { PlayerShipCard.rig = 100; }
+	if (hull) { PlayerShipCard.hull_hp = MakeInt((Screen_HullPercent() + hullFix) * stf(PlayerShipType.hitpoint) / 100.0); }
+	if (rig) { PlayerShipCard.rig = Screen_RigPercent() + rigFix; }
+	shipyardHullFix = -1;
+	shipyardRigFix = -1;
 	Screen_Fill();
 	Trace("PDM shipyard: repaired for " + cost + ", money " + PlayerCard.money);
 	return true;
@@ -598,6 +620,10 @@ bool Screen_ShipyardRepair(bool hull, bool rig)
 
 bool Screen_ShipyardClick(string node)
 {
+	if (node == "LB_LEFTHULL") { shipyardHullFix = Screen_HullFix() - 10; if (shipyardHullFix < 0) { shipyardHullFix = 0; } Screen_Fill(); return true; }
+	if (node == "LB_RIGHTHULL") { shipyardHullFix = Screen_HullFix() + 10; Screen_Fill(); return true; }
+	if (node == "LB_LEFTRIG") { shipyardRigFix = Screen_RigFix() - 10; if (shipyardRigFix < 0) { shipyardRigFix = 0; } Screen_Fill(); return true; }
+	if (node == "LB_RIGHTRIG") { shipyardRigFix = Screen_RigFix() + 10; Screen_Fill(); return true; }
 	if (node == "LB_REPAIR") { return Screen_ShipyardRepair(true, false); }
 	if (node == "LB_REPAIRALL") { return Screen_ShipyardRepair(true, true); }
 	if (node == "LB_SHIPUP") { Screen_ShipyardStep(-1); return true; }
@@ -801,6 +827,15 @@ void Screen_ShipyardVerify()
 	PlayerShipCard.rig = 50;
 	int before = sti(PlayerCard.money);
 	int cost = Screen_RepairPrice(100 - Screen_HullPercent()) + Screen_RepairPrice(100 - Screen_RigPercent());
+	// the arrows: hull 50% → minus one step twice = 30% of wear to repair, the rest stays
+	shipyardHullFix = -1;
+	Screen_ShipyardClick("LB_LEFTHULL");
+	Screen_ShipyardClick("LB_LEFTHULL");
+	if (Screen_HullFix() != 30) { Trace("PDM shipyard: arrows FAIL, fix " + Screen_HullFix()); }
+	Screen_ShipyardRepair(true, false);
+	if (Screen_HullPercent() != 80) { Trace("PDM shipyard: partial FAIL, hull " + Screen_HullPercent()); }
+	before = sti(PlayerCard.money);
+	cost = Screen_RepairPrice(100 - Screen_HullPercent()) + Screen_RepairPrice(100 - Screen_RigPercent());
 	Screen_ShipyardRepair(true, true);
 	if (Screen_HullPercent() == 100 && Screen_RigPercent() == 100 && sti(PlayerCard.money) == before - cost && cost > 0) { Trace("PDM shipyard: repair ok"); }
 	else { Trace("PDM shipyard: repair FAIL, hull " + Screen_HullPercent() + ", rig " + Screen_RigPercent() + ", money " + PlayerCard.money + ", want " + (before - cost)); }
