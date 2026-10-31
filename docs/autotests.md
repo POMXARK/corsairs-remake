@@ -224,5 +224,8 @@ corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City
 ## status-screens (TOWN_AUTO=22)
 В городе Хайрок: F1, затем кнопки «Корабль», «Трюм», «Сундук», «Журнал» с паузой 1,5 с. Маркер `PDM status: pages ok`, имена страниц — в `compile.log` (`PDM screen: sship` …). Кадры — из видео `shots.sh` (игра сама закрывается через ~8 с). Сделано нами для проверки; в оригинале страницы открывает скрипт игры.
 
+## prize-button (TOWN_AUTO=23)
+Кнопка «Взять призовой корабль» страницы «Корабли»: приз 6 класса берётся один раз (флот +1), повторное нажатие ничего не делает. Тот же сценарий, что `ransack-screens`, свой маркер `PDM prize: button ok` и своя папка сейвов. Отказы по экипажу и рангу проверяет `PDM prize: crew,skills,,ok`.
+
 ## ransack-screens (TOWN_AUTO=23)
 Как `status-screens`, но страницы `RANSACK.dll`: «Грабёж: Корабли» (`shipexchange`), «Грабёж: Трюм» (`transfer`) и окно сообщения. Маркер `PDM status: pages ok`. Открываются прямо из теста (наше): в оригинале их запускает игровой скрипт после абордажа.

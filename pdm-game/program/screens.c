@@ -28,6 +28,9 @@ bool screenGoing = false;
 string screenPending = "";
 // SCENE=screens: the screens it shows over the menu and over the game, where it is in the list and the stage
 string screenTourMenu = "options,keycontrols,loadgame,savegame,credits,messagebox,mainmenu";
+string prizeName = "";
+int prizeCrew = 0;
+int prizeOurs = 0;
 string prizeType = ""; // type of the last ship won at boarding, shown on the right of ShipExchange
 string screenTourGame = "sgoods,sship,logbook,schest,trade,shipyard,crew,tavern,messagebox_town,transfer,shipexchange,messagebox_ransack";
 // the text of the message box and what its "Да" does
@@ -1126,6 +1129,11 @@ bool Screen_Page(string node)
 // the button is still being pressed in it (menu.c)
 bool Screen_Click(string node)
 {
+	if (node == "LB_TAKEPRIZE" && screenName == "shipexchange")
+	{
+		Board_TakePrize();
+		return true;
+	}
 	string to = Screen_Target(node);
 	if (to == "") { return false; }
 	if (screenGoing) { return true; }
@@ -1216,8 +1224,19 @@ void Screen_StatusAuto()
 	else { Screen_Click(b); }
 	Trace("PDM status: " + b + " -> '" + screenName + "'");
 	// no ship was won in this test: a pinnace stands for the prize, the right column of ShipExchange shows it
-	if (b == "F1") { prizeType = "pinas"; }
+	if (b == "F1") { prizeType = "pinas"; prizeName = "Prize"; prizeCrew = 10; prizeOurs = 30; }
 	if (b == "@transfer") { Trace("PDM prize: right " + Screen_Value("S_TYPE1") + "," + Screen_Value("S_CLASS1")); }
+	if (b == "@transfer")
+	{
+		// the button of the page: a class 6 prize is always allowed, it joins the fleet once
+		prizeType = "sloop";
+		int before = Trade_Ships();
+		bool first = Board_TakePrize();
+		bool second = Board_TakePrize();
+		int after = Trade_Ships();
+		if (first && !second && after == before + 1) { Trace("PDM prize: button ok"); }
+		else { Trace("PDM prize: button FAIL fleet " + before + "->" + after); }
+	}
 	if (b == "@shipexchange")
 	{
 		string pc = Screen_PrizeCheck(10, 20, 5, 10, 3, 1);

@@ -566,12 +566,24 @@ void Board_Prize()
 	if (battleEnemyCrew >= 0) { theirs = battleEnemyCrew; }
 	theirs = theirs - sti(BoardEnemy.crew_lost);
 	int ours = sti(PlayerShipCard.crew) - sti(BoardHero.crew_lost);
-	string myType = PlayerShipCard.type_key;
 	prizeType = typeKey;
-	string why = Screen_PrizeCheck(ours, sti(PdmShipTypes.(myType).mincrew), theirs, sti(PdmShipTypes.(typeKey).mincrew), sti(PdmShipTypes.(typeKey).class), Screen_HeroRank());
-	if (why != "") { Trace("PDM prize: refused, " + why); return; }
-	Trade_AddShip(typeKey, PdmShips.(shipKey).name);
-	Trace("PDM prize: taken " + typeKey);
+	prizeName = PdmShips.(shipKey).name;
+	prizeCrew = theirs;
+	prizeOurs = ours;
+	Board_TakePrize();
+}
+
+// the same rules at the button "Взять призовой корабль" of ShipExchange: the prize is taken once, a refusal leaves it offered
+bool Board_TakePrize()
+{
+	if (prizeType == "") { return false; }
+	string myType = PlayerShipCard.type_key;
+	string why = Screen_PrizeCheck(prizeOurs, sti(PdmShipTypes.(myType).mincrew), prizeCrew, sti(PdmShipTypes.(prizeType).mincrew), sti(PdmShipTypes.(prizeType).class), Screen_HeroRank());
+	if (why != "") { Trace("PDM prize: refused, " + why); return false; }
+	Trade_AddShip(prizeType, prizeName);
+	Trace("PDM prize: taken " + prizeType);
+	prizeType = "";
+	return true;
 }
 
 ref Board_ShadowDensity()
