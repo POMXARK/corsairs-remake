@@ -51,10 +51,15 @@ float mapAY = 0.0;
 // the year 372 (CORE.dll date: limits 60 min, 24 h, 31 days, 12 months; SHIP.dll converts the date with 1/60, 1/24, 1/31, 1/12 and 372)
 float gameHours = 4001.0;
 #define MAP_HOURS_PER_TICK 1.48
+// the time at anchor goes at a*192*0.05 of the 4800 of the way (a - mapAnchorAcc): 1/500 of a on a tick of the way
+#define MAP_ANCHOR_ACC_MAX 300.0
 string mapDateShown = "";
 // the anchor (mapparam.ini [Anchors]): the game hour it lasts to; -1 none; mapAnchorMeet - until an encounter (anchor -3)
 float mapAnchorTo = -1.0;
 bool mapAnchorMeet = false;
+// the acceleration of the time at anchor (MAP.dll FUN_10004630): 20 at dropping the anchor, +0.025 a millisecond up to 300
+float mapAnchorAcc = 20.0;
+float mapAnchorFirst = 0.0; // hours of the first tick at anchor, to check the ramp
 bool mapAnchorListed = false;
 #define MAP_SUNRISE 6
 #define MAP_SUNSET 18
@@ -684,6 +689,8 @@ void Map_Anchor(int n)
 	if (n == 1) { mapAnchorTo = day0 + MAP_SUNSET; if (hour >= MAP_SUNSET) { mapAnchorTo = mapAnchorTo + 24.0; } }
 	if (n >= 2 && n <= 4) { mapAnchorTo = gameHours + 24.0 * (n - 1); }
 	if (n == 5) { mapAnchorMeet = true; }
+	mapAnchorAcc = 20.0;
+	mapAnchorFirst = 0.0;
 	Trace("PDM map anchor: " + n);
 	Sound_Once("yakor");
 	Map_ShowAnchors();
@@ -807,12 +814,19 @@ void Map_AutoScroll()
 	PostEvent("Map_AutoQuit", 1500);
 }
 
+// the end of a stay (weighed or an encounter): the acceleration has grown from its 20 of the start
+void Map_AnchorRamp()
+{
+	if (mapAnchorAcc > 30.0) { Trace("PDM map anchor: ramp ok " + mapAnchorFirst + " " + mapAnchorAcc); }
+	else { Trace("PDM map anchor: ramp FAIL " + mapAnchorFirst + " " + mapAnchorAcc); }
+}
+
 void Map_Tick()
 {
 	if (!mapActive) { return; }
 	if (!encShown) { Map_Scroll(); }
 	// the window of an encounter stops the ship until it is answered (encounter.c)
-	if (encShown) { mapAnchorTo = -1.0; mapAnchorMeet = false; mapNote = false; Map_ShowAnchors(); PostEvent("Map_Tick", MAP_TICK_MS); return; }
+	if (encShown) { if (mapAnchorTo >= 0.0 || mapAnchorMeet) { Map_AnchorRamp(); } mapAnchorTo = -1.0; mapAnchorMeet = false; mapNote = false; Map_ShowAnchors(); PostEvent("Map_Tick", MAP_TICK_MS); return; }
 	if (encForce == 1) { Enc_Tick(MAP_TICK_MS); }
 	if (mapTarget != "")
 	{
@@ -847,17 +861,23 @@ void Map_Tick()
 	}
 	else if (mapAnchorTo >= 0.0 || mapAnchorMeet)
 	{
-		// the time runs at anchor as on the way, the sails of the sea can meet the ship
-		gameHours = gameHours + MAP_HOURS_PER_TICK;
+		// the time at anchor speeds up from 20 to 300 of the acceleration, at most 0.6 of the speed of the way
+		float anchorStep = MAP_HOURS_PER_TICK * mapAnchorAcc / 500.0;
+		if (mapAnchorFirst == 0.0) { mapAnchorFirst = anchorStep; }
+		gameHours = gameHours + anchorStep;
+		mapAnchorAcc = mapAnchorAcc + MAP_TICK_MS * 0.025;
+		if (mapAnchorAcc > MAP_ANCHOR_ACC_MAX) { mapAnchorAcc = MAP_ANCHOR_ACC_MAX; }
 		if (mapAnchorTo >= 0.0 && gameHours >= mapAnchorTo)
 		{
 			gameHours = mapAnchorTo;
 			mapAnchorTo = -1.0;
 			Map_NoteHide();
 			Trace("PDM map anchor: weighed");
+			Map_AnchorRamp();
 			if (TownAuto == 27) { PostEvent("Map_AutoQuit", 500); }
 		}
-		else { Enc_Tick(MAP_TICK_MS); }
+		// the anchor tests (27) wait for the end of the stay, a random sail of the sea would break it
+		else if (TownAuto != 27) { Enc_Tick(MAP_TICK_MS); }
 	}
 	Map_Pay();
 	Map_Week();

@@ -288,3 +288,6 @@ corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City
 
 ## prize-scroll (TOWN_AUTO=23)
 Списки страницы «Трюм» показывают 10 строк: когда курсор уходит ниже, окно сдвигается — первые строки пропадают, строка курсора («> ») остаётся на виду. Тот же сценарий, что `ransack-screens`; маркер `PDM prize: list scroll ok <число видов>`.
+
+## map-anchor-ramp (TOWN_AUTO=27)
+Время на якоре разгоняется (MAP.dll: ускорение 20 → 300): шаг часов на последнем тике больше удвоенного шага первого. Сценарий якоря `map-anchor`; маркер `PDM map anchor: ramp ok <первый> <последний>`.
