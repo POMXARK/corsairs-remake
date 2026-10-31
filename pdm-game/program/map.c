@@ -138,6 +138,8 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	if (TownAuto == 38) { gameHours = 3905.0 + 400.0; PlayerCard.money = 10; }
 	if (TownAuto == 39) { PlayerCard.money = 1000; mapDebt = true; }
 	// the test of the mutiny (40): a hated captain, the step of the map ends in the message
+	// the test of the pirate hero (44): the pirates attack with 40 more on the threshold
+	if (TownAuto == 44) { PlayerCard.nation = 1; encForce = 1; }
 	if (TownAuto == 40 || TownAuto == 43) { PlayerCard.reputation = -35; encForce = 1; }
 	// the test of the storm (42): the hour is about to become 15
 	if (TownAuto == 42) { gameHours = 3901.0; }
@@ -150,7 +152,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	DeleteAttribute(&MapEncText, "");
 	if (TownAuto >= 24 && TownAuto < 27) { encForce = 1; }
 	if (TownAuto == 34 || TownAuto == 36) { encForce = 1; }
-	if (TownAuto == 34) { PlayerCard.relations.n0 = 2; }
+	if (TownAuto == 34) { PlayerCard.relations.n0 = 2; PlayerCard.nation = 2; }
 	if (fromIsland != "" && CheckAttribute(&PdmIslands, fromIsland + ".map_cell"))
 	{
 		mapX = atX;
@@ -191,7 +193,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	mapActive = true;
 	PostEvent("Map_Tick", MAP_TICK_MS);
 	Trace("PDM map: from " + fromIsland + " at " + mapX + ", " + mapY);
-	if (TownAuto == 6 || TownAuto == 28 || TownAuto == 37 || TownAuto == 38 || TownAuto == 39 || TownAuto == 40 || TownAuto == 42 || TownAuto == 43) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
+	if (TownAuto == 6 || TownAuto == 28 || TownAuto == 37 || TownAuto == 38 || TownAuto == 39 || TownAuto == 40 || TownAuto == 42 || TownAuto == 43 || TownAuto == 44) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
 	if (TownAuto == 27) { PostEvent("Map_AutoAnchor", MAP_AUTO_MS); }
 	if (TownAuto == 30 || TownAuto == 32 || TownAuto == 33) { PostEvent("Map_AutoScroll", MAP_AUTO_MS); }
 }

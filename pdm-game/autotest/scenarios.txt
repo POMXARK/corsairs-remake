@@ -44,6 +44,7 @@ map-week-pay|sea||39|PDM map: paid|300
 map-bunt|sea||40|PDM map: mutiny message|300
 map-storm|sea||42|PDM map: storm message|300
 map-bunt-movie|sea||43|PDM cutscene: BuntR1 done|300
+map-pirate-hero|sea||44|PDM encounter: attack threshold 70|300
 prize-skills|town|City_HighRock|23|PDM prize: skills question ok|120
 prize-refusal|town|City_HighRock|23|PDM prize: refusal text ok|120
 prize-step|town|City_HighRock|23|PDM prize: transfer step ok|120

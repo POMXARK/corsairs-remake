@@ -271,7 +271,11 @@ void Enc_Meet(int nation, int pattern)
 	{
 		// a pirate attacks when the roll is over ENC_ATTACK_MIN (the original adds more when the hero is at war: ours
 		// the war is not yet), else his sail is only seen
-		attack = rand(ENC_ATTACK_ROLL - 1) > ENC_ATTACK_MIN;
+		// a pirate hero (nation 1, CORE.dll writes the nation of a character into +0x1c8) is attacked less: 40 more on the threshold
+		int min = ENC_ATTACK_MIN;
+		if (Enc_HeroNation() == ENC_PIRATE) { min = min + 40; }
+		Trace("PDM encounter: attack threshold " + min);
+		attack = rand(ENC_ATTACK_ROLL - 1) > min;
 		encType = 2;
 		if (attack) { encType = 4; }
 	}
@@ -282,7 +286,8 @@ void Enc_Meet(int nation, int pattern)
 		encType = 0;
 		if (mc > 0 && wc == 0) { encType = 1; }
 		// a nation at war with the hero (relation 2, MAP.dll isEnemy) attacks by the same roll as pirates, the others never
-		if (Enc_Relation(nation) == 2)
+		// the hero never meets an attack from his own nation (MAP.dll 0x10005ef1)
+		if (Enc_Relation(nation) == 2 && Enc_HeroNation() != nation)
 		{
 			int roll = rand(ENC_ATTACK_ROLL - 1);
 			if (TownAuto == 34) { roll = ENC_ATTACK_ROLL - 1; }
@@ -300,6 +305,13 @@ void Enc_Meet(int nation, int pattern)
 	else { Sound_Once("mapship"); }
 	if (TownAuto == 34 && encType == 3) { Trace("PDM war: hostile nation " + nation + " attacks"); }
 	Enc_Show(encType, text);
+}
+
+// the nation of the hero (Pdm_SetNation of the quests), -1 when none
+int Enc_HeroNation()
+{
+	if (!CheckAttribute(&PlayerCard, "nation")) { return -1; }
+	return sti(PlayerCard.nation);
 }
 
 // the relation of the hero with a nation: 0 neutral, 1 ally, 2 hostile (relations.idf; the table of the hero is

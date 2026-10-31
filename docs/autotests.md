@@ -280,3 +280,6 @@ corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City
 
 ## map-bunt-movie
 Механика: бунт команды — после сообщения 12 ролик `BuntR1`, затем главное меню. `TOWN_AUTO=43`: репутация −35, бунт обязателен; после «ОК» проигрываются Bunt и Hanging, затем выход. Маркер: `PDM cutscene: BuntR1 done`.
+
+## map-pirate-hero
+Механика: герой-пират — порог нападения пиратов выше на 40. `TOWN_AUTO=44`: нация героя 1, принудительная встреча с пиратами. Маркер: `PDM encounter: attack threshold 70`.
