@@ -121,6 +121,9 @@ echo "int StartVolFx = $(setting VOLUME_FX volume_fx 80);" >> "$DIR/program/data
 echo "int StartVolMusic = $(setting VOLUME_MUSIC volume_music 70);" >> "$DIR/program/data/start.c"
 echo "int StartVolVoice = $(setting VOLUME_VOICE volume_voice 100);" >> "$DIR/program/data/start.c"
 echo "int StartNpcVoice = $(setting NPC_VOICE npc_voice 1);" >> "$DIR/program/data/start.c"
+# the keys the player rebound on the page "Управление": key_<control> = <code> of settings.ini, then of save/settings.ini (it wins)
+{ echo "void Keys_Init()"; echo "{"; for f in "$DIR/settings.ini" "$DIR/save/settings.ini"; do
+    sed -n 's/^key_\([A-Za-z0-9_]*\)[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\tPdmKeys.\1 = \2;/p' "$f" 2>/dev/null || true; done; echo "}"; } >> "$DIR/program/data/start.c"
 ln -sfn "$(dirname "$ENGINE")/resource/techniques" "$DIR/resource/techniques"
 
 # the window over engine.ini

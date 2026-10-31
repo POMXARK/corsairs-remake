@@ -45,6 +45,7 @@ aref PlayerShipType;
 #include "data\pdm_data.c"
 #include "data\pdm_trade.c"
 #include "data\pdm_encounters.c"
+#include "keys.c"
 #include "data\start.c"
 #include "data\pdm_logic.c"
 #include "data\pdm_world.c"
@@ -85,6 +86,7 @@ void MapKey(string controlName, int keyCode)
 
 void Main()
 {
+	Keys_Init();
 	PdmData_Init();
 	PdmTrade_Init();
 	PdmEncounters_Init();
@@ -132,6 +134,7 @@ void Main()
 		if (TownAuto == OPTIONSAUTO_ID) { Opt_AutoStart(); } // the options page of the main menu changes the screen
 		if (TownAuto == OPTCLOSE_ID) { Opt_CloseStart(); } // the same, over a live scene and closed at the end
 		if (TownAuto == 45) { Opt_ControlsStart(); } // the page of the controls is filled and scrolls
+		if (TownAuto == 46) { Opt_KeysStart(); } // the keys of the page of the controls are rebound and reset
 	Menu_Start();
 		return;
 	}
@@ -167,6 +170,7 @@ void Pdm_Base()
 void Pdm_Control()
 {
 	string control = GetEventData();
+	if (Keys_Control(control)) { return; }
 	// Escape on a screen goes back, the keys of the scene wait under it
 	if (control == "Pdm_Quit" && Screen_Escape()) { return; }
 	// F7 loads anywhere, even from the menu; F3 saves only in the game (save.c)

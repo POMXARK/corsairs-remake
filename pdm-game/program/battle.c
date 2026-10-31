@@ -183,12 +183,12 @@ void Battle_Create()
 	SetEventHandler("Board_Start", "Board_Start", 0);
 	SetEventHandler("Battle_SailTo", "Battle_SailTo", 0);
 	SetEventHandler("Battle_SailToCheck", "Battle_SailToCheck", 0);
-	MapKey("Battle_Fire", BATTLE_FIRE_KEY);
+	MapKey("Battle_Fire", Keys_Of("Battle_Fire"));
 	string key;
 	for (int i = 0; i < HUD_CHARGES; i++)
 	{
 		key = "Battle_Charge" + i;
-		MapKey(key, BATTLE_CHARGE_KEY + i);
+		MapKey(key, Keys_Of(key));
 	}
 }
 

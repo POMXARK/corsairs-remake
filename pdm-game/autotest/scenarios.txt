@@ -71,3 +71,4 @@ war-from-battle|sea||25|PDM war: nation 0 is hostile now|200
 prize-weight|town|City_HighRock|23|PDM prize: right hold ok [1-9][0-9]* of [1-9][0-9]*|120
 war-ships|sea||36|PDM war: ships of nation 0 fight nation 3|200
 menu-controls|menu||45|PDM controls: autotest done|60
+menu-keys|menu||46|PDM keys: autotest done, Ship_TurnLeft 65|60

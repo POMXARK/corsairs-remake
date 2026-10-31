@@ -162,6 +162,10 @@ if (-not (Test-Path "$Demo/program/data/pdm_voice_lines.c")) { Invoke-Python "$T
     "int StartVolMusic = $(Get-Setting 'VOLUME_MUSIC' 'volume_music' '70');"
     "int StartVolVoice = $(Get-Setting 'VOLUME_VOICE' 'volume_voice' '100');"
     "int StartNpcVoice = $(Get-Setting 'NPC_VOICE' 'npc_voice' '1');"
+    "void Keys_Init()"
+    "{"
+    foreach ($f in @("$Demo/settings.ini", "$Demo/save/settings.ini")) { if (Test-Path $f) { Select-String -Path $f -Pattern '^key_([A-Za-z0-9_]+)\s*=\s*(\d+)' | ForEach-Object { "`tPdmKeys.$($_.Matches[0].Groups[1].Value) = $($_.Matches[0].Groups[2].Value);" } } }
+    "}"
 ) | Set-Content -Encoding ascii "$Demo/program/data/start.c"
 
 # the window over engine.ini, as run.sh

@@ -62,7 +62,7 @@ void Screen_Init()
 	SetEventHandler("Screen_Tour", "Screen_Tour", 0);
 	SetEventHandler("Screen_Credits", "Screen_CreditsStep", 0);
 	SetEventHandler("PdmStory_Interface", "Screen_Launch", 0);
-	MapKey("Screen_Status", SCREEN_KEY);
+	MapKey("Screen_Status", Keys_Of("Screen_Status"));
 }
 
 // the page a button opens, "back" for the buttons that close a page, "" for the others (ours: the
@@ -208,7 +208,12 @@ void Screen_Controls()
 			head = head + "\n";
 			desc = desc + PdmScreens.keycontrols.(at).text + "\n";
 		}
-		keys = keys + PdmScreens.keycontrols.(at).keys + "\n";
+		// the rows the game can rebind show the key it uses now (ours; the other rows show the keys of the original)
+		int kix = -1;
+		if (sti(PdmScreens.keycontrols.(at).head) == 0) { kix = Keys_Find(sti(PdmScreens.keycontrols.(at).key)); }
+		if (kix < 0) { keys = keys + PdmScreens.keycontrols.(at).keys + "\n"; }
+		else if (kix == keysCapture) { keys = keys + "...\n"; }
+		else { keys = keys + Keys_VkName(Keys_Of(keysName[kix])) + "\n"; }
 	}
 	Screen_Text("EDITCONTROLSDESC", desc);
 	Screen_Text("EDITCONTROLSHEAD", head);
@@ -1237,6 +1242,18 @@ bool Screen_Click(string node)
 {
 	if (screenName == "keycontrols")
 	{
+		if (node == "LB_DEFAULT") { Keys_Reset(); return true; }
+		if (findSubStr(node, "LB_ROW", 0) == 0)
+		{
+			int rowAt = controlsTop + sti(strcut(node, 6, strlen(node) - 1));
+			if (rowAt < sti(PdmScreens.keycontrols.count))
+			{
+				string rowName = "c" + rowAt;
+				int rowKey = Keys_Find(sti(PdmScreens.keycontrols.(rowName).key));
+				if (sti(PdmScreens.keycontrols.(rowName).head) == 0 && rowKey >= 0) { Keys_Begin(rowKey); Screen_Controls(); }
+			}
+			return true;
+		}
 		if (node == "LB_SCROLLUP") { controlsTop = controlsTop - CONTROLS_STEP; Screen_Controls(); return true; }
 		if (node == "LB_SCROLLDOWN") { controlsTop = controlsTop + CONTROLS_STEP; Screen_Controls(); return true; }
 	}

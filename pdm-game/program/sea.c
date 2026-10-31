@@ -648,10 +648,10 @@ void Sea_Release()
 void Sea_MapShipKeys()
 {
 	// read by the ship entity itself for the main character
-	MapKey("Ship_TurnLeft", 65);
-	MapKey("Ship_TurnRight", 68);
-	MapKey("Ship_SailUp", 87);
-	MapKey("Ship_SailDown", 83);
+	MapKey("Ship_TurnLeft", Keys_Of("Ship_TurnLeft"));
+	MapKey("Ship_TurnRight", Keys_Of("Ship_TurnRight"));
+	MapKey("Ship_SailUp", Keys_Of("Ship_SailUp"));
+	MapKey("Ship_SailDown", Keys_Of("Ship_SailDown"));
 	// read by SHIP_CAMERA; 256/257 are the mouse axes
 	MapKey("ShipCamera_Turn_H", 256);
 	MapKey("ShipCamera_Turn_V", 257);

@@ -50,8 +50,8 @@ string saveFileAsked = "";
 
 void Save_Init()
 {
-	MapKey("Save_Quick", SAVEFILE_KEY);
-	MapKey("Save_Load", SAVEFILE_LOAD_KEY);
+	MapKey("Save_Quick", Keys_Of("Save_Quick"));
+	MapKey("Save_Load", Keys_Of("Save_Load"));
 	SetEventHandler("Save_Auto", "Save_Auto", 0);
 }
 

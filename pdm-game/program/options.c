@@ -114,7 +114,7 @@ void Options_SaveSettings()
 {
 	int voice = 0;
 	if (optionsVoice) { voice = 1; }
-	WriteTextFile(RUN_SAVEDIR + "/settings.ini", "volume_fx = " + optionsVolFx + "\nvolume_music = " + optionsVolMusic + "\nvolume_voice = " + optionsVolVoice + "\nnpc_voice = " + voice + "\n");
+	WriteTextFile(RUN_SAVEDIR + "/settings.ini", "volume_fx = " + optionsVolFx + "\nvolume_music = " + optionsVolMusic + "\nvolume_voice = " + optionsVolVoice + "\nnpc_voice = " + voice + "\n" + Keys_Lines());
 }
 
 void Options_Volumes()
@@ -338,6 +338,42 @@ void Opt_ControlsStep()
 	if (step == 5)
 	{
 		Trace("PDM controls: autotest done, the page " + screenName);
+		ExitProgram();
+	}
+}
+
+// the rebinding of the keys: a row is chosen, the key pressed, the file written, the reset (TOWN_AUTO 46)
+void Opt_KeysStart()
+{
+	SetEventHandler("Opt_KeysStep", "Opt_KeysStep", 0);
+	PostEvent("Opt_KeysStep", 1500);
+}
+
+void Opt_KeysStep()
+{
+	int step = ctlAutoStep;
+	ctlAutoStep++;
+	PostEvent("Opt_KeysStep", 900);
+	if (step == 0) { Screen_Open("options"); return; }
+	if (step == 1) { PostEvent("ievnt_command", 0, "ss", "click", "LB_CONTROLS"); return; }
+	if (step == 3) { PostEvent("ievnt_command", 0, "ss", "click", "LB_ROW1"); return; }
+	if (step == 4) { PostEvent("Control Activation", 0, "s", "Pdm_Cap81"); return; }
+	if (step == 6)
+	{
+		Trace("PDM keys: check, Ship_TurnLeft " + Keys_Of("Ship_TurnLeft") + ", Ship_TurnRight " + Keys_Of("Ship_TurnRight"));
+		PostEvent("ievnt_command", 0, "ss", "click", "LB_ROW2");
+		return;
+	}
+	if (step == 7) { PostEvent("Control Activation", 0, "s", "Pdm_Quit"); return; }
+	if (step == 9)
+	{
+		Trace("PDM keys: check, after Escape " + Keys_Of("Ship_TurnRight"));
+		PostEvent("ievnt_command", 0, "ss", "click", "LB_DEFAULT");
+		return;
+	}
+	if (step == 11)
+	{
+		Trace("PDM keys: autotest done, Ship_TurnLeft " + Keys_Of("Ship_TurnLeft"));
 		ExitProgram();
 	}
 }

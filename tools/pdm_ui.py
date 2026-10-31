@@ -902,6 +902,15 @@ class Converter:
             lines += ["[EDITCONTROLSHEAD]", "position = 105,108,325,398", "font = pdm_logbook_italic_19",
                       "fontScale = 0.667", f"lineSpace = {round(self.fonts['pdm_logbook_italic_19'][2])}",
                       "color = 255,110,60,0", "alignment = left", ""]
+        if out_name == "keycontrols":
+            # a click on a row of the list chooses the action whose key is to be changed (ours: the rows have no
+            # buttons in the original); the same window and line as EDITCONTROLSDESC, the width over both columns
+            for i in range(16):
+                y = 108 + 17 * i
+                nodes.append(("TEXTBUTTON", f"LB_ROW{i}"))
+                lines += [f"[LB_ROW{i}]", f"position = 105,{y},625,{y + 17}", "font = pdm_logbook_italic_19",
+                          "fontScale = 0.667", "fontColor = 255,255,255,255", "fontColorSelected = 255,255,255,255",
+                          "fontColorPressed = 255,255,255,255", "command = click", ""]
         if section == "Options":
             n, l = self.options_volume()
             nodes += n
@@ -1200,6 +1209,7 @@ class Converter:
             lines.append(f'\tPdmScreens.keycontrols.c{n}.keys = "{" / ".join(x for x in names if x)}";')
             lines.append(f'\tPdmScreens.keycontrols.c{n}.head = {head};')
             lines.append(f'\tPdmScreens.keycontrols.c{n}.code = {a.get("code", "0")};')
+            lines.append(f'\tPdmScreens.keycontrols.c{n}.key = {key};')
             n += 1
         return [f"\tPdmScreens.keycontrols.count = {n};"] + lines
 

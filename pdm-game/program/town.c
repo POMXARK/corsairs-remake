@@ -216,11 +216,11 @@ void Town_Handlers()
 void Town_MapKeys()
 {
 	// key codes are Windows virtual keys, 256/257 are the mouse axes
-	MapKey("ChrForward", 87);
-	MapKey("ChrBackward", 83);
-	MapKey("ChrTurnHL", 65);
-	MapKey("ChrTurnHR", 68);
-	MapKey("ChrRun", 16);
+	MapKey("ChrForward", Keys_Of("ChrForward"));
+	MapKey("ChrBackward", Keys_Of("ChrBackward"));
+	MapKey("ChrTurnHL", Keys_Of("ChrTurnHL"));
+	MapKey("ChrTurnHR", Keys_Of("ChrTurnHR"));
+	MapKey("ChrRun", Keys_Of("ChrRun"));
 	MapKey("ChrTurnH", 256);
 	// the mouse up looks up: 4 is INVERSE_CONTROL of menu.c, included after this file
 	Menu_MapKey("ChrCamTurnV", 257, 4);
@@ -231,7 +231,7 @@ void Town_MapKeys()
 	// middle button / C: first-person look and back
 	MapKey("ChrCamCameraSwitch", 4);
 	MapKey("ChrCamNormalize", 67);
-	MapKey("Town_Talk", 69);
+	MapKey("Town_Talk", Keys_Of("Town_Talk"));
 	// polled by the dialog entity while it is open: arrows pick an answer, Space, Enter or the left
 	// button say it, PageUp/PageDown page a long speech, Escape leaves
 	MapKey("DlgUp", 38);
