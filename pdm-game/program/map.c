@@ -47,8 +47,9 @@ float mapToY = 0.0;
 // the course of the ship on the map, it crosses the transitions (the original's worldMap.playerShipAY)
 float mapAY = 0.0;
 // the game date: hours from 1 January of 1601, 00:00 (the original keeps seconds, minutes, hours, day, month, year in the hero of MAP.dll);
-// the start is 12 June 17:00; 1 s of real sailing is about 37 game hours (measured in the original); years of 365 days (ours)
-float gameHours = 3905.0;
+// the start is 12 June 17:00; 1 s of real sailing is about 37 game hours (measured in the original); every month has 31 days and
+// the year 372 (CORE.dll date: limits 60 min, 24 h, 31 days, 12 months; SHIP.dll converts the date with 1/60, 1/24, 1/31, 1/12 and 372)
+float gameHours = 4001.0;
 #define MAP_HOURS_PER_TICK 1.48
 string mapDateShown = "";
 // the anchor (mapparam.ini [Anchors]): the game hour it lasts to; -1 none; mapAnchorMeet - until an encounter (anchor -3)
@@ -131,11 +132,11 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	mapHour = -1;
 	mapDebt = false;
 	// the test of the pay (28) starts a few hours before the end of June
-	if (TownAuto == 28) { gameHours = 3905.0 + 400.0; PlayerCard.money = 1000; }
+	if (TownAuto == 28) { gameHours = 4001.0 + 400.0; PlayerCard.money = 1000; }
 	// the test of the week (37) starts a few hours before the 8th of January
 	if (TownAuto == 37 || TownAuto == 39) { gameHours = 164.0; }
 	// the test of the debt (38): no gold at the end of the month; of the weekly pay (39): in debt, gold enough
-	if (TownAuto == 38) { gameHours = 3905.0 + 400.0; PlayerCard.money = 10; }
+	if (TownAuto == 38) { gameHours = 4001.0 + 424.0; PlayerCard.money = 10; }
 	if (TownAuto == 39) { PlayerCard.money = 1000; mapDebt = true; }
 	// the test of the mutiny (40): a hated captain, the step of the map ends in the message
 	// the test of the pirate hero (44): the pirates attack with 40 more on the threshold
@@ -492,14 +493,12 @@ void Map_SailTo(int index)
 
 int Map_MonthDays(int mon)
 {
-	if (mon == 1) { return 28; }
-	if (mon == 3 || mon == 5 || mon == 8 || mon == 10) { return 30; }
 	return 31;
 }
 
 int Map_MonthIndex()
 {
-	int day = (makeint(gameHours) / 24) % 365;
+	int day = (makeint(gameHours) / 24) % 372;
 	int mon = 0;
 	while (day >= Map_MonthDays(mon)) { day = day - Map_MonthDays(mon); mon++; }
 	return mon;
@@ -528,7 +527,7 @@ void Map_NoteHide()
 // the day of the month (0-based) of the game date
 int Map_MonthDay()
 {
-	int day = (makeint(gameHours) / 24) % 365;
+	int day = (makeint(gameHours) / 24) % 372;
 	int mon = 0;
 	while (day >= Map_MonthDays(mon)) { day = day - Map_MonthDays(mon); mon++; }
 	return day;
@@ -612,7 +611,7 @@ void Map_Pay()
 // hour and minutes, both without a leading zero: "June 12, 1601, 17.0")
 string Map_RecordDate(int total)
 {
-	int day = (total / 24) % 365;
+	int day = (total / 24) % 372;
 	int mon = 0;
 	while (day >= Map_MonthDays(mon)) { day = day - Map_MonthDays(mon); mon++; }
 	string months = "January,February,March,April,May,June,July,August,September,October,November,December";
@@ -620,13 +619,13 @@ string Map_RecordDate(int total)
 	for (int i = 0; i < mon; i++) { from = findSubStr(months, ",", from) + 1; }
 	int to = findSubStr(months, ",", from);
 	if (to < 0) { to = strlen(months); }
-	return strcut(months, from, to - 1) + " " + (day + 1) + ", " + (1601 + total / 8760) + ", " + (total % 24) + ".0";
+	return strcut(months, from, to - 1) + " " + (day + 1) + ", " + (1601 + total / 8928) + ", " + (total % 24) + ".0";
 }
 
 string Map_DateText(bool withTime)
 {
 	int total = makeint(gameHours);
-	int day = (total / 24) % 365;
+	int day = (total / 24) % 372;
 	int hour = total % 24;
 	int mon = 0;
 	while (day >= Map_MonthDays(mon)) { day = day - Map_MonthDays(mon); mon++; }
