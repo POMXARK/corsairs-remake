@@ -101,6 +101,9 @@ bool seaActive = false;
 float seaTimeScale = 1.0;
 bool seaFromMap = false;
 bool seaAutoMapDone = false;
+#define SEA_ESCAPE_DISTANCE 600.0
+#define SEA_ESCAPE_NOTE_S 5.0
+float seaEscapeNoteTime = -1.0;
 bool seaAutoSailDone = false;
 // SCENE=battle (battle.c): Sea_AddShip gives the ships to SEA_AI, an enemy comes after the hero
 bool seaBattle = false;
@@ -456,6 +459,8 @@ void Sea_Start(string islandKey)
 	SetEventHandler("Sea_Tick", "Sea_Tick", 0);
 	SetEventHandler("Sea_ToPort", "Sea_ToPort", 0);
 	SetEventHandler("Sea_ToMap", "Sea_ToMap", 0);
+	SetEventHandler("Sea_EscapeAuto", "Sea_EscapeAuto", 0);
+	seaEscapeNoteTime = -1.0;
 	// "Плыть к" at sea (ours, as battle.c registers Battle_SailTo at 166): the Tab's press posts Sea_SailTo
 	// (hud.c:Hud_LaunchCommand), the autotest posts it too, never simulated keys
 	SetEventHandler("Sea_SailTo", "Sea_SailTo", 0);
@@ -526,9 +531,55 @@ void Sea_Arrive(string islandKey, float atMapX, float atMapY, float ay)
 	Sea_Start(islandKey);
 }
 
+// the escape from the chase (ours: the threshold is not found in the original, whose command "sea_map" is shut
+// by a flag of the hero's ship): the distance in m to the nearest ship that attacks the hero, -1.0 without one.
+// The neutral and friendly ships (the NPC hull, a merchant that runs away, the sunk) do not count
+float Sea_HostileDistance()
+{
+	if (!seaBattle || battleOver || battleEnemyFlees || seaHero < 0) { return -1.0; }
+	float hx = stf(SeaShips[seaHero].ship.pos.x);
+	float hz = stf(SeaShips[seaHero].ship.pos.z);
+	float least = -1.0;
+	for (int i = 0; i < seaShipCount; i++)
+	{
+		if (i == seaHero || i == seaNpc) { continue; }
+		if (sti(SeaShips[i].Ship.HP) <= 0) { continue; }
+		float dx = stf(SeaShips[i].ship.pos.x) - hx;
+		float dz = stf(SeaShips[i].ship.pos.z) - hz;
+		float d = sqrt(dx * dx + dz * dz);
+		if (least < 0.0 || d < least) { least = d; }
+	}
+	return least;
+}
+
+// may the hero leave for the world map: no hostile ship nearer than SEA_ESCAPE_DISTANCE; the refusal is told to the player
+// once in SEA_ESCAPE_NOTE_S seconds (the sailing past the edge of the island asks every tick)
+bool Sea_CanEscape()
+{
+	float least = Sea_HostileDistance();
+	if (least < 0.0 || least >= SEA_ESCAPE_DISTANCE) { return true; }
+	if (seaTime - seaEscapeNoteTime >= SEA_ESCAPE_NOTE_S || seaEscapeNoteTime < 0.0)
+	{
+		seaEscapeNoteTime = seaTime;
+		Hud_Log("Враг слишком близко, оторваться от погони не удаётся!");
+		Trace("PDM sea: chase, hostile ship " + makeint(least) + " m, no way to the map");
+		if (TownAuto == 29) { PostEvent("Sea_EscapeAuto", 500); }
+	}
+	return false;
+}
+
+// TOWN_AUTO=29: after the refusal the hero sails away from the chase (put far, as the autotests move him) and asks again
+void Sea_EscapeAuto()
+{
+	if (!seaActive) { return; }
+	Sea_TeleportHero(stf(SeaShips[seaHero].ship.pos.x) + SEA_ESCAPE_DISTANCE * 3.0, stf(SeaShips[seaHero].ship.pos.z));
+	PostEvent("Sea_ToMap", 1000);
+}
+
 void Sea_ToMap()
 {
 	if (!seaActive) { return; }
+	if (!Sea_CanEscape()) { return; }
 	string island = seaIsland;
 	// the place and the course of the hero's ship at sea, taken before the release (the entity writes ship.pos and ship.ang each frame)
 	float mx = 0.0;
@@ -548,6 +599,7 @@ void Sea_ToMap()
 	}
 	Sea_Release();
 	Trace("PDM: sea, to the world map from " + island);
+	if (TownAuto == 29) { Trace("PDM sea: chase, escaped to the map"); ExitProgram(); return; }
 	Map_Start(island, mx, my, ay);
 }
 
@@ -569,6 +621,7 @@ void Sea_Release()
 	DelEventHandler("Sea_Tick", "Sea_Tick");
 	DelEventHandler("Sea_ToPort", "Sea_ToPort");
 	DelEventHandler("Sea_ToMap", "Sea_ToMap");
+	DelEventHandler("Sea_EscapeAuto", "Sea_EscapeAuto");
 	DelEventHandler("WhrCalcFogColor", "Sea_FogColor");
 	DelEventHandler("SeaGetLayers", "Sea_ShipLayers");
 	DelEventHandler("Shp_UpdParams", "Sea_ShipParameters");
@@ -1003,7 +1056,7 @@ void Sea_Tick()
 	if (TownAuto != 0 && Sea_AtHarbour(d)) { PostEvent("Sea_ToPort", 0); return; }
 	Hud_SeaTick();
 	if (seaBattle) { Board_SeaTick(); }
-	if (d > 0.0 && CheckAttribute(&PdmIslands, seaIsland + ".exit_r") && d > stf(PdmIslands.(seaIsland).exit_r))
+	if (d > 0.0 && CheckAttribute(&PdmIslands, seaIsland + ".exit_r") && d > stf(PdmIslands.(seaIsland).exit_r) && Sea_CanEscape())
 	{
 		PostEvent("Sea_ToMap", 0);
 		return;

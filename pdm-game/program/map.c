@@ -415,6 +415,7 @@ void Map_Land(int cx, int cy)
 		text = Enc_Format(Enc_Format(Enc_Text("Mapparammessage8"), name), Enc_Text(nations));
 	}
 	Trace("PDM map: land " + near + " (" + text + ")");
+	if (TownAuto == 6) { PostEvent("Map_AutoQuit", 1500); }
 	Enc_Show(5, text);
 }
 

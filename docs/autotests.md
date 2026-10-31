@@ -37,6 +37,7 @@
 | `map-anchor` | якорь «На день» (TOWN_AUTO=27): дата 12 → 13 Июнь, якорь поднят | `PDM map anchor: weighed` |
 | `map-open` | в новой игре в списке карты 3 острова (avilia, Belflor, Highrock) | `PDM map: list of 3 islands` |
 | `map-land` | корабль идёт к острову, при входе в клетки вокруг острова — окно «Сэр, земля!» с именем и флагом | `PDM map: land … Сэр, земля` |
+| `sea-escape` | уход от погони: враг ближе 600 м — отказ, после отрыва «Карта» работает (TOWN_AUTO=29) | `PDM sea: chase, escaped to the map` |
 | `map-pay` | при смене месяца окно «Пора платить команде», «Да» списывает 5 × команда (200) | `PDM map: paid 200` |
 | `battle-fire` / `battle-board` / `battle-sail` / `battle-fort` | залп, абордаж, парусная погоня, бой с фортом | `PDM: autotest done, battle…` |
 | `save-sea` | автосохранение в море и загрузка его обратно | `PDM: autotest done, save` |
