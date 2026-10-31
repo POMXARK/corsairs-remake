@@ -969,7 +969,8 @@ class Converter:
         for name in ["BACK_RIGHT"] + [f"BACK_TILE{i}" for i in range(MAP_BACK_TILES)]:
             nodes.append(("PICTURE", name))
             lines += [f"[{name}]", "position = 0,0,0,0", f"textureName = {back}", f"textureRect = 0,0,1,{bv:g}", ""]
-        nodes += [("PICTURE", "MAP"), ("PICTURE", "SHIP"), ("FORMATEDTEXT", "ISLANDS")]
+        nodes += [("PICTURE", "MAP"), ("PICTURE", "SHIP"), ("FORMATEDTEXT", "ISLANDS"), ("SCROLLER", "ISLSCROLL")]
+        scroll_lines = self.island_scroller(ix + int(a["dx"]) + 4, iy, int(a["dy"]))
         # the message of an encounter (MAP.dll SetMessages): the scroll map_message.tga with EditMessages on it and the buttons
         # lb_Ok / lb_Yes ("В бой") / lb_No ("Игнорировать"); all of them are of no size until map.c shows them (Map_Message)
         scroll = self.keyed(Image.open(self.pdm.find(self.base + "map_message.tga")).convert("RGBA"))
@@ -1003,9 +1004,37 @@ class Converter:
                  "[ISLANDS]", f"position = {ix},{iy},{ix + int(a['dx'])},{iy + int(a['dy'])}",
                  f"font = {font}", f"fontScale = {1 / FONT_OVERSAMPLE:.3f}", f"lineSpace = {line_h}",
                  f"color = {rgb(a.get('rgb'), '255,255,255')}", "backColor = 96,255,196,0", "backOffset = 2,0,2,0",
-                 "wrapoff = 1", "command = activate", "command = click", "command = upstep", "command = downstep", ""]
+                 "wrapoff = 1", "scrollerName = ISLSCROLL", "command = activate", "command = click", "command = upstep",
+                 "command = downstep", ""] + scroll_lines
         self.map_size = full.size
         return nodes, lines
+
+    def island_scroller(self, x, y, height):
+        """The scroller of the list of the islands (scroll_up, scroll_down, scroll_polzun0..2 of map.ini): the track with
+        the arrows (up-nor, down-nor of IMAGES/FRAMES/scroll) at its ends and the slider made of its three pieces.
+        XI_SCROLLER draws and drags them and moves ISLANDS (scrollerName); the dark track between the arrows is ours."""
+        folder = self.pdm.find("IMAGES/FRAMES/scroll")
+
+        def load(name):
+            return Image.open(next(f for f in folder.iterdir() if f.name.lower() == name)).convert("RGBA")
+        up, down = load("up-nor.tga"), load("down-nor.tga")
+        width, button = 28, 28
+        track = Image.new("RGBA", (width, height), (40, 24, 8, 200))
+        track.paste(up, (0, 0))
+        track.paste(down, (0, height - down.height))
+        ttex, tw, th = self.texture(track, "map_scrolltrack")
+        top, mid, bottom = load("scroll-up.tga"), load("scroll-mid.tga"), load("scroll-down.tga")
+        roller_h = 40
+        roller = Image.new("RGBA", (width, roller_h), (0, 0, 0, 0))
+        body = mid.resize((mid.width, roller_h - top.height - bottom.height))
+        roller.paste(body, ((width - mid.width) // 2, top.height))
+        roller.paste(top, ((width - top.width) // 2, 0))
+        roller.paste(bottom, ((width - bottom.width) // 2, roller_h - bottom.height))
+        rtex, rw, rh = self.texture(roller, "map_scrollroller")
+        return ["[ISLSCROLL]", f"position = {x},{y},{x + width},{y + height}", f"baseTexture = {ttex}",
+                f"rollerTexture = {rtex}", f"scrollTexPos = 0,0,{width / tw:g},{height / th:g}",
+                f"rollTexPos = 0,0,{width / rw:g},{roller_h / rh:g}", f"begEndTexSize = {button / th:g}",
+                f"begEndBaseSize = {button}", f"rollerHeight = {roller_h}", "OwnedControl = ISLANDS", ""]
 
     # ---------- the dialog ----------
 

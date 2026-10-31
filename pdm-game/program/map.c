@@ -176,7 +176,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	Trace("PDM map: from " + fromIsland + " at " + mapX + ", " + mapY);
 	if (TownAuto == 6 || TownAuto == 28) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
 	if (TownAuto == 27) { PostEvent("Map_AutoAnchor", MAP_AUTO_MS); }
-	if (TownAuto == 30 || TownAuto == 32) { PostEvent("Map_AutoScroll", MAP_AUTO_MS); }
+	if (TownAuto == 30 || TownAuto == 32 || TownAuto == 33) { PostEvent("Map_AutoScroll", MAP_AUTO_MS); }
 }
 
 // the islands of islands_x.idf with a model at sea; the dead towns (Highrock_) stand on the living ones
@@ -207,6 +207,11 @@ void Map_FillIslands()
 		MapFog.island.avilia = 1;
 		MapFog.island.Belflor = 1;
 		MapFog.island.Highrock = 1;
+	}
+	// the test of the scroller of the list (TOWN_AUTO=33): every island is found, the list is longer than its window
+	if (TownAuto == 33)
+	{
+		for (int k = 0; k < mapIslandCount; k++) { at = "i" + k; key = MapIslands.(at); MapFog.island.(key) = 1; }
 	}
 	aref found;
 	makearef(found, MapFog.island);
@@ -286,6 +291,7 @@ void Map_Layout()
 	// -1: the position message of every node (inode.cpp), the rects of mainmap.ini moved right
 	int dx = 2 * edge;
 	Map_MoveNode("ISLANDS", 650 + dx, 125, 758 + dx, 386);
+	Map_MoveNode("ISLSCROLL", 762 + dx, 125, 790 + dx, 386);
 	Map_MoveNode("EDITTIME", 650 + dx, 515, 762 + dx, 585);
 	Map_MoveNode("LB_EXIT", 657 + dx, 34, 771 + dx, 75);
 	Map_MoveNode("LB_ISLANDUP", 763 + dx, 123, 784 + dx, 141);
