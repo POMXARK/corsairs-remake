@@ -597,9 +597,14 @@ class Converter:
             h = line
         if align is None:
             align = "center" if "xo" in a else "right" if "xr" in a else "left"
+        color = rgb(a.get("rgb"), "255,255,255")
+        if key.lower() in ("editcontrolsdesc", "editcontrolskeys"):
+            # the rows of the original lie in rect_controls (87,98,626,406) in dark ink (rgb 8,8,8 of control#)
+            x, y, w, h = (105 if key.lower() == "editcontrolsdesc" else 400), 108, 220, 290
+            color = "255,8,8,8"
         lines = [f"[{key.upper()}]", f"position = {x},{y},{x + w},{y + h}", f"font = {name}",
                  f"fontScale = {1 / FONT_OVERSAMPLE:.3f}", f"lineSpace = {round(self.fonts[name][2])}",
-                 f"color = {rgb(a.get('rgb'), '255,255,255')}", f"alignment = {align}"]
+                 f"color = {color}", f"alignment = {align}"]
         string = text_key(a.get("txt", ""))
         if string:
             lines.append(f"string = {string}")

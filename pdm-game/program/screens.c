@@ -177,7 +177,7 @@ void Screen_Credits()
 // (controls.ini, the names of interface.ini) in the right one; the lines are in PdmScreens.keycontrols.c<i>
 // (tools/pdm_ui.py) and the buttons of the scroll move the window over them by CONTROLS_STEP (ours: the
 // original has a rect of the controls with the scroll, no more is known)
-#define CONTROLS_ROWS 20
+#define CONTROLS_ROWS 16
 #define CONTROLS_STEP 5
 int controlsTop = 0;
 
