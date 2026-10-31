@@ -134,7 +134,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	encAcc = 0;
 	DeleteAttribute(&MapEncText, "");
 	if (TownAuto >= 24 && TownAuto < 27) { encForce = 1; }
-	if (TownAuto == 34) { encForce = 1; }
+	if (TownAuto == 34 || TownAuto == 36) { encForce = 1; }
 	if (TownAuto == 34) { PlayerCard.relations.n0 = 2; }
 	if (fromIsland != "" && CheckAttribute(&PdmIslands, fromIsland + ".map_cell"))
 	{

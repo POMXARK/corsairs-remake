@@ -167,12 +167,63 @@ void Enc_Tick(int ms)
 		encPats[0] = 21;
 		// TOWN_AUTO=25: the merchants of England (pattern 5), the hero attacks them and they run away
 		if (TownAuto == 25 || TownAuto == 34) { encPick[0] = 0; encPats[0] = 5; }
+		// TOWN_AUTO=36: England and Spain meet in one cell, they fight each other (message 9)
+		if (TownAuto == 36) { layers = 2; encPick[0] = 0; encPats[0] = 5; encPick[1] = 3; encPats[1] = 5; }
 		// TOWN_AUTO=26: the pirate squadron of three (pattern 8), the hero attacks, the escorts join the battle
 		if (TownAuto == 26) { encPats[0] = 8; }
 	}
 	if (layers == 0) { return; }
 	int at = rand(layers - 1);
+	if (TownAuto == 36) { at = 0; }
+	if (Enc_War(layers, at)) { return; }
 	Enc_Meet(encPick[at], encPats[at]);
+}
+
+// MAP.dll isEnemy for two nations that are not the hero's: different nations, both known, are enemies (the hero has no
+// nation of his own in the remake: the rule for his nation is Enc_Relation)
+bool Enc_IsEnemy(int first, int second)
+{
+	if (first < 0 || second < 0 || first == second) { return false; }
+	return true;
+}
+
+// GetWar of MAP.dll: with two nations or more in the cell the nation picked may meet an enemy of its own: "ships fight each
+// other" (message 9), the roll is over 220 of 300. Returns true when the message came up.
+bool Enc_War(int layers, int at)
+{
+	if (layers < 2) { return false; }
+	int enemies = 0;
+	int j;
+	for (j = 0; j < layers; j++)
+	{
+		if (j != at && Enc_IsEnemy(encPick[at], encPick[j])) { enemies++; }
+	}
+	if (enemies == 0) { return false; }
+	int roll = rand(ENC_ATTACK_ROLL - 1);
+	if (TownAuto == 36) { roll = ENC_ATTACK_ROLL - 1; }
+	if (roll <= 220) { return false; }
+	int nth = rand(enemies - 1);
+	int other = -1;
+	for (j = 0; j < layers; j++)
+	{
+		if (j == at || !Enc_IsEnemy(encPick[at], encPick[j])) { continue; }
+		if (nth == 0) { other = encPick[j]; break; }
+		nth--;
+	}
+	encAcc = 0;
+	encNation = encPick[at];
+	encPattern = encPats[at];
+	string pat = "p" + encPattern;
+	int mc = sti(PdmPattern.(pat).mc);
+	int wc = sti(PdmPattern.(pat).wc);
+	encCount = wc;
+	if (wc == 0) { encCount = mc; }
+	encType = 9;
+	string text = Enc_Format(Enc_Format(Enc_Text("MapMessageWAR"), Enc_Adjective(encNation)), Enc_Adjective(other));
+	Trace("PDM war: ships of nation " + encNation + " fight nation " + other + " (" + text + ")");
+	Sound_Once("mapattack");
+	Enc_Show(9, text);
+	return true;
 }
 
 // a meeting with the pattern of the nation: the type of the message by the rules of the original, then the window

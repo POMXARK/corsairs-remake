@@ -43,6 +43,7 @@
 | `war-logbook` | подписи наций в журнале по отношению героя (TOWN_AUTO=35: Англия нейтрально, Франция враждебно, Испания лояльно) | `PDM war: logbook loyalty ok` |
 | `war-from-battle` | после «Напасть» на торговца нации она становится враждебной (наше) | `PDM war: nation 0 is hostile now` |
 | `prize-weight` | на «Передаче» вес и вместимость правого (призового) корабля: вес груза приза не больше вместимости | `PDM prize: right hold ok …` |
+| `war-ships` | в клетке две нации (TOWN_AUTO=36, Англия и Испания): сообщение 9, корабли дерутся между собой | `PDM war: ships of nation 0 fight nation 3` |
 | `map-open` | в новой игре в списке карты 3 острова (avilia, Belflor, Highrock) | `PDM map: list of 3 islands` |
 | `map-land` | корабль идёт к острову, при входе в клетки вокруг острова — окно «Сэр, земля!» с именем и флагом | `PDM map: land … Сэр, земля` |
 | `map-scroll-fast` | прокрутка карты с зажатым Shift идёт вдвое быстрее (клавиши скрипт нажать не может: Shift задан напрямую, TOWN_AUTO=32; маркер `fast 2`) | `PDM map: scrolled … manual 1 fast 2` |
