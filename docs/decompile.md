@@ -205,3 +205,6 @@ MAP.dll только показывает дату на карте: узел `Ma
 - Запись в `english.qst` (CORE.dll, `ref/pdm-decomp/CORE.dll.c` ~680, `FUN_1000dec0`): дата `%s %d, %d, %d.%d` с английским месяцем, 2 байта перевода строки, текст, 4 байта разделителя. Строки `s_Accepted/s_NotAccepted` в STATUS.dll (~500) нигде не используются дальше — списка квестов нет.
 - Ghidra: имена функций CLogBook в `strings.txt` есть, в `.c` они `FUN_100…` — искать по строкам `s_LogBook_…`.
 
+
+## Шторм: тупики
+- `MAP.dll.strings` без «storm/tornado/weather»; `Tornado.dll`, `coordinator.dll` (маска погоды: tornado/lightning/l_flare) — море, а не карта; источник маски не найден. Сообщения 5 и 10 из mapparam.ini не используются.
