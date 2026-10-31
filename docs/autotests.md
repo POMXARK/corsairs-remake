@@ -227,6 +227,9 @@ corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City
 ## prize-button (TOWN_AUTO=23)
 Кнопка «Взять призовой корабль» страницы «Корабли»: приз 6 класса берётся один раз (флот +1), повторное нажатие ничего не делает. Тот же сценарий, что `ransack-screens`, свой маркер `PDM prize: button ok` и своя папка сейвов. Отказы по экипажу и рангу проверяет `PDM prize: crew,skills,,ok`.
 
+## prize-step (TOWN_AUTO=23)
+Стрелки страницы «Трюм»: «влево» переносит шаг товара под курсором от приза к герою, «вправо» возвращает; вес и остатки сходятся. Тот же сценарий, что `ransack-screens`; маркер `PDM prize: transfer step ok`.
+
 ## prize-cargo (TOWN_AUTO=23)
 Кнопка «Всё» страницы «Трюм»: груз корабля из мира (`PrizeShip.cargo`, копия `PdmShips.<ключ>.cargo`) переходит в трюм героя в пределах вместимости, вес трюма растёт, у приза остаётся меньше. Тот же сценарий, что `ransack-screens`; маркер `PDM prize: cargo ok`.
 

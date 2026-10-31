@@ -1106,6 +1106,7 @@ void Screen_Command()
 	}
 	if (screenName == "messagebox" && node == "LB_YES" && screenMessageYes == "exit") { ExitProgram(); return; }
 	if (screenName == "trade" && Trade_Click(node)) { return; }
+	if (screenName == "transfer" && Transfer_Click(node)) { return; }
 	if (screenName == "transfer" && node == "LB_LOADALL") { Trade_PrizeLoadAll(); Trade_TransferLists(); return; }
 	if (screenName == "shipyard" && Screen_ShipyardClick(node)) { return; }
 	if (screenName == "logbook" && Screen_LogbookClick(node)) { return; }
@@ -1231,6 +1232,12 @@ void Screen_StatusAuto()
 	{
 		// "Всё" of Transfer (the screen before the message): the cargo of a ship of the world moves to the hold of the hero
 		Trade_PrizeCargo("n123");
+		transferSel = 0;
+		int stepHad = Trade_Onboard(Transfer_Nth(0));
+		int stepMoved = Transfer_Move(true);
+		int stepBack = Transfer_Move(false);
+		if (stepMoved > 0 && stepBack == stepMoved && Trade_Onboard(Transfer_Nth(0)) == stepHad) { Trace("PDM prize: transfer step ok " + stepMoved); }
+		else { Trace("PDM prize: transfer step FAIL " + stepMoved + "," + stepBack); }
 		int cargoHad = Trade_Twentieths();
 		int cargoKinds = Trade_PrizeLoadAll();
 		int cargoLeft = 0;

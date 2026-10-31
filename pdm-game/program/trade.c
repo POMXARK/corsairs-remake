@@ -505,6 +505,86 @@ void Trade_PrizeCargo(string shipKey)
 	}
 }
 
+// the goods under the cursor of Transfer: the n-th kind that lies in either hold (the lists show the same rows)
+int transferSel = 0;
+
+int Transfer_Prize(int i)
+{
+	string at = "n" + i;
+	if (!CheckAttribute(&PrizeShip, "cargo." + at)) { return 0; }
+	return sti(PrizeShip.cargo.(at));
+}
+
+// does the kind lie in either hold
+bool Transfer_Has(int i)
+{
+	if (Trade_Onboard(i) > 0) { return true; }
+	return Transfer_Prize(i) > 0;
+}
+
+int Transfer_Kinds()
+{
+	int k = 0;
+	int all = Trade_Goods();
+	for (int i = 0; i < all; i++)
+	{
+		if (Transfer_Has(i)) { k++; }
+	}
+	return k;
+}
+
+int Transfer_Nth(int row)
+{
+	int k = 0;
+	int all = Trade_Goods();
+	for (int i = 0; i < all; i++)
+	{
+		if (Transfer_Has(i))
+		{
+			if (k == row) { return i; }
+			k++;
+		}
+	}
+	return -1;
+}
+
+// LB_LEFT: one step of the goods under the cursor from the prize to the hero (as far as the room allows), LB_RIGHT: back;
+// the step is the pack of the goods (Trade_Step); returns the pieces moved
+int Transfer_Move(bool toHero)
+{
+	int i = Transfer_Nth(transferSel);
+	if (i < 0) { return 0; }
+	int q = Trade_Step(i);
+	string at = "n" + i;
+	if (toHero)
+	{
+		if (q > Transfer_Prize(i)) { q = Transfer_Prize(i); }
+		int w = Trade_Weight(i);
+		if (Trade_Type(i) != 1) { w = w * 20; }
+		int free = Trade_ShipCapacity() * 20 - Trade_Twentieths();
+		if (w > 0 && q * w > free) { q = free / w; }
+		if (q <= 0) { return 0; }
+		Trade_SetOnboard(i, Trade_Onboard(i) + q);
+		PrizeShip.cargo.(at) = Transfer_Prize(i) - q;
+		return q;
+	}
+	if (q > Trade_Onboard(i)) { q = Trade_Onboard(i); }
+	if (q <= 0) { return 0; }
+	Trade_SetOnboard(i, Trade_Onboard(i) - q);
+	PrizeShip.cargo.(at) = Transfer_Prize(i) + q;
+	return q;
+}
+
+// the cursor of Transfer and the arrows between the lists; true if the node was one of them
+bool Transfer_Click(string node)
+{
+	if (node == "LB_TOVARUP" || node == "LB_TOVARUP1") { if (transferSel > 0) { transferSel--; } return true; }
+	if (node == "LB_TOVARDOWN" || node == "LB_TOVARDOWN1") { if (transferSel < Transfer_Kinds() - 1) { transferSel++; } return true; }
+	if (node == "LB_LEFT") { Transfer_Move(true); Trade_TransferLists(); return true; }
+	if (node == "LB_RIGHT") { Transfer_Move(false); Trade_TransferLists(); return true; }
+	return false;
+}
+
 // "Всё" of Transfer: the goods of the prize move to the hold of the hero as far as its room allows (the whole pieces);
 // returns the number of kinds of goods that moved at least a piece
 int Trade_PrizeLoadAll()
