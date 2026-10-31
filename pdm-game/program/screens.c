@@ -862,6 +862,9 @@ void Screen_PrizeShip()
 		Screen_Text("LB_CURRENTSHIP", PdmScreens.ships.(heroId).name);
 		Screen_Text("EDITCENTERSTYPE", PdmScreens.ships.(heroId).name);
 	}
+	// the name of the ship (not of its type) on the dark bars
+	Screen_Text("S_SHIPTYPENAME", PlayerShipCard.name);
+	Screen_Text("EDITCENTERSNAME", PlayerShipCard.name);
 	if (prizeType != "" && CheckAttribute(PdmScreens, "ships." + prizeType + ".name")) { Screen_Text("LB_TARGETSHIP", PdmScreens.ships.(prizeType).name); }
 	if (prizeType != "")
 	{
