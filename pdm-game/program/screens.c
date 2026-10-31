@@ -301,8 +301,8 @@ string Screen_LogbookPage(string book, int p)
 		if (nl < 0) { to = len; }
 		if (line / LOGBOOK_LINES == p)
 		{
-			if (text != "") { text = text + "\n"; }
-			text = text + strcut(book, from, to - 1);
+			if (line % LOGBOOK_LINES != 0) { text = text + "\n"; }
+			if (to > from) { text = text + strcut(book, from, to - 1); }
 		}
 		line++;
 		if (nl < 0) { break; }
