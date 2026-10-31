@@ -886,6 +886,14 @@ class Converter:
             n, l = self.ship_portraits()
             nodes += n
             lines += l
+        if ("FORMATEDTEXT", "EDITFACENAME") in nodes:
+            # the portrait of the hero of the face block (rect_face = 94,516,64,64 of [Common], IMAGES/FACES/ourface.tga);
+            # the frames around it (ramka_yourface/facename/facemoney) are drawn by the DLL, their pieces are not in the game folder
+            image = Image.open(self.pdm.find("IMAGES/FACES/ourface.tga")).convert("RGBA")
+            write_tx(image, self.resource / "textures/interfaces/pdm/ourface.tga.tx", mip_chain=False)
+            nodes.append(("PICTURE", "FACE"))
+            lines += ["[FACE]", "position = 94,516,158,580", "textureName = interfaces\\pdm\\ourface.tga",
+                      "textureRect = 0,0,1,1", ""]
         if section == "Options":
             n, l = self.options_volume()
             nodes += n
