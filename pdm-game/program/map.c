@@ -86,6 +86,7 @@ int mapIslandCount = 0;
 // the keys of PdmIslands in the order of the list
 object MapIslands;
 bool mapNote;           // the note "якорь брошен" is up (it needs no answer, the ship stands)
+int mapWeek = -1;       // the week of the month last seen (day / 7), -1 before the first look
 int mapPayMonth = -1;   // the month the crew was last asked to be paid in
 string mapLastIsland;
 object MapList;
@@ -124,8 +125,11 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	mapFrom = fromIsland;
 	mapLastIsland = fromIsland;
 	mapPayMonth = -1;
+	mapWeek = -1;
 	// the test of the pay (28) starts a few hours before the end of June
 	if (TownAuto == 28) { gameHours = 3905.0 + 400.0; PlayerCard.money = 1000; }
+	// the test of the week (37) starts a few hours before the 8th of January
+	if (TownAuto == 37) { gameHours = 164.0; }
 	mapTarget = "";
 	encShown = false;
 	mapAnchorTo = -1.0;
@@ -176,7 +180,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	mapActive = true;
 	PostEvent("Map_Tick", MAP_TICK_MS);
 	Trace("PDM map: from " + fromIsland + " at " + mapX + ", " + mapY);
-	if (TownAuto == 6 || TownAuto == 28) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
+	if (TownAuto == 6 || TownAuto == 28 || TownAuto == 37) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
 	if (TownAuto == 27) { PostEvent("Map_AutoAnchor", MAP_AUTO_MS); }
 	if (TownAuto == 30 || TownAuto == 32 || TownAuto == 33) { PostEvent("Map_AutoScroll", MAP_AUTO_MS); }
 }
@@ -508,6 +512,29 @@ void Map_NoteHide()
 	Trace("PDM map: note hidden");
 }
 
+// the day of the month (0-based) of the game date
+int Map_MonthDay()
+{
+	int day = (makeint(gameHours) / 24) % 365;
+	int mon = 0;
+	while (day >= Map_MonthDays(mon)) { day = day - Map_MonthDays(mon); mon++; }
+	return day;
+}
+
+// a new week of the month (day / 7) while the month is the one seen last and no window is open: the sound mapweek
+// (MAP.dll 0x10007800 region; the window of the week that the original opens after it is not made)
+void Map_Week()
+{
+	if (mapPayMonth < 0 || Map_MonthIndex() != mapPayMonth || encShown) { return; }
+	int week = Map_MonthDay() / 7;
+	if (week == mapWeek) { return; }
+	bool first = mapWeek < 0;
+	mapWeek = week;
+	if (first) { return; }
+	Trace("PDM map: week " + week);
+	Sound_Once("mapweek");
+}
+
 // the end of the month: the crew wants its pay (message 6; ours: 5 per man of the crew, MAP.dll sums it up from fields not decoded)
 void Map_Pay()
 {
@@ -519,6 +546,7 @@ void Map_Pay()
 	if (sum <= 0 || encShown) { return; }
 	Map_NoteHide();
 	Trace("PDM map: pay " + sum);
+	Sound_Once("mapevent2");
 	Enc_Show(6, Enc_Format(Enc_Text("Mapparammessage6"), "" + sum));
 	encPay = sum;
 }
@@ -775,6 +803,7 @@ void Map_Tick()
 		else { Enc_Tick(MAP_TICK_MS); }
 	}
 	Map_Pay();
+	Map_Week();
 	Map_ShowAnchors();
 	Map_ShowDate();
 	PostEvent("Map_Tick", MAP_TICK_MS);

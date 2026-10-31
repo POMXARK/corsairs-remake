@@ -245,6 +245,9 @@ corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City
 ## map-sound-pay (TOWN_AUTO=28)
 Выплата жалованья на карте («Да» в окне сообщения 6) играет алиас `mapevent2` (`_paymoney`). Сценарий как у `map-pay`, свой маркер `PDM sound: mapevent2`. Привязка по имени алиаса — наше.
 
+## map-sound-week (TOWN_AUTO=37)
+Карта стартует 7-го января за несколько часов до 8-го; при смене недели месяца (день/7) играет `mapweek`. Маркер `PDM sound: mapweek`.
+
 ## prize-cursor (TOWN_AUTO=23)
 Страница «Трюм» передачи: строка товара под курсором в обоих списках начинается с «> »; оба списка показывают одни и те же строки (товары из любого трюма, нет — 0). Тот же сценарий, что `ransack-screens`; маркер `PDM prize: cursor mark ok`.
 

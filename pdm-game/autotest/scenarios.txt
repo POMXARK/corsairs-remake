@@ -38,6 +38,7 @@ ransack-screens|town|City_HighRock|23|PDM status: pages ok|120
 prize-button|town|City_HighRock|23|PDM prize: button ok|120
 prize-change|town|City_HighRock|23|PDM prize: change ok|120
 prize-cursor|town|City_HighRock|23|PDM prize: cursor mark ok|120
+map-sound-week|sea||37|PDM sound: mapweek|300
 prize-skills|town|City_HighRock|23|PDM prize: skills question ok|120
 prize-refusal|town|City_HighRock|23|PDM prize: refusal text ok|120
 prize-step|town|City_HighRock|23|PDM prize: transfer step ok|120
