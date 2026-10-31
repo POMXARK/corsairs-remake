@@ -173,6 +173,34 @@ void Screen_Credits()
 	PostEvent("Screen_Credits", 100);
 }
 
+// the page of the keys (KeyControls of menu.ini): the headings and the actions in the left column, their keys
+// (controls.ini, the names of interface.ini) in the right one; the lines are in PdmScreens.keycontrols.c<i>
+// (tools/pdm_ui.py) and the buttons of the scroll move the window over them by CONTROLS_STEP (ours: the
+// original has a rect of the controls with the scroll, no more is known)
+#define CONTROLS_ROWS 20
+#define CONTROLS_STEP 5
+int controlsTop = 0;
+
+void Screen_Controls()
+{
+	int count = sti(PdmScreens.keycontrols.count);
+	int maxTop = count - CONTROLS_ROWS;
+	if (maxTop < 0) { maxTop = 0; }
+	if (controlsTop > maxTop) { controlsTop = maxTop; }
+	if (controlsTop < 0) { controlsTop = 0; }
+	string desc = "";
+	string keys = "";
+	for (int i = controlsTop; i < count && i < controlsTop + CONTROLS_ROWS; i++)
+	{
+		string at = "c" + i;
+		desc = desc + PdmScreens.keycontrols.(at).text + "\n";
+		keys = keys + PdmScreens.keycontrols.(at).keys + "\n";
+	}
+	Screen_Text("EDITCONTROLSDESC", desc);
+	Screen_Text("EDITCONTROLSKEYS", keys);
+	Trace("PDM controls: lines " + count + ", top " + controlsTop);
+}
+
 // the fields of the original the game knows already: the hero under his face, his status and his ship
 void Screen_Fill()
 {
@@ -191,6 +219,7 @@ void Screen_Fill()
 	if (findSubStr(screenName, "messagebox", 0) == 0) { Screen_Text("EDITTEXT", screenMessage); return; }
 	if (screenName == "options") { Options_Fill(); return; }
 	if (screenName == "credits") { Screen_Credits(); return; }
+	if (screenName == "keycontrols") { Screen_Controls(); return; }
 	Screen_TitlePlace();
 	if (screenName == "trade") { Trade_Lists(); }
 	if (screenName == "transfer") { Trade_TransferLists(); }
@@ -1176,6 +1205,11 @@ bool Screen_Page(string node)
 // the button is still being pressed in it (menu.c)
 bool Screen_Click(string node)
 {
+	if (screenName == "keycontrols")
+	{
+		if (node == "LB_SCROLLUP") { controlsTop = controlsTop - CONTROLS_STEP; Screen_Controls(); return true; }
+		if (node == "LB_SCROLLDOWN") { controlsTop = controlsTop + CONTROLS_STEP; Screen_Controls(); return true; }
+	}
 	if (node == "LB_CHANGESHIP" && screenName == "shipexchange")
 	{
 		if (!Board_ChangeShip())

@@ -131,6 +131,7 @@ void Main()
 	{
 		if (TownAuto == OPTIONSAUTO_ID) { Opt_AutoStart(); } // the options page of the main menu changes the screen
 		if (TownAuto == OPTCLOSE_ID) { Opt_CloseStart(); } // the same, over a live scene and closed at the end
+		if (TownAuto == 45) { Opt_ControlsStart(); } // the page of the controls is filled and scrolls
 	Menu_Start();
 		return;
 	}

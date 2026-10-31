@@ -315,3 +315,29 @@ void Opt_CloseStep()
 		ExitProgram();
 	}
 }
+
+// ---------- TOWN_AUTO=45 with SCENE=menu: the page "Управление" (Options -> Controls) is filled ----------
+// the list is from menu.ini [KeyControls] + controls.ini (tools/pdm_ui.py, controls()); the arrows scroll it
+
+int ctlAutoStep = 0;
+
+void Opt_ControlsStart()
+{
+	SetEventHandler("Opt_ControlsStep", "Opt_ControlsStep", 0);
+	PostEvent("Opt_ControlsStep", 1500);
+}
+
+void Opt_ControlsStep()
+{
+	int step = ctlAutoStep;
+	ctlAutoStep++;
+	PostEvent("Opt_ControlsStep", 900);
+	if (step == 0) { Screen_Open("options"); return; }
+	if (step == 1) { PostEvent("ievnt_command", 0, "ss", "click", "LB_CONTROLS"); return; }
+	if (step == 3) { PostEvent("ievnt_command", 0, "ss", "click", "LB_SCROLLDOWN"); return; }
+	if (step == 5)
+	{
+		Trace("PDM controls: autotest done, the page " + screenName);
+		ExitProgram();
+	}
+}

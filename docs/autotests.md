@@ -283,3 +283,4 @@ corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City
 
 ## map-pirate-hero
 Механика: герой-пират — порог нападения пиратов выше на 40. `TOWN_AUTO=44`: нация героя 1, принудительная встреча с пиратами. Маркер: `PDM encounter: attack threshold 70`.
+| `menu-controls` | страница «Управление»: список действий/клавиш и прокрутка | `PDM controls: …` |
