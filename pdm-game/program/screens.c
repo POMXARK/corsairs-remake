@@ -449,6 +449,7 @@ void Screen_Items()
 		if (count > 1) { line = line + " x" + count; }
 		text = text + line + "\n";
 	}
+	Trace("PDM chest: items " + n + ", first " + first);
 	Screen_Text("EDITINVENTORY", text);
 	if (first != "") { Screen_Text("EDITINVTEXT", Screen_Name("items", first, "about")); }
 }
