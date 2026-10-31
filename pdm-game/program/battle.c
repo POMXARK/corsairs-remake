@@ -23,6 +23,7 @@
 #define AI_MESSAGE_CHARACTER_DEAD 51026
 #define AITASK_ATTACK 1
 #define AITASK_ABORDAGE 5
+#define AITASK_RUNAWAY 6
 #define PRIMARY_TASK 0
 #define RELATION_FRIEND 1
 #define RELATION_ENEMY 3
@@ -107,6 +108,8 @@ string battleChargeNames[HUD_CHARGES] = {"ядра", "картечь", "книп
 
 // the enemy of the battle is a ship of the world map met on the way (encounter.c), not the pirate of the first battle
 bool battleEncounter = false;
+// the met ship is a merchant: it runs away from the hero instead of attacking (AITASK_RUNAWAY; the task of the merchants of the original is not found, ours)
+bool battleEnemyFlees = false;
 
 string Battle_EnemyKey()
 {
@@ -118,6 +121,7 @@ string Battle_EnemyKey()
 void Battle_Start()
 {
 	battleEncounter = false;
+	battleEnemyFlees = false;
 	seaBattle = true;
 	Sea_Start(PlayerCard.address.island);
 }
@@ -298,7 +302,9 @@ void Battle_AddEnemy(float x, float z, float ay)
 	SeaShips[battleEnemy].Crew.quantity = sti(PdmShips.(shipKey).crew);
 	battleEnemyCrew = sti(PdmShips.(shipKey).crew);
 	SendMessage(&BattleInterface, "llaall", BI_IN_CREATE_SHIP, battleEnemy, &SeaShips[battleEnemy], &SeaShipTypes[battleEnemy], 0, BI_RELATION_ENEMY);
-	SendMessage(&AISea, "lllaa", AI_MESSAGE_SHIP_SET_TASK, AITASK_ATTACK, PRIMARY_TASK, &SeaShips[battleEnemy], &SeaShips[seaHero]);
+	int enemyTask = AITASK_ATTACK;
+	if (battleEnemyFlees) { enemyTask = AITASK_RUNAWAY; }
+	SendMessage(&AISea, "lllaa", AI_MESSAGE_SHIP_SET_TASK, enemyTask, PRIMARY_TASK, &SeaShips[battleEnemy], &SeaShips[seaHero]);
 	Sound_Music(Battle_Music(sti(card.nation)));
 	string report = "PDM: battle, " + card.id + " on " + PdmShips.(shipKey).name + " (" + typeKey + "), hull ";
 	report = report + SeaShips[battleEnemy].Ship.HP + " against " + SeaShips[seaHero].Ship.HP;

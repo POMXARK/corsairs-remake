@@ -163,6 +163,8 @@ void Enc_Tick(int ms)
 		layers = 1;
 		encPick[0] = ENC_PIRATE;
 		encPats[0] = 21;
+		// TOWN_AUTO=25: the merchants of England (pattern 5), the hero attacks them and they run away
+		if (TownAuto == 25) { encPick[0] = 0; encPats[0] = 5; }
 	}
 	if (layers == 0) { return; }
 	int at = rand(layers - 1);
@@ -196,7 +198,7 @@ void Enc_Meet(int nation, int pattern)
 		encType = 0;
 		if (mc > 0 && wc == 0) { encType = 1; }
 	}
-	if (encForce == 3) { encType = 4; encForce = 0; }
+	if (encForce == 3) { encType = 4; if (TownAuto == 25) { encType = 1; } encForce = 0; }
 	string text = Enc_Message(encType, nation, pattern, encCount);
 	Trace("PDM encounter: nation " + nation + ", pattern " + pattern + ", type " + encType + ", " + encCount + " ship(s) at " + encIsland);
 	Enc_Show(encType, text);
@@ -237,7 +239,7 @@ void Enc_Show(int type, string text)
 		Enc_Node("LB_YES", 265 + e, 365 + t, 385 + e, 395 + t);
 		Enc_Node("LB_NO", 415 + e, 365 + t, 535 + e, 395 + t);
 	}
-	if (TownAuto == 24) { PostEvent("Enc_Auto", ENC_AUTO_MS); }
+	if (TownAuto >= 24) { PostEvent("Enc_Auto", ENC_AUTO_MS); }
 }
 
 void Enc_Node(string node, int left, int top, int right, int bottom)
@@ -285,7 +287,7 @@ void Enc_Command(string node)
 // TOWN_AUTO=24: the enemy of the pattern is at sea, the battle is on
 void Enc_AutoQuit()
 {
-	Trace("PDM encounter: autotest done, enemy " + battleEnemy + " of " + encShipType);
+	Trace("PDM encounter: autotest done, enemy " + battleEnemy + " of " + encShipType + ", flees " + battleEnemyFlees);
 	// the sea AI asks the script for the balls of the ships every frame, after ExitProgram it gets no answer and asserts
 	Battle_Release();
 	ExitProgram();
@@ -293,7 +295,9 @@ void Enc_AutoQuit()
 
 void Enc_Auto()
 {
-	if (encShown) { Enc_Command("LB_OK"); }
+	if (!encShown) { return; }
+	if (TownAuto == 25) { Enc_Command("LB_YES"); }
+	else { Enc_Command("LB_OK"); }
 }
 
 // the type of the first ship of the pattern: a random one of PdmShipTypes of the classes from u to d with the flag of the
@@ -373,7 +377,8 @@ void Enc_Battle()
 	Enc_MakeEnemy(typeKey, encNation);
 	encShipType = typeKey;
 	Trace("PDM encounter: battle, " + typeKey + " of nation " + encNation + " near " + encIsland);
+	battleEnemyFlees = encType == 1;
 	Map_Fight(encIsland);
 	// TOWN_AUTO=24: the battle has started, the test is done
-	if (TownAuto == 24) { PostEvent("Enc_AutoQuit", ENC_AUTO_QUIT_MS); }
+	if (TownAuto >= 24) { PostEvent("Enc_AutoQuit", ENC_AUTO_QUIT_MS); }
 }

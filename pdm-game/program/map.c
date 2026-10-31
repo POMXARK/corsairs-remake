@@ -99,7 +99,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	encShown = false;
 	encAcc = 0;
 	DeleteAttribute(&MapEncText, "");
-	if (TownAuto == 24) { encForce = 1; }
+	if (TownAuto >= 24) { encForce = 1; }
 	if (fromIsland != "" && CheckAttribute(&PdmIslands, fromIsland + ".map_cell"))
 	{
 		mapX = atX;
