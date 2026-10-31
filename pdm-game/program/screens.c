@@ -87,7 +87,11 @@ string Screen_Target(string node)
 string Screen_Parent(string name)
 {
 	if (name == "keycontrols") { return "options"; }
-	if (name == "messagebox" && screenMessageBack != "") { return screenMessageBack; }
+	if (screenMessageBack != "")
+	{
+		if (name == "messagebox") { return screenMessageBack; }
+		if (name == "messagebox_ransack") { return screenMessageBack; }
+	}
 	if (screenGameMenu && name != "mainmenu") { return "mainmenu"; }
 	if (screenOverGame) { return ""; }
 	return "mainmenu";
@@ -490,6 +494,8 @@ void Screen_Message(string text, string yes)
 	screenMessageYes = yes;
 	screenMessageBack = screenName;
 	screenNext = "messagebox";
+	// the questions of the ransack pages stand on their own board (the ransack background of the original)
+	if (screenName == "shipexchange" || screenName == "transfer") { screenNext = "messagebox_ransack"; }
 	screenGoing = true;
 	PostEvent("Screen_Go", 0);
 }
@@ -1197,7 +1203,8 @@ bool Screen_Page(string node)
 {
 	if (screenName == "options") { return Options_Click(node); }
 	if (screenName == "loadgame" || screenName == "savegame") { return Save_ScreenClick(node); }
-	if (screenName != "messagebox" || node != "LB_YES") { return false; }
+	if (screenName != "messagebox" && screenName != "messagebox_ransack") { return false; }
+	if (node != "LB_YES") { return false; }
 	if (screenMessageYes == "swap")
 	{
 		Board_SwapShips();
