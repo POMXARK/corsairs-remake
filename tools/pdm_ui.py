@@ -87,6 +87,8 @@ def font_dirs(pdm):
     and of Windows."""
     home = Path.home()
     dirs = [Path(d) for d in os.environ.get("PDM_FONTS", "").split(os.pathsep) if d]
+    # the original faces made readable by tools/pdm_fonts.py (outside git: the fonts are not free)
+    dirs += [TOOLS.parent.parent / "ref/fonts-pdm"]
     dirs += [Path(pdm), home / ".local/share/fonts", home / ".fonts", Path("/usr/share/fonts"),
              Path("/usr/local/share/fonts")]
     for prefix in ("*", ".*", ".local/share/wineprefixes/*"):
@@ -899,10 +901,13 @@ class Converter:
             # the headings of the sections (key -1 of control#) in dark brown (ours: the gold of the original, rgb 229,187,76, is lost on the parchment), on the
             # line of the column of the actions; the same window and line as EDITCONTROLSDESC
             nodes.append(("FORMATEDTEXT", "EDITCONTROLSHEAD"))
-            lines += ["[EDITCONTROLSHEAD]", "position = 105,108,325,398", "font = pdm_logbook_italic_19",
+            lines += ["[EDITCONTROLSHEAD]", "position = 105,108,395,398", "font = pdm_logbook_italic_19",
                       "fontScale = 0.667", f"lineSpace = {round(self.fonts['pdm_logbook_italic_19'][2])}",
                       "color = 255,110,60,0", "alignment = left", ""]
         if out_name == "keycontrols":
+            # the column of the actions is wider than the 105..325 of the original: the longer lines of its font ("Привязать
+            # камеру к кораблю") broke into two and shifted the rows (ours); the keys start at 400
+            lines = [l.replace("position = 105,108,325,398", "position = 105,108,395,398") for l in lines]
             # a click on a row of the list chooses the action whose key is to be changed (ours: the rows have no
             # buttons in the original); the same window and line as EDITCONTROLSDESC, the width over both columns
             for i in range(16):
@@ -910,7 +915,8 @@ class Converter:
                 nodes.append(("TEXTBUTTON", f"LB_ROW{i}"))
                 lines += [f"[LB_ROW{i}]", f"position = 105,{y},625,{y + 17}", "font = pdm_logbook_italic_19",
                           "fontScale = 0.667", "fontColor = 255,255,255,255", "fontColorSelected = 255,255,255,255",
-                          "fontColorPressed = 255,255,255,255", "command = click", ""]
+                          "fontColorPressed = 255,255,255,255", "faceColor = 0,0,0,0", "faceColorPressed = 0,0,0,0",
+                          "backColor = 0,0,0,0", "command = click", ""]
         if section == "Options":
             n, l = self.options_volume()
             nodes += n
