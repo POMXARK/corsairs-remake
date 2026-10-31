@@ -112,6 +112,7 @@ string battleChargeNames[HUD_CHARGES] = {"ядра", "картечь", "книп
 bool battleEncounter = false;
 // the met ship is a merchant: it runs away from the hero instead of attacking (AITASK_RUNAWAY; the task of the merchants of the original is not found, ours)
 int battleEscorts = 0;
+int battleEnemiesLeft = 1;
 bool battleEnemyFlees = false;
 
 string Battle_EnemyKey()
@@ -308,6 +309,8 @@ void Battle_AddEnemy(float x, float z, float ay)
 	int enemyTask = AITASK_ATTACK;
 	if (battleEnemyFlees) { enemyTask = AITASK_RUNAWAY; }
 	SendMessage(&AISea, "lllaa", AI_MESSAGE_SHIP_SET_TASK, enemyTask, PRIMARY_TASK, &SeaShips[battleEnemy], &SeaShips[seaHero]);
+	battleEnemiesLeft = 1;
+	if (battleEncounter) { battleEnemiesLeft = 1 + battleEscorts; }
 	if (battleEncounter) { for (int e = 1; e <= battleEscorts; e++) { Battle_AddEscort(e, ex, ez, ay, enemyTask); } }
 	Sound_Music(Battle_Music(sti(card.nation)));
 	string report = "PDM: battle, " + card.id + " on " + PdmShips.(shipKey).name + " (" + typeKey + "), hull ";
@@ -734,7 +737,7 @@ void Battle_HullHit()
 	float z = GetEventData();
 	SendMessage(&Particles, "lsffffffl", PS_CREATE, "explosion", x, y, z, 0.0, 0.0, 0.0, 0);
 	Battle_Sound("ship_damage", x, y, z, true);
-	if (battleOver || owner == index) { return; }
+	if (battleOver || owner == index || sti(SeaShips[index].Ship.HP) <= 0) { return; }
 	if (owner == seaHero) { battleHits++; }
 	aref cannon = GetAttributeN(&PdmCannons, Battle_CannonLine(owner));
 	float damage = stf(cannon.damage);
@@ -748,7 +751,14 @@ void Battle_HullHit()
 	string report = "PDM: battle, " + SeaShips[index].id + " hull " + hull + ", sails " + makeint(stf(SeaShips[index].Ship.SP));
 	Trace(report + ", crew " + Battle_Crew(index) + " (" + hudChargeGoods[charge] + ")");
 	if (hull > 0) { return; }
-	battleOver = true;
+	// ours: the battle goes on until the hero or the whole squadron is sunk
+	bool squadronLeft = false;
+	if (index != seaHero)
+	{
+		battleEnemiesLeft--;
+		squadronLeft = battleEnemiesLeft > 0;
+	}
+	if (!squadronLeft) { battleOver = true; }
 	// SEA_AI stops steering and firing the ship and sinks it
 	SendMessage(&AISea, "la", AI_MESSAGE_CHARACTER_DEAD, &SeaShips[index]);
 	SendMessage(&BattleInterface, "ll", BI_IN_DEAD_SHIP, index);
@@ -759,6 +769,12 @@ void Battle_HullHit()
 		Hud_Log("Наш корабль тонет!");
 		Trace("PDM: battle, the hero sinks");
 		if (TownAuto == 7 || TownAuto == 8 || TownAuto == 11) { PostEvent("Battle_AutoExit", BATTLE_AUTO_EXIT_MS); }
+		return;
+	}
+	if (squadronLeft)
+	{
+		Hud_Log("Враг идёт ко дну! Осталось кораблей: " + battleEnemiesLeft);
+		Trace("PDM: battle, " + SeaShips[index].id + " sinks, " + battleEnemiesLeft + " left");
 		return;
 	}
 	Sound_Music("win");
