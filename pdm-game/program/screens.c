@@ -28,6 +28,7 @@ bool screenGoing = false;
 string screenPending = "";
 // SCENE=screens: the screens it shows over the menu and over the game, where it is in the list and the stage
 string screenTourMenu = "options,keycontrols,loadgame,savegame,credits,messagebox,mainmenu";
+string prizeType = ""; // type of the last ship won at boarding, shown on the right of ShipExchange
 string screenTourGame = "sgoods,sship,logbook,schest,trade,shipyard,crew,tavern,messagebox_town,transfer,shipexchange,messagebox_ransack";
 // the text of the message box and what its "Да" does
 // the shipyard: the type chosen in the list (ShipUp/ShipDown) and whether the old ship is sold already
@@ -214,6 +215,7 @@ void Screen_Fill()
 	Screen_Lists();
 	if (screenName == "logbook") { Screen_Logbook(); }
 	if (screenName == "trade") { Trade_Arrows(); }
+	if (screenName == "shipexchange") { Screen_PrizeShip(); }
 	// the values of the screen in the texts of the original: "Ранг %d", "9 узлов"
 	if (!CheckAttribute(PdmScreens, screenName + ".s")) { return; }
 	aref values;
@@ -766,11 +768,34 @@ string Screen_ViewId()
 	return PlayerShipType.id;
 }
 
+// the ship on the right of ShipExchange: the nodes S_<NAME>1 made by pdm_ui.py (second_ship) get the values of the prize type
+void Screen_PrizeShip()
+{
+	string names = "S_TYPE,S_CLASS,S_HITPOINTS,S_SPEEDRATE,S_TURNRATE,S_MAXCREW,S_MINCREW,S_CAPACITY,S_GUNPORTS";
+	int at = 0;
+	while (at < strlen(names))
+	{
+		int end = findSubStr(names, ",", at);
+		if (end < 0) { end = strlen(names); }
+		string node = strcut(names, at, end - 1) + "1";
+		string value = Screen_Value(node);
+		if (value != "") { Screen_Text(node, value); }
+		at = end + 1;
+	}
+}
+
 // the value of an s_ node of the original the game knows, "" for the others (the shipyard and the trade show
 // the ship of the hero until they have their own, P9)
 string Screen_Value(string node)
 {
 	string vid = Screen_ViewId();
+	// ShipExchange: S_<NAME>1 is the prize ship on the right (empty until a ship is won, see Board_Prize)
+	if (screenName == "shipexchange" && strlen(node) > 2 && strcut(node, strlen(node) - 1, strlen(node) - 1) == "1")
+	{
+		if (prizeType == "") { return ""; }
+		vid = prizeType;
+		node = strcut(node, 0, strlen(node) - 2);
+	}
 	if (screenName == "trade" && Trade_Value(node) != "") { return Trade_Value(node); }
 	if (node == "S_CAPTAIN") { return PlayerCard.name; }
 	if (node == "S_RANK") { return PlayerCard.rank; }
@@ -1190,6 +1215,9 @@ void Screen_StatusAuto()
 	else if (b == "LB_NEXT" || b == "LB_PREV") { Screen_LogbookClick(b); }
 	else { Screen_Click(b); }
 	Trace("PDM status: " + b + " -> '" + screenName + "'");
+	// no ship was won in this test: a pinnace stands for the prize, the right column of ShipExchange shows it
+	if (b == "F1") { prizeType = "pinas"; }
+	if (b == "@transfer") { Trace("PDM prize: right " + Screen_Value("S_TYPE1") + "," + Screen_Value("S_CLASS1")); }
 	if (b == "@shipexchange")
 	{
 		string pc = Screen_PrizeCheck(10, 20, 5, 10, 3, 1);

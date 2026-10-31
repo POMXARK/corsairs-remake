@@ -810,6 +810,10 @@ class Converter:
             n, l = self.chart(chart)
             nodes += n
             lines += l
+        if out_name == "shipexchange":
+            n, l = self.second_ship(lines)
+            nodes += n
+            lines += l
         if titles:
             nodes.append(("STRINGCOLLECTION", "TITLES"))
             lines += ["[TITLES]"] + titles + [""]
@@ -904,6 +908,29 @@ class Converter:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text("\n".join(head + [""] + lines), encoding="utf-8")
         self.screens[out_name] = (file, section)
+
+    def second_ship(self, lines):
+        """The values of the ship on the right of ShipExchange: RANSACK.dll draws the values of both ships with one
+        function, the second at a shift of the first (the labels S_SHIP15.. of ransack.ini stand 516 px to the right of
+        S_SHIP0..), so S_<NAME>1 is a copy of S_<NAME> 516 px to the right (ours: ransack.ini has no nodes for them)."""
+        shift = 516
+        names = ("S_TYPE", "S_CLASS", "S_HITPOINTS", "S_SPEEDRATE", "S_TURNRATE", "S_MAXCREW", "S_MINCREW", "S_CAPACITY", "S_GUNPORTS")
+        nodes, out = [], []
+        for name in names:
+            if f"[{name}]" not in lines:
+                continue
+            at = lines.index(f"[{name}]")
+            end = at + 1
+            while end < len(lines) and lines[end] != "" and not lines[end].startswith("["):
+                end += 1
+            block = [f"[{name}1]"] + lines[at + 1:end]
+            for i, line in enumerate(block):
+                if line.startswith("position = "):
+                    x0, y0, x1, y1 = (int(v) for v in line[11:].split(","))
+                    block[i] = f"position = {x0 + shift},{y0},{x1 + shift},{y1}"
+            nodes.append(("FORMATEDTEXT", name + "1"))
+            out += block + [""]
+        return nodes, out
 
     def out_name(self, file, section):
         """<section>.ini; a section of the same name in another file (MessageBox) gets the file after it."""

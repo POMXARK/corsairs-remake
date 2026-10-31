@@ -567,6 +567,7 @@ void Board_Prize()
 	theirs = theirs - sti(BoardEnemy.crew_lost);
 	int ours = sti(PlayerShipCard.crew) - sti(BoardHero.crew_lost);
 	string myType = PlayerShipCard.type_key;
+	prizeType = typeKey;
 	string why = Screen_PrizeCheck(ours, sti(PdmShipTypes.(myType).mincrew), theirs, sti(PdmShipTypes.(typeKey).mincrew), sti(PdmShipTypes.(typeKey).class), Screen_HeroRank());
 	if (why != "") { Trace("PDM prize: refused, " + why); return; }
 	Trade_AddShip(typeKey, PdmShips.(shipKey).name);
