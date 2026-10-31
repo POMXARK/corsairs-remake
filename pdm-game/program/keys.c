@@ -4,13 +4,14 @@
 // launch of the game, as the scenes map their keys once.
 object PdmKeys;
 
-#define KEYS_COUNT 18
+#define KEYS_COUNT 23
 string keysName[KEYS_COUNT] = {"Ship_TurnLeft", "Ship_TurnRight", "Ship_SailUp", "Ship_SailDown", "Battle_Fire",
 	"Battle_Charge0", "Battle_Charge1", "Battle_Charge2", "Battle_Charge3", "Screen_Status", "Save_Quick", "Save_Load",
-	"ChrForward", "ChrBackward", "ChrRun", "Town_Talk", "ChrTurnHL", "ChrTurnHR"};
-int keysDefault[KEYS_COUNT] = {65, 68, 87, 83, 70, 49, 50, 51, 52, 112, 114, 118, 87, 83, 16, 69, 65, 68};
+	"ChrForward", "ChrBackward", "ChrRun", "Town_Talk", "ChrTurnHL", "ChrTurnHR", "Hud_Menu", "Hud_Confirm",
+	"Hud_Left", "Hud_Right", "Hud_Corner"};
+int keysDefault[KEYS_COUNT] = {65, 68, 87, 83, 70, 49, 50, 51, 52, 112, 114, 118, 87, 83, 16, 69, 65, 68, 9, 13, 37, 39, 187};
 // the number "key" of the line in [KeyControls] of INI/menu.ini that the row stands for
-int keysRow[KEYS_COUNT] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 20, 22, 23, 24, 25, 26, 27, 38, 39};
+int keysRow[KEYS_COUNT] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 20, 22, 23, 24, 25, 26, 27, 38, 39, 12, 13, 42, 43, 19};
 
 int keysCapture = -1;
 bool keysCapReady = false;

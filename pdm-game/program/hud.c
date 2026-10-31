@@ -263,10 +263,10 @@ void Hud_LandStart()
 	SetEventHandler("BI_CommandEndChecking", "Hud_CommandEndChecking", 0);
 	SetEventHandler("BI_LaunchCommand", "Hud_LandLaunch", 0);
 	SetEventHandler("Hud_LandAuto", "Hud_LandAuto", 0);
-	MapKey("LICommandsActivate", HUD_KEY_MENU);
-	MapKey("BICommandsLeft", 37);
-	MapKey("BICommandsRight", 39);
-	MapKey("BICommandsConfirm", 13);
+	MapKey("LICommandsActivate", Keys_Of("Hud_Menu"));
+	MapKey("BICommandsLeft", Keys_Of("Hud_Left"));
+	MapKey("BICommandsRight", Keys_Of("Hud_Right"));
+	MapKey("BICommandsConfirm", Keys_Of("Hud_Confirm"));
 	MapKey("BICommandsCancel", 27);
 	CreateEntity(&LandInterface, "battle_land_interface");
 	LayerAddObject(EXECUTE, &LandInterface, 65534);
@@ -423,16 +423,16 @@ void Hud_Start()
 	SetEventHandler("BI_LaunchCommand", "Hud_LaunchCommand", 0);
 	SetEventHandler("BI_SetSeaState", "Hud_SeaState", 0);
 	SetEventHandler("GetCurrentCharge", "Hud_GetCharge", 0);
-	MapKey("Hud_Corner", HUD_KEY_CORNER);
+	MapKey("Hud_Corner", Keys_Of("Hud_Corner"));
 	// TOWN_AUTO=7: "=" by itself, the enemies in the corner for the video
 	SetEventHandler("Hud_AutoCorner", "Hud_AutoCorner", 0);
 	if (TownAuto == 7) { PostEvent("Hud_AutoCorner", HUD_AUTO_CORNER_MS); }
-	MapKey("BICommandsActivate", HUD_KEY_MENU);
-	MapKey("BICommandsLeft", 37);
-	MapKey("BICommandsRight", 39);
+	MapKey("BICommandsActivate", Keys_Of("Hud_Menu"));
+	MapKey("BICommandsLeft", Keys_Of("Hud_Left"));
+	MapKey("BICommandsRight", Keys_Of("Hud_Right"));
 	MapKey("BICommandsUp", 38);
 	MapKey("BICommandsDown", 40);
-	MapKey("BICommandsConfirm", 13);
+	MapKey("BICommandsConfirm", Keys_Of("Hud_Confirm"));
 	MapKey("BICommandsCancel", 27);
 
 	CreateEntity(&BattleInterface, "battle_interface");
