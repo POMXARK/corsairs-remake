@@ -18,7 +18,7 @@ while IFS='|' read -r name scene town auto marker secs extra; do
     if [ $# -gt 0 ] && ! printf '%s\n' "$@" | grep -qx "$name"; then continue; fi
     # the engine starts a log file anew, so after a run the whole compile.log and error.log are that run's
     # (counting lines before and after fails when a run writes as many lines as the run before it)
-    env $extra SCENE="$scene" TOWN="$town" TOWN_AUTO="$auto" timeout -k 5 "$secs" "$DIR/run.sh" "$ENGINE" > /dev/null 2>&1
+    env $extra TEST_NAME="$name" SCENE="$scene" TOWN="$town" TOWN_AUTO="$auto" timeout -k 5 "$secs" "$DIR/run.sh" "$ENGINE" > /dev/null 2>&1
     code=$?
     new=$(cat "$LOGS/compile.log" 2>/dev/null)
     errors=$(lines "$LOGS/error.log")

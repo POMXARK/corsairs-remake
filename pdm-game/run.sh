@@ -101,6 +101,8 @@ echo "int TownAuto = ${TOWN_AUTO:-0};" >> "$DIR/program/data/start.c"
 echo "#define RUN_TOWNAUTO ${TOWN_AUTO:-0}" >> "$DIR/program/data/start.c"
 # the saves of a test run never touch the saves of the player (they used to: a test save loaded from the menu ran the autotest)
 SAVEDIR=save; [ "${TOWN_AUTO:-0}" != 0 ] && SAVEDIR=save-test
+# autotests.sh gives every test its own folder (TEST_NAME): one test never overwrites the saves of another
+[ "${TOWN_AUTO:-0}" != 0 ] && [ -n "${TEST_NAME:-}" ] && SAVEDIR="save-test-$TEST_NAME"
 echo "#define RUN_SAVEDIR \"$SAVEDIR\"" >> "$DIR/program/data/start.c"
 echo "#define RUN_SAVEPFX \"$SAVEDIR\\\"" >> "$DIR/program/data/start.c"
 # TOWN_AUTO=50 and CAM=cx,cy,cz,hx,hy,hz: the hero is put at h, the camera looks at him from c (a look at a sign)
