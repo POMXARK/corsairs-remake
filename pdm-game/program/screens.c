@@ -1106,6 +1106,7 @@ void Screen_Command()
 	}
 	if (screenName == "messagebox" && node == "LB_YES" && screenMessageYes == "exit") { ExitProgram(); return; }
 	if (screenName == "trade" && Trade_Click(node)) { return; }
+	if (screenName == "transfer" && node == "LB_LOADALL") { Trade_PrizeLoadAll(); Trade_TransferLists(); return; }
 	if (screenName == "shipyard" && Screen_ShipyardClick(node)) { return; }
 	if (screenName == "logbook" && Screen_LogbookClick(node)) { return; }
 	if (Screen_Page(node)) { return; }
@@ -1226,6 +1227,17 @@ void Screen_StatusAuto()
 	// no ship was won in this test: a pinnace stands for the prize, the right column of ShipExchange shows it
 	if (b == "F1") { prizeType = "pinas"; prizeName = "Prize"; prizeCrew = 10; prizeOurs = 30; }
 	if (b == "@transfer") { Trace("PDM prize: right " + Screen_Value("S_TYPE1") + "," + Screen_Value("S_CLASS1")); }
+	if (b == "@messagebox_ransack")
+	{
+		// "Всё" of Transfer (the screen before the message): the cargo of a ship of the world moves to the hold of the hero
+		Trade_PrizeCargo("n123");
+		int cargoHad = Trade_Twentieths();
+		int cargoKinds = Trade_PrizeLoadAll();
+		int cargoLeft = 0;
+		if (CheckAttribute(&PrizeShip, "cargo.n0")) { cargoLeft = sti(PrizeShip.cargo.n0); }
+		if (cargoKinds > 0 && Trade_Twentieths() > cargoHad && cargoLeft < 10) { Trace("PDM prize: cargo ok, kinds " + cargoKinds); }
+		else { Trace("PDM prize: cargo FAIL, kinds " + cargoKinds + ", weight " + cargoHad + "->" + Trade_Twentieths()); }
+	}
 	if (b == "@transfer")
 	{
 		// the button of the page: a class 6 prize is always allowed, it joins the fleet once

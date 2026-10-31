@@ -570,6 +570,7 @@ void Board_Prize()
 	prizeName = PdmShips.(shipKey).name;
 	prizeCrew = theirs;
 	prizeOurs = ours;
+	Trade_PrizeCargo(shipKey);
 	Board_TakePrize();
 }
 

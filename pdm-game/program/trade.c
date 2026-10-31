@@ -492,6 +492,43 @@ void Trade_TransferLists()
 	Screen_Text("EDITOURMONEY", PlayerCard.money);
 }
 
+// the cargo of the won ship goes to PrizeShip (the right list of Transfer), the old one is dropped
+void Trade_PrizeCargo(string shipKey)
+{
+	DeleteAttribute(&PrizeShip, "cargo");
+	int all = Trade_Goods();
+	for (int i = 0; i < all; i++)
+	{
+		string at = "n" + i;
+		if (!CheckAttribute(PdmShips, shipKey + ".cargo." + at)) { continue; }
+		if (sti(PdmShips.(shipKey).cargo.(at)) > 0) { PrizeShip.cargo.(at) = PdmShips.(shipKey).cargo.(at); }
+	}
+}
+
+// "Всё" of Transfer: the goods of the prize move to the hold of the hero as far as its room allows (the whole pieces);
+// returns the number of kinds of goods that moved at least a piece
+int Trade_PrizeLoadAll()
+{
+	int kinds = 0;
+	int all = Trade_Goods();
+	for (int i = 0; i < all; i++)
+	{
+		string at = "n" + i;
+		if (!CheckAttribute(&PrizeShip, "cargo." + at)) { continue; }
+		int have = sti(PrizeShip.cargo.(at));
+		int w = Trade_Weight(i);
+		if (Trade_Type(i) != 1) { w = w * 20; }
+		int free = Trade_ShipCapacity() * 20 - Trade_Twentieths();
+		int q = have;
+		if (w > 0 && q * w > free) { q = free / w; }
+		if (q <= 0) { continue; }
+		Trade_SetOnboard(i, Trade_Onboard(i) + q);
+		PrizeShip.cargo.(at) = have - q;
+		kinds++;
+	}
+	return kinds;
+}
+
 // the sale: the piece by piece, as many as the stock, the hold and the money allow
 void Trade_Buy()
 {
