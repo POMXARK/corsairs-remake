@@ -1045,6 +1045,12 @@ void Town_AutoGo()
 	}
 	if (TownPlan.(at) == "hud")
 	{
+		// the last place of the walk is the sea: the town is left there, so the end of the test is told before
+		if (TownPlan.(at).arg == "sea" && townPlanStep >= townPlanCount)
+		{
+			Trace("PDM town: autotest done, every place visited, leaving for the sea");
+			PostEvent("Town_AutoQuit", 6000);
+		}
 		Hud_LandAutoOpen(TownPlan.(at).arg);
 		return;
 	}

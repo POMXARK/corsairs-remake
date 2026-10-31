@@ -30,7 +30,7 @@
 | `story` | прогоняет все сюжетные действия и диалоги без графики (`Story_SelfTest`) | `PDM story test: … actions run` |
 | `screens` | обходит страницы экранов (торговля, верфь, настройки…) таймером `Screen_Tour` | `PDM trade: bought` |
 | `town-tavern` / `town-talk` / `town-quest` | таверна, разговор с NPC, взятие квеста в городе | `PDM town: autotest done` |
-| `town-land` | высадка и ходьба по городу Highrock | `PDM town: autotest done` |
+| `town-land` | высадка и ходьба по городу Highrock, последний шаг — выход в море (маркер пишется до него) | `PDM town: autotest done` |
 | `town-face` | лица NPC при разговоре (камера на лицо) | `PDM face: autotest done` |
 | `sea-out` / `sea-port` / `sea-map` | выход в море, возврат в порт, переход на карту мира | `PDM: sea …` |
 | `map-date` | дата на карте мира идёт при ходе (12 → 14 Июнь) | `PDM map date: …` |
