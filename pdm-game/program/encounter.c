@@ -165,6 +165,8 @@ void Enc_Tick(int ms)
 		encPats[0] = 21;
 		// TOWN_AUTO=25: the merchants of England (pattern 5), the hero attacks them and they run away
 		if (TownAuto == 25) { encPick[0] = 0; encPats[0] = 5; }
+		// TOWN_AUTO=26: the pirate squadron of three (pattern 8), the hero attacks, the escorts join the battle
+		if (TownAuto == 26) { encPats[0] = 8; }
 	}
 	if (layers == 0) { return; }
 	int at = rand(layers - 1);
@@ -287,7 +289,7 @@ void Enc_Command(string node)
 // TOWN_AUTO=24: the enemy of the pattern is at sea, the battle is on
 void Enc_AutoQuit()
 {
-	Trace("PDM encounter: autotest done, enemy " + battleEnemy + " of " + encShipType + ", flees " + battleEnemyFlees);
+	Trace("PDM encounter: autotest done, enemy " + battleEnemy + " of " + encShipType + ", flees " + battleEnemyFlees + ", escorts " + battleEscorts);
 	// the sea AI asks the script for the balls of the ships every frame, after ExitProgram it gets no answer and asserts
 	Battle_Release();
 	ExitProgram();
@@ -296,7 +298,7 @@ void Enc_AutoQuit()
 void Enc_Auto()
 {
 	if (!encShown) { return; }
-	if (TownAuto == 25) { Enc_Command("LB_YES"); }
+	if (TownAuto >= 25) { Enc_Command("LB_YES"); }
 	else { Enc_Command("LB_OK"); }
 }
 
@@ -331,9 +333,8 @@ string Enc_ShipType(int pattern, bool war)
 }
 
 // the card of the captain and the ship of the battle (ours: the unnamed captain)
-void Enc_MakeEnemy(string typeKey, int nation)
+void Enc_MakeEnemy(string key, string typeKey, int nation)
 {
-	string key = "PdmEnc";
 	DeleteAttribute(&PdmCharacters, key);
 	DeleteAttribute(&PdmShips, key);
 	PdmShips.(key).type_key = typeKey;
@@ -374,7 +375,16 @@ void Enc_Battle()
 		Trace("PDM encounter: no ship of the pattern " + encPattern);
 		return;
 	}
-	Enc_MakeEnemy(typeKey, encNation);
+	Enc_MakeEnemy("PdmEnc", typeKey, encNation);
+	// the rest of the squadron of the pattern (ours: they only attack the hero, the victory and boarding go by the first ship)
+	battleEscorts = 0;
+	for (int k = 1; k < encCount && k <= BATTLE_MAX_ESCORTS; k++)
+	{
+		string escortType = Enc_ShipType(encPattern, war);
+		if (escortType == "") { break; }
+		Enc_MakeEnemy("PdmEnc" + k, escortType, encNation);
+		battleEscorts = k;
+	}
 	encShipType = typeKey;
 	Trace("PDM encounter: battle, " + typeKey + " of nation " + encNation + " near " + encIsland);
 	battleEnemyFlees = encType == 1;

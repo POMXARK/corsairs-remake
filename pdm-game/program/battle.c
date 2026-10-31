@@ -24,6 +24,8 @@
 #define AITASK_ATTACK 1
 #define AITASK_ABORDAGE 5
 #define AITASK_RUNAWAY 6
+#define BATTLE_MAX_ESCORTS 3
+#define BATTLE_ESCORT_SPACING 120.0
 #define PRIMARY_TASK 0
 #define RELATION_FRIEND 1
 #define RELATION_ENEMY 3
@@ -109,6 +111,7 @@ string battleChargeNames[HUD_CHARGES] = {"ядра", "картечь", "книп
 // the enemy of the battle is a ship of the world map met on the way (encounter.c), not the pirate of the first battle
 bool battleEncounter = false;
 // the met ship is a merchant: it runs away from the hero instead of attacking (AITASK_RUNAWAY; the task of the merchants of the original is not found, ours)
+int battleEscorts = 0;
 bool battleEnemyFlees = false;
 
 string Battle_EnemyKey()
@@ -305,6 +308,7 @@ void Battle_AddEnemy(float x, float z, float ay)
 	int enemyTask = AITASK_ATTACK;
 	if (battleEnemyFlees) { enemyTask = AITASK_RUNAWAY; }
 	SendMessage(&AISea, "lllaa", AI_MESSAGE_SHIP_SET_TASK, enemyTask, PRIMARY_TASK, &SeaShips[battleEnemy], &SeaShips[seaHero]);
+	if (battleEncounter) { for (int e = 1; e <= battleEscorts; e++) { Battle_AddEscort(e, ex, ez, ay, enemyTask); } }
 	Sound_Music(Battle_Music(sti(card.nation)));
 	string report = "PDM: battle, " + card.id + " on " + PdmShips.(shipKey).name + " (" + typeKey + "), hull ";
 	report = report + SeaShips[battleEnemy].Ship.HP + " against " + SeaShips[seaHero].Ship.HP;
@@ -333,6 +337,25 @@ void Battle_AddEnemy(float x, float z, float ay)
 		ShipCamera.Distance = BATTLE_AUTO_CAMERA_DISTANCE;
 		ShipCamera.AngleX = BATTLE_AUTO_CAMERA_HEIGHT;
 	}
+}
+
+// a ship of the squadron beside the first one: only its task, the crew card as for the first
+void Battle_AddEscort(int n, float ex, float ez, float ay, int task)
+{
+	string key = "PdmEnc" + n;
+	aref card;
+	makearef(card, PdmCharacters.(key));
+	string shipKey = card.ship_key;
+	string typeKey = PdmShips.(shipKey).type_key;
+	float side = BATTLE_ESCORT_SPACING * n;
+	int i = Sea_AddShip(card, typeKey, ex + cos(ay) * side, ez - sin(ay) * side, ay + BATTLE_PI);
+	SeaShips[i].Ship.Name = PdmShips.(shipKey).name;
+	SeaShips[i].Ship.SP = 100;
+	SeaShipTypes[i].SP = 100;
+	SeaShips[i].Crew.quantity = sti(PdmShips.(shipKey).crew);
+	SendMessage(&BattleInterface, "llaall", BI_IN_CREATE_SHIP, i, &SeaShips[i], &SeaShipTypes[i], 0, BI_RELATION_ENEMY);
+	SendMessage(&AISea, "lllaa", AI_MESSAGE_SHIP_SET_TASK, task, PRIMARY_TASK, &SeaShips[i], &SeaShips[seaHero]);
+	Trace("PDM: battle, escort " + n + " on " + PdmShips.(shipKey).name + " (" + typeKey + ")");
 }
 
 // the battle music of mmusic.ini by the nation of the enemy (nations.idf: england, pirate, france, spain)
