@@ -74,6 +74,8 @@ float mapTop = 0.0;
 int mapIslandCount = 0;
 // the keys of PdmIslands in the order of the list
 object MapIslands;
+object MapList;
+int mapListCount = 0;
 // The fog of MAP.dll: the closed chart (map_close.tga, fogTexture of MAP) covers the map, and the stamps of
 // ShowCell burn it away: mask_black (65 px, alpha up to 124, adding up) at every point of a 16 px grid the
 // ship passes, once each, and mask_black_island (140 px) on an island found in the 3 x 3 cells of 60 px round
@@ -149,14 +151,17 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 }
 
 // the islands of islands_x.idf with a model at sea; the dead towns (Highrock_) stand on the living ones
+// MapIslands is all of them (the encounters count the closeness to every island), MapList the ones found, in the order of finding:
+// MAP.dll shows in the list only the islands it has opened (OpenIsland)
 void Map_FillIslands()
 {
 	DeleteAttribute(&MapIslands, "");
+	DeleteAttribute(&MapList, "");
 	mapIslandCount = 0;
+	mapListCount = 0;
 	int n = GetAttributesNum(&PdmIslands);
 	aref island;
-	string key, name, at;
-	int from = 0;
+	string key, at;
 	for (int i = 0; i < n; i++)
 	{
 		island = GetAttributeN(&PdmIslands, i);
@@ -165,13 +170,39 @@ void Map_FillIslands()
 		if (strcut(key, strlen(key) - 1, strlen(key) - 1) == "_") { continue; }
 		at = "i" + mapIslandCount;
 		MapIslands.(at) = key;
-		if (key == mapFrom) { from = mapIslandCount; }
-		name = island.class;
-		if (CheckAttribute(island, "label")) { name = island.label; }
-		SendMessage(&GameInterface, "lsle", MSG_INTERFACE_MSG_TO_NODE, "ISLANDS", 0, &name);
 		mapIslandCount++;
 	}
+	// a new game: MAP.dll opens avilia, Belflor and Highrock at the start (first_start of mapparam.ini)
+	if (!CheckAttribute(&MapFog, "island"))
+	{
+		MapFog.island.avilia = 1;
+		MapFog.island.Belflor = 1;
+		MapFog.island.Highrock = 1;
+	}
+	aref found;
+	makearef(found, MapFog.island);
+	n = GetAttributesNum(found);
+	int from = 0;
+	for (int j = 0; j < n; j++)
+	{
+		key = GetAttributeName(GetAttributeN(found, j));
+		if (!CheckAttribute(&PdmIslands, key + ".map_cell")) { continue; }
+		if (key == mapFrom) { from = mapListCount; }
+		Map_ListAdd(key);
+	}
 	SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, "ISLANDS", 1, from);
+	Trace("PDM map: list of " + mapListCount + " islands");
+}
+
+// an island found goes to the end of the list of the map
+void Map_ListAdd(string key)
+{
+	string at = "l" + mapListCount;
+	MapList.(at) = key;
+	mapListCount++;
+	string name = PdmIslands.(key).class;
+	if (CheckAttribute(&PdmIslands, key + ".label")) { name = PdmIslands.(key).label; }
+	SendMessage(&GameInterface, "lsle", MSG_INTERFACE_MSG_TO_NODE, "ISLANDS", 0, &name);
 }
 
 // The screen of the original is 4:3. On a wider window (ScreenLeft of the xinterface: how far its 800 x 600
@@ -337,6 +368,7 @@ void Map_Fog()
 		if (abs(ix - cx) > 1 || abs(iy - cy) > 1) { continue; }
 		MapFog.island.(key) = 1;
 		Map_FogIsland(key);
+		Map_ListAdd(key);
 		Trace("PDM map: fog, " + key + " found");
 	}
 }
@@ -351,9 +383,9 @@ void Map_FogIsland(string key)
 
 void Map_SailTo(int index)
 {
-	if (index < 0 || index >= mapIslandCount || !mapActive) { return; }
-	string at = "i" + index;
-	mapTarget = MapIslands.(at);
+	if (index < 0 || index >= mapListCount || !mapActive) { return; }
+	string at = "l" + index;
+	mapTarget = MapList.(at);
 	mapToX = Map_IslandX(mapTarget);
 	mapToY = Map_IslandY(mapTarget);
 	Trace("PDM map: sail to " + mapTarget + " at " + mapToX + ", " + mapToY);
@@ -510,7 +542,7 @@ void Map_Command()
 	if (node == "MAP") { Map_Click(); return; }
 	int index = SendMessage(&GameInterface, "lsl", MSG_INTERFACE_MSG_TO_NODE, "ISLANDS", 11);
 	if (node == "LB_ISLANDUP" && index > 0) { index--; }
-	if (node == "LB_ISLANDDOWN" && index + 1 < mapIslandCount) { index++; }
+	if (node == "LB_ISLANDDOWN" && index + 1 < mapListCount) { index++; }
 	SendMessage(&GameInterface, "lsll", MSG_INTERFACE_MSG_TO_NODE, "ISLANDS", 1, index);
 	// the button is still being pressed: the interface goes away after the event (menu.c)
 	if (node == "LB_EXIT") { PostEvent("Map_Exit", 0); }
@@ -527,10 +559,10 @@ void Map_Click()
 	int index = -1;
 	string at, key;
 	float dx, dy;
-	for (int i = 0; i < mapIslandCount; i++)
+	for (int i = 0; i < mapListCount; i++)
 	{
-		at = "i" + i;
-		key = MapIslands.(at);
+		at = "l" + i;
+		key = MapList.(at);
 		dx = Map_IslandX(key) - x;
 		dy = Map_IslandY(key) - y;
 		if (dx * dx + dy * dy < best) { best = dx * dx + dy * dy; index = i; }

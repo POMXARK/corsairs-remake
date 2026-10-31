@@ -35,6 +35,7 @@
 | `sea-out` / `sea-port` / `sea-map` | выход в море, возврат в порт, переход на карту мира | `PDM: sea …` |
 | `map-date` | дата на карте мира идёт при ходе (12 → 14 Июнь) | `PDM map date: …` |
 | `map-anchor` | якорь «На день» (TOWN_AUTO=27): дата 12 → 13 Июнь, якорь поднят | `PDM map anchor: weighed` |
+| `map-open` | в новой игре в списке карты 3 острова (avilia, Belflor, Highrock) | `PDM map: list of 3 islands` |
 | `battle-fire` / `battle-board` / `battle-sail` / `battle-fort` | залп, абордаж, парусная погоня, бой с фортом | `PDM: autotest done, battle…` |
 | `save-sea` | автосохранение в море и загрузка его обратно | `PDM: autotest done, save` |
 | `store-screen` | `SCENE=town`, `TOWN_AUTO=21`, Хайрок: идёт к магазину, говорит с владельцем, ответ `PdmA_STORE` открывает экран `trade` как в игре; проверяет списки (16 товаров, запас, цена), затем «Купить» (деньги −цена·кол-во, запас и трюм по количеству) и «Всё»+«Продать» (трюм пуст, деньги растут); значения проверяет скрипт (`Trade_Check`, `trade.c`) | `PDM store: sell ok` (до него `values ok`, `buy ok`) |
