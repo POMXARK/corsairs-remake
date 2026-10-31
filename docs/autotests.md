@@ -37,6 +37,8 @@
 | `map-anchor` | якорь «На день» (TOWN_AUTO=27): дата 12 → 13 Июнь, якорь поднят | `PDM map anchor: weighed` |
 | `map-sound-land` | при сообщении «Земля!» играет звук `mapisland` (msound.ini) | `PDM sound: mapisland` |
 | `map-sound-anchor` | при броске якоря играет звук `yakor` | `PDM sound: yakor` |
+| `map-sound-attack` | встреча с нападением (TOWN_AUTO=24): звук `mapattack` | `PDM sound: mapattack` |
+| `map-sound-ship` | парус нации (TOWN_AUTO=25): звук `mapship` | `PDM sound: mapship` |
 | `map-open` | в новой игре в списке карты 3 острова (avilia, Belflor, Highrock) | `PDM map: list of 3 islands` |
 | `map-land` | корабль идёт к острову, при входе в клетки вокруг острова — окно «Сэр, земля!» с именем и флагом | `PDM map: land … Сэр, земля` |
 | `map-scroll-fast` | прокрутка карты с зажатым Shift идёт вдвое быстрее (клавиши скрипт нажать не может: Shift задан напрямую, TOWN_AUTO=32; маркер `fast 2`) | `PDM map: scrolled … manual 1 fast 2` |

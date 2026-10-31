@@ -205,6 +205,10 @@ void Enc_Meet(int nation, int pattern)
 	if (encForce == 3) { encType = 4; if (TownAuto == 25) { encType = 1; } encForce = 0; }
 	string text = Enc_Message(encType, nation, pattern, encCount);
 	Trace("PDM encounter: nation " + nation + ", pattern " + pattern + ", type " + encType + ", " + encCount + " ship(s) at " + encIsland);
+	// the sound of the sail (MAP.dll): an attack - mapattack, pirates in sight - mapenemy, the sail of a nation - mapship
+	if (encType == 3 || encType == 4) { Sound_Once("mapattack"); }
+	else if (encType == 2) { Sound_Once("mapenemy"); }
+	else { Sound_Once("mapship"); }
 	Enc_Show(encType, text);
 }
 
