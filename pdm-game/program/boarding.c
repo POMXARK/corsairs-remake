@@ -587,6 +587,48 @@ bool Board_TakePrize()
 	return true;
 }
 
+// "Сменить" of ShipExchange (RANSACK.dll 0x10007cc4 → 0x10007800): the ship of the hero and the prize swap places — the type,
+// the name and the hold; the class of the prize has to be in the range of the rank (else the window about the skills);
+// the crew of the hero stays on board up to the room of the new ship, the rest goes to the prize
+bool Board_ChangeShip()
+{
+	if (prizeType == "") { return false; }
+	if (sti(PdmShipTypes.(prizeType).class) < Screen_RankClass(Screen_HeroRank()))
+	{
+		Trace("PDM prize: change refused, skills");
+		return false;
+	}
+	string oldType = PlayerShipCard.type_key;
+	string oldName = PlayerShipCard.name;
+	PlayerShipCard.type_key = prizeType;
+	PlayerShipCard.name = prizeName;
+	prizeType = oldType;
+	prizeName = oldName;
+	int all = Trade_Goods();
+	for (int i = 0; i < all; i++)
+	{
+		string at = "n" + i;
+		int mine = 0;
+		if (CheckAttribute(PlayerShipCard, "cargo." + at)) { mine = sti(PlayerShipCard.cargo.(at)); }
+		int theirs = Transfer_Prize(i);
+		if (theirs > 0) { PlayerShipCard.cargo.(at) = theirs; }
+		else { DeleteAttribute(PlayerShipCard, "cargo." + at); }
+		if (mine > 0) { PrizeShip.cargo.(at) = mine; }
+		else { DeleteAttribute(&PrizeShip, "cargo." + at); }
+	}
+	int crew = sti(PlayerShipCard.crew);
+	string newKey = PlayerShipCard.type_key;
+	int room = sti(PdmShipTypes.(newKey).maxcrew);
+	if (crew > room)
+	{
+		prizeCrew = prizeCrew + crew - room;
+		PlayerShipCard.crew = room;
+	}
+	makearef(PlayerShipType, PdmShipTypes.(newKey));
+	Trace("PDM prize: changed " + oldType + " -> " + newKey);
+	return true;
+}
+
 ref Board_ShadowDensity()
 {
 	return &boardShadow;

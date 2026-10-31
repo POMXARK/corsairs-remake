@@ -1131,6 +1131,12 @@ bool Screen_Page(string node)
 // the button is still being pressed in it (menu.c)
 bool Screen_Click(string node)
 {
+	if (node == "LB_CHANGESHIP" && screenName == "shipexchange")
+	{
+		Board_ChangeShip();
+		Screen_PrizeShip();
+		return true;
+	}
 	if (node == "LB_TAKEPRIZE" && screenName == "shipexchange")
 	{
 		Board_TakePrize();
@@ -1244,6 +1250,18 @@ void Screen_StatusAuto()
 		if (CheckAttribute(&PrizeShip, "cargo.n0")) { cargoLeft = sti(PrizeShip.cargo.n0); }
 		if (cargoKinds > 0 && Trade_Twentieths() > cargoHad && cargoLeft < 10) { Trace("PDM prize: cargo ok, kinds " + cargoKinds); }
 		else { Trace("PDM prize: cargo FAIL, kinds " + cargoKinds + ", weight " + cargoHad + "->" + Trade_Twentieths()); }
+	}
+	if (b == "@transfer")
+	{
+		// "Сменить": a class 6 prize and the ship of the hero swap, twice they swap back
+		string heroWas = PlayerShipCard.type_key;
+		prizeType = "sloop";
+		prizeName = "Swap";
+		bool swapped = Board_ChangeShip();
+		string heroNow = PlayerShipCard.type_key;
+		bool swappedBack = Board_ChangeShip();
+		if (swapped && swappedBack && heroNow == "sloop" && PlayerShipCard.type_key == heroWas && prizeType == "sloop") { Trace("PDM prize: change ok"); }
+		else { Trace("PDM prize: change FAIL " + heroWas + "," + heroNow + "," + PlayerShipCard.type_key); }
 	}
 	if (b == "@transfer")
 	{
