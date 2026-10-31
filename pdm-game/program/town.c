@@ -979,9 +979,21 @@ void Town_AutoPlan()
 		return;
 	}
 	// 22: F1 on the spot, the pages of the status one after the other (screens.c, Screen_StatusAuto); it quits itself
-	if (TownAuto == STATUS_ID || TownAuto == RANSACKSCR_ID)
+	if (TownAuto == STATUS_ID || TownAuto == RANSACKSCR_ID || TownAuto == 31)
 	{
 		PlayerCard.money = 500;
+		// 31: a hero with records, the journal has two spreads (screens.c, Screen_Logbook)
+		if (TownAuto == 31)
+		{
+			Pdm_AddRecord("Alameda_agreed");
+			Pdm_AddRecord("Big_Cannons");
+			Pdm_AddRecord("Alumnus_advice");
+			Pdm_AddRecord("Araines_boarded");
+			Pdm_AddRecord("Arcadio_agreed");
+			Pdm_AddRecord("Ashton_to_Highrock");
+			Pdm_AddRecord("Beltrop_Ordo");
+			Pdm_AddRecord("Belflor_defense");
+		}
 		PostEvent("Screen_StatusAuto", 1500, "l", 0);
 		return;
 	}
@@ -1018,7 +1030,7 @@ void Town_AutoGo()
 {
 	if (townPlanStep >= townPlanCount)
 	{
-		if (TownAuto == STATUS_ID || TownAuto == RANSACKSCR_ID) { return; }
+		if (TownAuto == STATUS_ID || TownAuto == RANSACKSCR_ID || TownAuto == 31) { return; }
 		Trace("PDM town: autotest done in " + townHere + ", money " + Pdm_Count(PlayerCard, "money") + ", reputation "
 			+ Pdm_Count(PlayerCard, "reputation") + ", experience " + Pdm_Count(PlayerCard, "experience"));
 		PostEvent("Town_AutoQuit", 3000);

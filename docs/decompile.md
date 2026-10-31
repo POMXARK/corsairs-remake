@@ -184,3 +184,9 @@ MAP.dll только показывает дату на карте: узел `Ma
 
 ## Курсор и прокрутка карты (MAP.dll, `map.ini`)
 Курсоры краёв — `IMAGES/MAP/cursor0..7.tga`, обычный — `IMAGES/cursor.tga`; зона 10 px, 8 направлений, скорость dt/10 px/кадр. Сведения из кода MAP.dll и `map.ini`. В xinterface курсор — глобальная строка `MousePointer` в `interfaces.ini`; мышь виртуальная и двигается относительными смещениями (абсолютный `xdotool mousemove` позицию в игре не меняет — для проверки `xdotool mousemove_relative -- -1500 0`). Процесс игры при `live.sh` называется `engine-1`: `pkill -x engine-1`.
+
+## Журнал (STATUS.dll, CLogBook)
+- `ref/pdm-decomp/STATUS.dll.c`: Init/Realize ~395–540 (узлы `lb_Next/lb_Prev`, `s_Loyal/Neutral/Hostile`, `s_Nation%d` для наций ≠ 1, `EditPage1/2`, `title%d`), `FUN_10001e50` (LoadFile, нормализует переводы строк в `\r`), `FUN_10001f20` (ListPages: ширина знаков шрифта из таблицы, перенос по пробелу, до 0x3fff страниц).
+- Откуда тексты: CORE.dll пишет `RESOURCE\TEXTS\RECORDS\%s.rcd` в `RESOURCE\QUESTS\english.qst` (строки CORE.dll 0x100194a0, 0x10019508); STATUS.dll читает этот файл. В папке игры `english.qst` нет — создаётся при игре.
+- Ghidra: имена функций CLogBook в `strings.txt` есть, в `.c` они `FUN_100…` — искать по строкам `s_LogBook_…`.
+

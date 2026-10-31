@@ -212,6 +212,7 @@ void Screen_Fill()
 	Screen_Text("EDITSHIPTYPENAME", PlayerShipType.type);
 	Screen_ShipText();
 	Screen_Lists();
+	if (screenName == "logbook") { Screen_Logbook(); }
 	if (screenName == "trade") { Trade_Arrows(); }
 	// the values of the screen in the texts of the original: "Ранг %d", "9 узлов"
 	if (!CheckAttribute(PdmScreens, screenName + ".s")) { return; }
@@ -233,6 +234,98 @@ void Screen_Fill()
 		}
 		Screen_Text(node, text);
 	}
+}
+
+// the journal (STATUS.dll CLogBook): the records of the hero (TEXTS/RECORDS, Pdm_AddRecord) one after the other as the text of
+// the book, cut at a space into the pages of LOGBOOK_PAGE signs; two pages are open, "Дальше" and "Назад" turn them (a spread)
+#define LOGBOOK_PAGE 1250
+int logbookSpread = 0;
+int logbookPages = 0;
+
+// the key of PdmScreens.records of a name of a record: every sign but a letter, a digit or _ is _
+string Screen_RecordKey(string name)
+{
+	string key = "";
+	string ok = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+	int n = strlen(name);
+	for (int i = 0; i < n; i++)
+	{
+		string c = strcut(name, i, i);
+		if (findSubStr(ok, c, 0) < 0) { c = "_"; }
+		key = key + c;
+	}
+	return key;
+}
+
+// the whole text of the book
+string Screen_LogbookBook()
+{
+	string book = "";
+	for (int i = 0; i < pdmRecords; i++)
+	{
+		string at = "r" + i;
+		string key = Screen_RecordKey(PlayerCard.records.(at));
+		if (!CheckAttribute(PdmScreens, "records." + key)) { continue; }
+		if (book != "") { book = book + "\n\n"; }
+		book = book + PdmScreens.records.(key);
+	}
+	return book;
+}
+
+// the page p (from 0) of the book, "" after the last; sets logbookPages
+string Screen_LogbookPage(string book, int p)
+{
+	int len = strlen(book);
+	int from = 0;
+	int page = 0;
+	string text = "";
+	while (from < len)
+	{
+		int to = from + LOGBOOK_PAGE - 1;
+		if (to >= len - 1) { to = len - 1; }
+		else
+		{
+			// back to a space, so that no word is cut
+			int cut = to;
+			while (cut > from && strcut(book, cut, cut) != " ") { cut--; }
+			if (cut > from) { to = cut; }
+		}
+		if (page == p) { text = strcut(book, from, to); }
+		from = to + 1;
+		page++;
+	}
+	logbookPages = page;
+	return text;
+}
+
+void Screen_Logbook()
+{
+	string book = Screen_LogbookBook();
+	string left = Screen_LogbookPage(book, logbookSpread * 2);
+	string right = Screen_LogbookPage(book, logbookSpread * 2 + 1);
+	Screen_Text("EDITPAGE1", left);
+	Screen_Text("EDITPAGE2", right);
+	string next = "";
+	string prev = "";
+	if (logbookSpread * 2 + 2 < logbookPages) { next = PdmScreens.logbook.t.next; }
+	if (logbookSpread > 0) { prev = PdmScreens.logbook.t.prev; }
+	Screen_Text("LB_NEXT", next);
+	Screen_Text("LB_PREV", prev);
+	// the loyalty of the nations the book shows (england 0, france 2, spain 3): our wars are not there yet, all neutral
+	Screen_Text("S_NATION0", PdmScreens.logbook.t.neutral);
+	Screen_Text("S_NATION2", PdmScreens.logbook.t.neutral);
+	Screen_Text("S_NATION3", PdmScreens.logbook.t.neutral);
+}
+
+// "Дальше" / "Назад": a spread forward or back, only where there is one
+bool Screen_LogbookClick(string node)
+{
+	if (node == "LB_NEXT" && logbookSpread * 2 + 2 < logbookPages) { logbookSpread++; }
+	else if (node == "LB_PREV" && logbookSpread > 0) { logbookSpread--; }
+	else { return node == "LB_NEXT" || node == "LB_PREV"; }
+	Screen_Fill();
+	Trace("PDM logbook: spread " + logbookSpread + " of " + ((logbookPages + 1) / 2));
+	return true;
 }
 
 // the lists the DLLs of the original drew: the goods of the hold and of the trade (a LIST_<COLUMN> per
@@ -986,6 +1079,7 @@ void Screen_Command()
 	if (screenName == "messagebox" && node == "LB_YES" && screenMessageYes == "exit") { ExitProgram(); return; }
 	if (screenName == "trade" && Trade_Click(node)) { return; }
 	if (screenName == "shipyard" && Screen_ShipyardClick(node)) { return; }
+	if (screenName == "logbook" && Screen_LogbookClick(node)) { return; }
 	if (Screen_Page(node)) { return; }
 	Screen_Click(node);
 }
@@ -1068,6 +1162,7 @@ void Screen_StatusAuto()
 	int step = GetEventData();
 	string buttons = "F1,LB_SHIP,LB_GOODS,LB_CHEST,LB_LOGBOOK";
 	if (TownAuto == RANSACKSCR_ID) { buttons = "F1,@shipexchange,@transfer,@messagebox_ransack"; }
+	if (TownAuto == 31) { buttons = "F1,LB_LOGBOOK,LB_NEXT,LB_PREV"; }
 	int at = 0;
 	for (int i = 0; i < step; i++)
 	{
@@ -1077,6 +1172,7 @@ void Screen_StatusAuto()
 	}
 	if (at >= strlen(buttons))
 	{
+		if (TownAuto == 31) { Trace("PDM logbook: ok pages " + logbookPages + " records " + pdmRecords); }
 		Trace("PDM status: pages ok");
 		PostEvent("Town_AutoQuit", 500);
 		return;
@@ -1091,6 +1187,7 @@ void Screen_StatusAuto()
 		screenGoing = true;
 		PostEvent("Screen_Go", 0);
 	}
+	else if (b == "LB_NEXT" || b == "LB_PREV") { Screen_LogbookClick(b); }
 	else { Screen_Click(b); }
 	Trace("PDM status: " + b + " -> '" + screenName + "'");
 	if (b == "@shipexchange")

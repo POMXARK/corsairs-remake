@@ -40,5 +40,6 @@ map-encounter-merchant|sea||25|PDM encounter: autotest done, enemy [0-9]+ of [a-
 map-encounter-squadron|sea||26|PDM encounter: autotest done, enemy [0-9]+ of [a-z0-9]+, flees 0, escorts [1-3]|200
 map-land|sea||6|PDM map: land .*Сэр, земля|300
 map-scroll|sea||30|PDM map: scrolled -[1-9][0-9.]* -[1-9][0-9.]* manual 1|120
+logbook-screen|town|City_HighRock|31|PDM logbook: ok pages [2-9]|120
 map-pay|sea||28|PDM map: paid 200|300
 sea-escape|battle||29|PDM sea: chase, escaped to the map|120

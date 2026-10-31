@@ -22,7 +22,9 @@ start)
     env "$@" "$DIR/run.sh" "$ENGINE" > "$OUT/game.log" 2>&1 &
     echo $! > "$OUT/game.pid"
     for _ in $(seq 1 120); do
-        W=$(xdotool search --onlyvisible --class engine 2>/dev/null | tail -1 || true)
+        # the window of this very game (by the process): a window of an earlier copy may still be around
+        P=$(pgrep -n -x engine-1 || true)
+        W=""; [ -n "$P" ] && W=$(xdotool search --onlyvisible --pid "$P" 2>/dev/null | tail -1 || true)
         [ -n "$W" ] && break
         sleep 1
     done
