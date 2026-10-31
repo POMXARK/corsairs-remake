@@ -274,3 +274,6 @@ corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City
 
 ## ransack-screens (TOWN_AUTO=23)
 Как `status-screens`, но страницы `RANSACK.dll`: «Грабёж: Корабли» (`shipexchange`), «Грабёж: Трюм» (`transfer`) и окно сообщения. Маркер `PDM status: pages ok`. Открываются прямо из теста (наше): в оригинале их запускает игровой скрипт после абордажа.
+
+## map-storm
+Механика: шторм на карте (сообщение 10). `TOWN_AUTO=42`: игра в начале суток 13:00, шанс снят; на втором шаге хода час становится 15 — окно с `MapMessageTornado`, «ОК» закрывает, выход. Маркер: `PDM map: storm message`. Сценарий: `map-storm|sea||42|…|300`.

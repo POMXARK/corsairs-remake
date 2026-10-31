@@ -87,6 +87,7 @@ int mapIslandCount = 0;
 object MapIslands;
 bool mapNote;           // the note "якорь брошен" is up (it needs no answer, the ship stands)
 bool mapDebt = false;   // the crew was not paid for lack of gold (MAP.dll +0x167c48): the weekly reminder comes
+int mapHour = -1;       // the hour of the day at the last step of the sail, -1 before the first one
 int mapWeek = -1;       // the week of the month last seen (day / 7), -1 before the first look
 int mapPayMonth = -1;   // the month the crew was last asked to be paid in
 string mapLastIsland;
@@ -127,6 +128,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	mapLastIsland = fromIsland;
 	mapPayMonth = -1;
 	mapWeek = -1;
+	mapHour = -1;
 	mapDebt = false;
 	// the test of the pay (28) starts a few hours before the end of June
 	if (TownAuto == 28) { gameHours = 3905.0 + 400.0; PlayerCard.money = 1000; }
@@ -137,6 +139,8 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	if (TownAuto == 39) { PlayerCard.money = 1000; mapDebt = true; }
 	// the test of the mutiny (40): a hated captain, the step of the map ends in the message
 	if (TownAuto == 40) { PlayerCard.reputation = -35; encForce = 1; }
+	// the test of the storm (42): the hour is about to become 15
+	if (TownAuto == 42) { gameHours = 3901.0; }
 	mapTarget = "";
 	encShown = false;
 	mapAnchorTo = -1.0;
@@ -187,7 +191,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	mapActive = true;
 	PostEvent("Map_Tick", MAP_TICK_MS);
 	Trace("PDM map: from " + fromIsland + " at " + mapX + ", " + mapY);
-	if (TownAuto == 6 || TownAuto == 28 || TownAuto == 37 || TownAuto == 38 || TownAuto == 39 || TownAuto == 40) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
+	if (TownAuto == 6 || TownAuto == 28 || TownAuto == 37 || TownAuto == 38 || TownAuto == 39 || TownAuto == 40 || TownAuto == 42) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
 	if (TownAuto == 27) { PostEvent("Map_AutoAnchor", MAP_AUTO_MS); }
 	if (TownAuto == 30 || TownAuto == 32 || TownAuto == 33) { PostEvent("Map_AutoScroll", MAP_AUTO_MS); }
 }
@@ -530,6 +534,22 @@ int Map_MonthDay()
 
 // a new week of the month (day / 7) while the month is the one seen last and no window is open: the sound mapweek
 // (MAP.dll 0x10007800 region; the window of the week that the original opens after it is not made)
+// the storm (message 10, the step of the sail in MAP.dll 0x10005666): when the hour of the day becomes 15, 1 in 384
+// (rand % 384 == 128); the ship stops, the window only says it, OK closes it
+bool Map_Storm()
+{
+	int hour = makeint(gameHours) % 24;
+	int before = mapHour;
+	mapHour = hour;
+	if (hour != 15 || before == 15 || before < 0) { return false; }
+	if (TownAuto != 42 && rand(383) != 128) { return false; }
+	mapTarget = "";
+	Map_NoteHide();
+	Trace("PDM map: storm message");
+	Enc_Show(10, Enc_Text("MapMessageTornado"));
+	return true;
+}
+
 void Map_Week()
 {
 	if (mapPayMonth < 0 || Map_MonthIndex() != mapPayMonth || encShown) { return; }
@@ -820,6 +840,7 @@ void Map_Tick()
 		Map_Fog();
 		Map_View();
 		gameHours = gameHours + MAP_HOURS_PER_TICK;
+		if (Map_Storm()) { PostEvent("Map_Tick", MAP_TICK_MS); return; }
 		// the map tests (6) sail without the random sails of the sea: the window of one would hide what they check
 		if (TownAuto != 6 && TownAuto != 28) { Enc_Tick(MAP_TICK_MS); }
 	}

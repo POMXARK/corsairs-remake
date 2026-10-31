@@ -328,7 +328,7 @@ void Enc_Show(int type, string text)
 	int t = mapTopEdge;
 	encKind = type;
 	if (type == 12) { Trace("PDM map: mutiny message"); }
-	encPlain = type == 5 || type == 11 || type == 12 || type == 33;
+	encPlain = type == 5 || type == 10 || type == 11 || type == 12 || type == 33;
 	encPay = 0;
 	if (type == 4 || type == 3)
 	{
@@ -400,6 +400,7 @@ void Enc_Command(string node)
 		Enc_Hide();
 		if (TownAuto == 38 && encKind == 11) { PostEvent("Map_AutoQuit", 500); }
 		if (TownAuto == 40 && encKind == 12) { PostEvent("Map_AutoQuit", 500); }
+		if (TownAuto == 42) { PostEvent("Map_AutoQuit", 500); }
 		return;
 	}
 	if (encPay > 0)
@@ -437,6 +438,7 @@ void Enc_Command(string node)
 	if (encPlain)
 	{
 		Trace("PDM map: message closed");
+		if (TownAuto == 42) { PostEvent("Map_AutoQuit", 500); }
 		Enc_Hide();
 		return;
 	}
