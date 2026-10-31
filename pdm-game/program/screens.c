@@ -837,6 +837,15 @@ void Screen_PrizeShip()
 	Screen_Text("S_RIG", "");
 	Screen_Text("EDITHULLPERCENT", Screen_HullPercent() + "%");
 	Screen_Text("EDITRIGPERCENT", Screen_RigPercent() + "%");
+	// the names in the plates (ours: the DLL fills them, with what is not found): the type of the ship of the hero
+	// on the left and in the middle, the type of the prize on the right
+	string heroId = Screen_ViewId();
+	if (CheckAttribute(PdmScreens, "ships." + heroId + ".name"))
+	{
+		Screen_Text("LB_CURRENTSHIP", PdmScreens.ships.(heroId).name);
+		Screen_Text("EDITCENTERSTYPE", PdmScreens.ships.(heroId).name);
+	}
+	if (prizeType != "" && CheckAttribute(PdmScreens, "ships." + prizeType + ".name")) { Screen_Text("LB_TARGETSHIP", PdmScreens.ships.(prizeType).name); }
 	if (prizeType != "")
 	{
 		Screen_Text("EDITHULLPERCENT1", "100%");

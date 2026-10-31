@@ -602,6 +602,13 @@ class Converter:
             # the rows of the original lie in rect_controls (87,98,626,406) in dark ink (rgb 8,8,8 of control#)
             x, y, w, h = (105 if key.lower() == "editcontrolsdesc" else 400), 108, 220, 290
             color = "255,8,8,8"
+        if key.lower() in ("lb_currentship", "lb_targetship", "editcenterstype"):
+            # the names on the yellow ribbons of ShipExchange: dark ink in the middle of the ribbon (ours, the
+            # original draws them with the DLL)
+            color = "255,8,8,8"
+            align = "center"
+            if key.lower() == "editcenterstype":
+                y += 6
         lines = [f"[{key.upper()}]", f"position = {x},{y},{x + w},{y + h}", f"font = {name}",
                  f"fontScale = {1 / FONT_OVERSAMPLE:.3f}", f"lineSpace = {round(self.fonts[name][2])}",
                  f"color = {color}", f"alignment = {align}"]
