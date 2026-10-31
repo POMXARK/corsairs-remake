@@ -894,6 +894,13 @@ class Converter:
             nodes.append(("PICTURE", "FACE"))
             lines += ["[FACE]", "position = 94,516,158,580", "textureName = interfaces\\pdm\\ourface.tga",
                       "textureRect = 0,0,1,1", ""]
+        if out_name == "keycontrols":
+            # the headings of the sections (key -1 of control#) in dark brown (ours: the gold of the original, rgb 229,187,76, is lost on the parchment), on the
+            # line of the column of the actions; the same window and line as EDITCONTROLSDESC
+            nodes.append(("FORMATEDTEXT", "EDITCONTROLSHEAD"))
+            lines += ["[EDITCONTROLSHEAD]", "position = 105,108,325,398", "font = pdm_logbook_italic_19",
+                      "fontScale = 0.667", f"lineSpace = {round(self.fonts['pdm_logbook_italic_19'][2])}",
+                      "color = 255,110,60,0", "alignment = left", ""]
         if section == "Options":
             n, l = self.options_volume()
             nodes += n

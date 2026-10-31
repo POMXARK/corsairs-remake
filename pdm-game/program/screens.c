@@ -194,13 +194,24 @@ void Screen_Controls()
 	if (controlsTop < 0) { controlsTop = 0; }
 	string desc = "";
 	string keys = "";
+	string head = "";
 	for (int i = controlsTop; i < count && i < controlsTop + CONTROLS_ROWS; i++)
 	{
 		string at = "c" + i;
-		desc = desc + PdmScreens.keycontrols.(at).text + "\n";
+		if (sti(PdmScreens.keycontrols.(at).head) == 1)
+		{
+			head = head + PdmScreens.keycontrols.(at).text + "\n";
+			desc = desc + "\n";
+		}
+		else
+		{
+			head = head + "\n";
+			desc = desc + PdmScreens.keycontrols.(at).text + "\n";
+		}
 		keys = keys + PdmScreens.keycontrols.(at).keys + "\n";
 	}
 	Screen_Text("EDITCONTROLSDESC", desc);
+	Screen_Text("EDITCONTROLSHEAD", head);
 	Screen_Text("EDITCONTROLSKEYS", keys);
 	Trace("PDM controls: lines " + count + ", top " + controlsTop);
 }
