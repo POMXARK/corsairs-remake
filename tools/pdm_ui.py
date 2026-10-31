@@ -883,6 +883,11 @@ class Converter:
                 lines += [f"[GUNROW{i}]", f"position = 60,{y},228,{y + 18}", "font = pdm_logbook_16", "fontScale = 0.667", "lineSpace = 18",
                           "color = 255,8,8,8", "alignment = left", "backColor = 96,255,196,0", "backOffset = 2,0,2,0", "wrapoff = 1", "bNotUse = 1", ""]
 
+        if chart:
+            # the date and the anchors go over the pictures of the frame (the items are drawn in the order of the list)
+            for name in ("EDITTIME", "EDITANCHOR"):
+                nodes.remove(("FORMATEDTEXT", name))
+                nodes.append(("FORMATEDTEXT", name))
         head = [f"; converted by tools/pdm_ui.py from [{section}] of INI/{self.ini_name} of the original"]
         head += notes and ["; the layout of the original for the scripts of the screen:"] + notes
         head += ["[MAIN]"] + [f"item = {kind},{name}" for kind, name in nodes]
@@ -890,6 +895,10 @@ class Converter:
             head.append("start = ISLANDS")
         elif names:
             head.append(f"start = {names[0]}")
+        if chart:
+            # the list of the anchors (mapparam.ini [Anchors]): rows to click, filled by map.c at anchor (ours: a list like the islands)
+            at = lines.index("[EDITANCHOR]")
+            lines[at + 1:at + 1] = ["command = activate", "command = click", "wrapoff = 1", "backColor = 96,255,196,0", "backOffset = 2,0,2,0"]
         out = self.resource / f"ini/interfaces/{out_name}.ini"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text("\n".join(head + [""] + lines), encoding="utf-8")

@@ -51,6 +51,12 @@ float mapAY = 0.0;
 float gameHours = 3905.0;
 #define MAP_HOURS_PER_TICK 1.48
 string mapDateShown = "";
+// the anchor (mapparam.ini [Anchors]): the game hour it lasts to; -1 none; mapAnchorMeet - until an encounter (anchor -3)
+float mapAnchorTo = -1.0;
+bool mapAnchorMeet = false;
+bool mapAnchorListed = false;
+#define MAP_SUNRISE 6
+#define MAP_SUNSET 18
 string mapTarget = "";
 string mapFrom = "";
 bool mapActive = false;
@@ -102,9 +108,12 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	mapFrom = fromIsland;
 	mapTarget = "";
 	encShown = false;
+	mapAnchorTo = -1.0;
+	mapAnchorMeet = false;
+	mapAnchorListed = false;
 	encAcc = 0;
 	DeleteAttribute(&MapEncText, "");
-	if (TownAuto >= 24) { encForce = 1; }
+	if (TownAuto >= 24 && TownAuto < 27) { encForce = 1; }
 	if (fromIsland != "" && CheckAttribute(&PdmIslands, fromIsland + ".map_cell"))
 	{
 		mapX = atX;
@@ -121,10 +130,12 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	SetEventHandler("Map_Arrive", "Map_Arrive", 0);
 	SetEventHandler("Map_Exit", "Map_Exit", 0);
 	SetEventHandler("Map_AutoSail", "Map_AutoSail", 0);
+	SetEventHandler("Map_AutoAnchor", "Map_AutoAnchor", 0);
 	SetEventHandler("Enc_Auto", "Enc_Auto", 0);
 	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\mainmap.ini");
 	Map_Layout();
 	Map_FillIslands();
+	Map_FillAnchors();
 	Map_FogReplay();
 	Map_Fog();
 	Map_View();
@@ -134,6 +145,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	PostEvent("Map_Tick", MAP_TICK_MS);
 	Trace("PDM map: from " + fromIsland + " at " + mapX + ", " + mapY);
 	if (TownAuto == 6) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
+	if (TownAuto == 27) { PostEvent("Map_AutoAnchor", MAP_AUTO_MS); }
 }
 
 // the islands of islands_x.idf with a model at sea; the dead towns (Highrock_) stand on the living ones
@@ -214,6 +226,7 @@ void Map_Layout()
 	// -1: the position message of every node (inode.cpp), the rects of mainmap.ini moved right
 	int dx = 2 * edge;
 	Map_MoveNode("ISLANDS", 650 + dx, 125, 758 + dx, 386);
+	Map_MoveNode("EDITTIME", 650 + dx, 515, 762 + dx, 585);
 	Map_MoveNode("LB_EXIT", 657 + dx, 34, 771 + dx, 75);
 	Map_MoveNode("LB_ISLANDUP", 763 + dx, 123, 784 + dx, 141);
 	Map_MoveNode("LB_ISLANDDOWN", 763 + dx, 370, 784 + dx, 388);
@@ -378,11 +391,52 @@ string Map_DateText(bool withTime)
 	return text;
 }
 
+// the rows of the anchors (the six of [Anchors]) while the ship stands, nothing while it sails or waits at anchor
+void Map_ShowAnchors()
+{
+	bool want = false;
+	if (mapTarget == "" && mapAnchorTo < 0.0 && mapAnchorMeet == false && encShown == false) { want = true; }
+	if (want == mapAnchorListed) { return; }
+	mapAnchorListed = want;
+	if (!want) { Map_MoveNode("EDITANCHOR", 0, 0, 0, 0); return; }
+	Map_MoveNode("EDITANCHOR", 650 + 2 * mapEdge, 428, 778 + 2 * mapEdge, 512);
+}
+
+// the six rows of the list of anchors, once: the node is moved in and out of sight
+void Map_FillAnchors()
+{
+	string keys = "Untilsunrise,Untilsunset,Oneday,Twodays,Threedays,Untilencounter";
+	int from = 0;
+	int to;
+	for (int i = 0; i < 6; i++)
+	{
+		to = findSubStr(keys, ",", from);
+		if (to < 0) { to = strlen(keys); }
+		string name = Enc_Text("Mapparam" + strcut(keys, from, to - 1));
+		SendMessage(&GameInterface, "lsle", MSG_INTERFACE_MSG_TO_NODE, "EDITANCHOR", 0, &name);
+		from = to + 1;
+	}
+}
+
+// the anchor n of the list: the hours it lasts to (days of 24 h; sunrise and sunset at 6 and 18 are ours, not measured)
+void Map_Anchor(int n)
+{
+	if (mapTarget != "" || mapAnchorTo >= 0.0 || mapAnchorMeet) { return; }
+	int hour = makeint(gameHours) % 24;
+	float day0 = gameHours - hour;
+	if (n == 0) { mapAnchorTo = day0 + MAP_SUNRISE; if (hour >= MAP_SUNRISE) { mapAnchorTo = mapAnchorTo + 24.0; } }
+	if (n == 1) { mapAnchorTo = day0 + MAP_SUNSET; if (hour >= MAP_SUNSET) { mapAnchorTo = mapAnchorTo + 24.0; } }
+	if (n >= 2 && n <= 4) { mapAnchorTo = gameHours + 24.0 * (n - 1); }
+	if (n == 5) { mapAnchorMeet = true; }
+	Trace("PDM map anchor: " + n);
+	Map_ShowAnchors();
+}
+
 void Map_ShowDate()
 {
 	// on the way only the date, at anchor the time as well (the clock is hidden while the ship sails)
 	string text = Map_DateText(mapTarget == "");
-	Screen_Text("EDITTIME", text);
+	Enc_SetText("EDITTIME", text);
 	if (text != mapDateShown) { mapDateShown = text; Trace("PDM map date: " + text); }
 }
 
@@ -390,7 +444,7 @@ void Map_Tick()
 {
 	if (!mapActive) { return; }
 	// the window of an encounter stops the ship until it is answered (encounter.c)
-	if (encShown) { PostEvent("Map_Tick", MAP_TICK_MS); return; }
+	if (encShown) { mapAnchorTo = -1.0; mapAnchorMeet = false; Map_ShowAnchors(); PostEvent("Map_Tick", MAP_TICK_MS); return; }
 	if (encForce == 1) { Enc_Tick(MAP_TICK_MS); }
 	if (mapTarget != "")
 	{
@@ -421,6 +475,19 @@ void Map_Tick()
 		gameHours = gameHours + MAP_HOURS_PER_TICK;
 		Enc_Tick(MAP_TICK_MS);
 	}
+	else if (mapAnchorTo >= 0.0 || mapAnchorMeet)
+	{
+		// the time runs at anchor as on the way, the sails of the sea can meet the ship
+		gameHours = gameHours + MAP_HOURS_PER_TICK;
+		if (mapAnchorTo >= 0.0 && gameHours >= mapAnchorTo)
+		{
+			gameHours = mapAnchorTo;
+			mapAnchorTo = -1.0;
+			Trace("PDM map anchor: weighed");
+		}
+		else { Enc_Tick(MAP_TICK_MS); }
+	}
+	Map_ShowAnchors();
 	Map_ShowDate();
 	PostEvent("Map_Tick", MAP_TICK_MS);
 }
@@ -430,6 +497,7 @@ void Map_Activate()
 	string node = GetEventData();
 	int index = GetEventData();
 	if (node == "ISLANDS") { Map_SailTo(index); }
+	if (node == "EDITANCHOR") { Map_Anchor(index); }
 }
 
 void Map_Command()
@@ -482,6 +550,7 @@ void Map_Release()
 	DelEventHandler("Map_Arrive", "Map_Arrive");
 	DelEventHandler("Map_Exit", "Map_Exit");
 	DelEventHandler("Map_AutoSail", "Map_AutoSail");
+	DelEventHandler("Map_AutoAnchor", "Map_AutoAnchor");
 	DelEventHandler("Enc_Auto", "Enc_Auto");
 	SendMessage(&GameInterface, "l", MSG_INTERFACE_RELEASE);
 	DeleteClass(&GameInterface);
@@ -517,6 +586,13 @@ void Map_Exit()
 }
 
 // clicks the island on the map the way the player does: mousepos is where it is on the window
+// TOWN_AUTO=27: the second anchor of the list ("until sunset"), then "on a day"
+void Map_AutoAnchor()
+{
+	if (mapAnchorTo < 0.0 && !mapAnchorMeet) { Map_Anchor(2); }
+	else { PostEvent("Map_AutoAnchor", MAP_AUTO_MS); }
+}
+
 void Map_AutoSail()
 {
 	string to = "Highrock";
