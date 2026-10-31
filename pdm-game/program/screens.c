@@ -1348,6 +1348,8 @@ void Screen_StatusAuto()
 	else if (strcut(b, 0, 0) == "@")
 	{
 		screenNext = strcut(b, 1, strlen(b) - 1);
+		// the overview opens the board without a question: the text of the refusal "not enough crew" stands on it
+		if (screenNext == "messagebox_ransack") { screenMessage = PdmScreens.shipexchange.t.crew; }
 		screenGoing = true;
 		PostEvent("Screen_Go", 0);
 	}
