@@ -29,6 +29,7 @@
 
 int encAcc = 0;
 bool encShown = false;
+int encPay = 0;         // the sum the window of the pay (message 6) asks, 0 for the other windows
 bool encPlain = false; // the window only says something: "OK" closes it, no battle
 // the type of the message (Mapparammessage<n>), the nation and the pattern met
 int encType = -1;
@@ -223,6 +224,7 @@ void Enc_Show(int type, string text)
 	int e = mapEdge;
 	int t = mapTopEdge;
 	encPlain = type == 5;
+	encPay = 0;
 	if (type == 4 || type == 3)
 	{
 		// the attack: as the attack of pirates the text of the count and the nation too, the original puts it into MapMessageAttack
@@ -279,6 +281,20 @@ void Enc_Hide()
 void Enc_Command(string node)
 {
 	if (!encShown) { return; }
+	if (encPay > 0)
+	{
+		if (node == "LB_YES")
+		{
+			int pay = encPay;
+			if (pay > sti(PlayerCard.money)) { pay = sti(PlayerCard.money); }
+			PlayerCard.money = sti(PlayerCard.money) - pay;
+			Trace("PDM map: paid " + pay);
+		}
+		else { Trace("PDM map: not paid"); }
+		Enc_Hide();
+		if (TownAuto == 28) { PostEvent("Map_AutoQuit", 500); }
+		return;
+	}
 	if (node == "LB_NO")
 	{
 		Trace("PDM encounter: ignored");

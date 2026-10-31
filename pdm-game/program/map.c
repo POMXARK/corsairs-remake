@@ -74,6 +74,8 @@ float mapTop = 0.0;
 int mapIslandCount = 0;
 // the keys of PdmIslands in the order of the list
 object MapIslands;
+bool mapNote;           // the note "якорь брошен" is up (it needs no answer, the ship stands)
+int mapPayMonth = -1;   // the month the crew was last asked to be paid in
 string mapLastIsland;
 object MapList;
 int mapListCount = 0;
@@ -110,6 +112,9 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	Menu_InterfaceKeys();
 	mapFrom = fromIsland;
 	mapLastIsland = fromIsland;
+	mapPayMonth = -1;
+	// the test of the pay (28) starts a few hours before the end of June
+	if (TownAuto == 28) { gameHours = 3905.0 + 400.0; PlayerCard.money = 1000; }
 	mapTarget = "";
 	encShown = false;
 	mapAnchorTo = -1.0;
@@ -134,6 +139,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	SetEventHandler("Map_Arrive", "Map_Arrive", 0);
 	SetEventHandler("Map_Exit", "Map_Exit", 0);
 	SetEventHandler("Map_AutoSail", "Map_AutoSail", 0);
+	SetEventHandler("Map_AutoQuit", "Map_AutoQuit", 0);
 	SetEventHandler("Map_AutoAnchor", "Map_AutoAnchor", 0);
 	SetEventHandler("Enc_Auto", "Enc_Auto", 0);
 	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\mainmap.ini");
@@ -148,7 +154,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	mapActive = true;
 	PostEvent("Map_Tick", MAP_TICK_MS);
 	Trace("PDM map: from " + fromIsland + " at " + mapX + ", " + mapY);
-	if (TownAuto == 6) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
+	if (TownAuto == 6 || TownAuto == 28) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
 	if (TownAuto == 27) { PostEvent("Map_AutoAnchor", MAP_AUTO_MS); }
 }
 
@@ -437,6 +443,49 @@ int Map_MonthDays(int mon)
 	return 31;
 }
 
+int Map_MonthIndex()
+{
+	int day = (makeint(gameHours) / 24) % 365;
+	int mon = 0;
+	while (day >= Map_MonthDays(mon)) { day = day - Map_MonthDays(mon); mon++; }
+	return mon;
+}
+
+// the note without buttons (message 7 of MAP.dll): stays while the ship is at anchor, goes with weighing it
+void Map_Note(string text)
+{
+	int e = mapEdge;
+	int t = mapTopEdge;
+	Enc_Node("MSGSCROLL", ENC_SCROLL_L + e, ENC_SCROLL_T + t, ENC_SCROLL_R + e, ENC_SCROLL_B + t);
+	Enc_Node("EDITMESSAGES", 240 + e, 190 + t, 550 + e, 340 + t);
+	Enc_SetText("EDITMESSAGES", text);
+	mapNote = true;
+}
+
+void Map_NoteHide()
+{
+	if (!mapNote) { return; }
+	mapNote = false;
+	Enc_Node("MSGSCROLL", 0, 0, 0, 0);
+	Enc_Node("EDITMESSAGES", 0, 0, 0, 0);
+	Trace("PDM map: note hidden");
+}
+
+// the end of the month: the crew wants its pay (message 6; ours: 5 per man of the crew, MAP.dll sums it up from fields not decoded)
+void Map_Pay()
+{
+	int mon = Map_MonthIndex();
+	if (mapPayMonth < 0) { mapPayMonth = mon; return; }
+	if (mon == mapPayMonth) { return; }
+	mapPayMonth = mon;
+	int sum = Pdm_Count(&PlayerShipCard, "crew") * 5;
+	if (sum <= 0 || encShown) { return; }
+	Map_NoteHide();
+	Trace("PDM map: pay " + sum);
+	Enc_Show(6, Enc_Format(Enc_Text("Mapparammessage6"), "" + sum));
+	encPay = sum;
+}
+
 string Map_DateText(bool withTime)
 {
 	int total = makeint(gameHours);
@@ -501,6 +550,7 @@ void Map_Anchor(int n)
 	if (n == 5) { mapAnchorMeet = true; }
 	Trace("PDM map anchor: " + n);
 	Map_ShowAnchors();
+	Map_Note(Enc_Text("Mapparammessage7"));
 }
 
 void Map_ShowDate()
@@ -515,7 +565,7 @@ void Map_Tick()
 {
 	if (!mapActive) { return; }
 	// the window of an encounter stops the ship until it is answered (encounter.c)
-	if (encShown) { mapAnchorTo = -1.0; mapAnchorMeet = false; Map_ShowAnchors(); PostEvent("Map_Tick", MAP_TICK_MS); return; }
+	if (encShown) { mapAnchorTo = -1.0; mapAnchorMeet = false; mapNote = false; Map_ShowAnchors(); PostEvent("Map_Tick", MAP_TICK_MS); return; }
 	if (encForce == 1) { Enc_Tick(MAP_TICK_MS); }
 	if (mapTarget != "")
 	{
@@ -545,7 +595,7 @@ void Map_Tick()
 		Map_View();
 		gameHours = gameHours + MAP_HOURS_PER_TICK;
 		// the map tests (6) sail without the random sails of the sea: the window of one would hide what they check
-		if (TownAuto != 6) { Enc_Tick(MAP_TICK_MS); }
+		if (TownAuto != 6 && TownAuto != 28) { Enc_Tick(MAP_TICK_MS); }
 	}
 	else if (mapAnchorTo >= 0.0 || mapAnchorMeet)
 	{
@@ -555,10 +605,13 @@ void Map_Tick()
 		{
 			gameHours = mapAnchorTo;
 			mapAnchorTo = -1.0;
+			Map_NoteHide();
 			Trace("PDM map anchor: weighed");
+			if (TownAuto == 27) { PostEvent("Map_AutoQuit", 500); }
 		}
 		else { Enc_Tick(MAP_TICK_MS); }
 	}
+	Map_Pay();
 	Map_ShowAnchors();
 	Map_ShowDate();
 	PostEvent("Map_Tick", MAP_TICK_MS);
@@ -622,6 +675,7 @@ void Map_Release()
 	DelEventHandler("Map_Arrive", "Map_Arrive");
 	DelEventHandler("Map_Exit", "Map_Exit");
 	DelEventHandler("Map_AutoSail", "Map_AutoSail");
+	DelEventHandler("Map_AutoQuit", "Map_AutoQuit");
 	DelEventHandler("Map_AutoAnchor", "Map_AutoAnchor");
 	DelEventHandler("Enc_Auto", "Enc_Auto");
 	SendMessage(&GameInterface, "l", MSG_INTERFACE_RELEASE);
@@ -663,6 +717,13 @@ void Map_AutoAnchor()
 {
 	if (mapAnchorTo < 0.0 && !mapAnchorMeet) { Map_Anchor(2); }
 	else { PostEvent("Map_AutoAnchor", MAP_AUTO_MS); }
+}
+
+// the tests 27 and 28 have said what they check: the game ends, so that the run does not wait for the timeout
+void Map_AutoQuit()
+{
+	Battle_Release();
+	ExitProgram();
 }
 
 void Map_AutoSail()
