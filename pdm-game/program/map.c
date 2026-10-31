@@ -74,6 +74,7 @@ float mapTop = 0.0;
 int mapIslandCount = 0;
 // the keys of PdmIslands in the order of the list
 object MapIslands;
+string mapLastIsland;
 object MapList;
 int mapListCount = 0;
 // The fog of MAP.dll: the closed chart (map_close.tga, fogTexture of MAP) covers the map, and the stamps of
@@ -108,6 +109,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 {
 	Menu_InterfaceKeys();
 	mapFrom = fromIsland;
+	mapLastIsland = fromIsland;
 	mapTarget = "";
 	encShown = false;
 	mapAnchorTo = -1.0;
@@ -371,6 +373,43 @@ void Map_Fog()
 		Map_ListAdd(key);
 		Trace("PDM map: fog, " + key + " found");
 	}
+	Map_Land(cx, cy);
+}
+
+// the island in the cells round the ship changed: "Земля!" with the name and the flag of it (message 8 of MAP.dll, the sound mapisland)
+// the nearest island of the 3x3 cells; the nations of the islands go as the flags of the ships (0 England, 1 pirates, 2 France, 3 Spain, 4 Libertalia), -1 none
+void Map_Land(int cx, int cy)
+{
+	string near = "";
+	int best = 100;
+	string key;
+	string at;
+	for (int i = 0; i < mapIslandCount; i++)
+	{
+		at = "i" + i;
+		key = MapIslands.(at);
+		int dx = abs(makeint(Map_IslandX(key) / MAP_FOG_CELL) - cx);
+		int dy = abs(makeint(Map_IslandY(key) / MAP_FOG_CELL) - cy);
+		if (dx > 1 || dy > 1) { continue; }
+		if (dx + dy < best) { best = dx + dy; near = key; }
+	}
+	if (near == mapLastIsland) { return; }
+	mapLastIsland = near;
+	if (near == "" || encShown) { return; }
+	int nation = sti(PdmIslands.(near).nation);
+	string name = PdmIslands.(near).label;
+	string text = Enc_Format(Enc_Text("MapparamIslandNoNation"), name);
+	if (nation >= 0)
+	{
+		string nations = "mapEngland";
+		if (nation == 1) { nations = "mapPirate"; }
+		if (nation == 2) { nations = "mapFrance"; }
+		if (nation == 3) { nations = "mapSpain"; }
+		if (nation == 4) { nations = "mapAmerica"; }
+		text = Enc_Format(Enc_Format(Enc_Text("Mapparammessage8"), name), Enc_Text(nations));
+	}
+	Trace("PDM map: land " + near + " (" + text + ")");
+	Enc_Show(5, text);
 }
 
 // the island stamp on the island (ours: at its middle, MAP.dll puts it at the middle of its cell)
@@ -505,7 +544,8 @@ void Map_Tick()
 		Map_Fog();
 		Map_View();
 		gameHours = gameHours + MAP_HOURS_PER_TICK;
-		Enc_Tick(MAP_TICK_MS);
+		// the map tests (6) sail without the random sails of the sea: the window of one would hide what they check
+		if (TownAuto != 6) { Enc_Tick(MAP_TICK_MS); }
 	}
 	else if (mapAnchorTo >= 0.0 || mapAnchorMeet)
 	{

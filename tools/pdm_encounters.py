@@ -18,7 +18,7 @@ from pathlib import Path
 
 NATIONS = ["England", "Pirate", "France", "Spain"]
 TEXT_KEYS = re.compile(r"^(months|Mapparammessage\d+|MapMessageShips|MapMessageAttack|MapMessageWAR|t_MapFleet|attack\d+|mapships_\d+|"
-                       r"pattern\d+|map(English|Pirates|French|Spanish)1?|MapparamIslandNoNation|Mapparam(Untilsunrise|Untilsunset|Oneday|Twodays|Threedays|Untilencounter)|lbMapOK|lbMapEngage|lbMapIgnore)$")
+                       r"pattern\d+|map(English|Pirates|French|Spanish)1?|MapparamIslandNoNation|mapEngland|mapPirate|mapFrance|mapSpain|Mapparam(Untilsunrise|Untilsunset|Oneday|Twodays|Threedays|Untilencounter)|lbMapOK|lbMapEngage|lbMapIgnore)$")
 
 
 def find(game: Path, *parts):

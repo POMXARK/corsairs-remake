@@ -29,6 +29,7 @@
 
 int encAcc = 0;
 bool encShown = false;
+bool encPlain = false; // the window only says something: "OK" closes it, no battle
 // the type of the message (Mapparammessage<n>), the nation and the pattern met
 int encType = -1;
 int encNation = ENC_PIRATE;
@@ -221,6 +222,7 @@ void Enc_Show(int type, string text)
 	encShown = true;
 	int e = mapEdge;
 	int t = mapTopEdge;
+	encPlain = type == 5;
 	if (type == 4 || type == 3)
 	{
 		// the attack: as the attack of pirates the text of the count and the nation too, the original puts it into MapMessageAttack
@@ -232,7 +234,7 @@ void Enc_Show(int type, string text)
 	Enc_Node("MSGSCROLL", ENC_SCROLL_L + e, ENC_SCROLL_T + t, ENC_SCROLL_R + e, ENC_SCROLL_B + t);
 	Enc_Node("EDITMESSAGES", 240 + e, 190 + t, 550 + e, 340 + t);
 	Enc_SetText("EDITMESSAGES", text);
-	if (type == 3 || type == 4)
+	if (type == 3 || type == 4 || type == 5)
 	{
 		Enc_Node("LB_OK", 350 + e, 371 + t, 450 + e, 401 + t);
 	}
@@ -280,6 +282,12 @@ void Enc_Command(string node)
 	if (node == "LB_NO")
 	{
 		Trace("PDM encounter: ignored");
+		Enc_Hide();
+		return;
+	}
+	if (encPlain)
+	{
+		Trace("PDM map: message closed");
 		Enc_Hide();
 		return;
 	}
