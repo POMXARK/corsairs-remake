@@ -181,3 +181,6 @@ MAP.dll только показывает дату на карте: узел `Ma
 
 ## Уход от погони (SQUAD_CONTROL.dll)
 Команда `sea_map` (меню команд, пункт 0) недоступна при бите 1 флагов корабля героя (`+0x94`), см. `ref/pdm-decomp/SQUAD_CONTROL.dll.c` ~4270–4320 и ~3113. Кто ставит бит — не найдено; `min_distance_to_enemy` (NAVIGATOR.dll.strings.txt, 0x100156ec) в коде по имени не нашлась. Тупик.
+
+## Курсор и прокрутка карты (MAP.dll, `map.ini`)
+Курсоры краёв — `IMAGES/MAP/cursor0..7.tga`, обычный — `IMAGES/cursor.tga`; зона 10 px, 8 направлений, скорость dt/10 px/кадр. Сведения из кода MAP.dll и `map.ini`. В xinterface курсор — глобальная строка `MousePointer` в `interfaces.ini`; мышь виртуальная и двигается относительными смещениями (абсолютный `xdotool mousemove` позицию в игре не меняет — для проверки `xdotool mousemove_relative -- -1500 0`). Процесс игры при `live.sh` называется `engine-1`: `pkill -x engine-1`.

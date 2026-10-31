@@ -71,6 +71,13 @@ int mapTopEdge = 0;
 // the left top of the map picture in the window (Map_View)
 float mapLeft = 0.0;
 float mapTop = 0.0;
+// the player has scrolled the map with the mouse at the edge of the window: the view stays where it was put and does not follow the ship
+bool mapManual = false;
+// the cursor of the screen: 0 the flame arrow, 1..8 the arrows of the edges (up, up-right, ... up-left); -1 not set yet
+int mapPointer = -1;
+#define MSG_INTERFACE_SET_MOUSE_POINTER 45063
+#define MAP_EDGE_PX 10
+#define MAP_SCROLL_PX 4
 int mapIslandCount = 0;
 // the keys of PdmIslands in the order of the list
 object MapIslands;
@@ -140,6 +147,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	SetEventHandler("Map_Exit", "Map_Exit", 0);
 	SetEventHandler("Map_AutoSail", "Map_AutoSail", 0);
 	SetEventHandler("Map_AutoQuit", "Map_AutoQuit", 0);
+	SetEventHandler("Map_AutoScroll", "Map_AutoScroll", 0);
 	SetEventHandler("Map_AutoAnchor", "Map_AutoAnchor", 0);
 	SetEventHandler("Enc_Auto", "Enc_Auto", 0);
 	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\mainmap.ini");
@@ -148,6 +156,9 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	Map_FillAnchors();
 	Map_FogReplay();
 	Map_Fog();
+	mapManual = false;
+	mapPointer = -1;
+	Map_Pointer(0);
 	Map_View();
 	Sound_StopLocation();
 	Sound_Music("map");
@@ -156,6 +167,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	Trace("PDM map: from " + fromIsland + " at " + mapX + ", " + mapY);
 	if (TownAuto == 6 || TownAuto == 28) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
 	if (TownAuto == 27) { PostEvent("Map_AutoAnchor", MAP_AUTO_MS); }
+	if (TownAuto == 30) { PostEvent("Map_AutoScroll", MAP_AUTO_MS); }
 }
 
 // the islands of islands_x.idf with a model at sea; the dead towns (Highrock_) stand on the living ones
@@ -301,6 +313,7 @@ void Map_View()
 {
 	float left = mapX - mapViewW / 2;
 	float top = mapY - mapViewH / 2;
+	if (mapManual) { left = mapLeft; top = mapTop; }
 	if (left > MAP_W - mapViewW) { left = MAP_W - mapViewW; }
 	if (top > MAP_H - mapViewH) { top = MAP_H - mapViewH; }
 	if (left < 0.0) { left = 0.0; }
@@ -312,7 +325,10 @@ void Map_View()
 	// an int takes a float rounded down
 	int x = mapViewX + mapX - left - MAP_SHIP_W / 2;
 	int y = mapViewY + mapY - top - MAP_SHIP_H / 2;
-	SendMessage(&GameInterface, "lslllll", MSG_INTERFACE_MSG_TO_NODE, "SHIP", 0, x, y, x + MAP_SHIP_W, y + MAP_SHIP_H);
+	// a ship out of the window (the view is scrolled away from it) is not drawn over the frame
+	if (x < mapViewX || y < mapViewY || x + MAP_SHIP_W > mapViewX + mapViewW || y + MAP_SHIP_H > mapViewY + mapViewH) { x = 0; y = 0; }
+	if (x == 0 && y == 0) { SendMessage(&GameInterface, "lslllll", MSG_INTERFACE_MSG_TO_NODE, "SHIP", 0, 0, 0, 0, 0); }
+	else { SendMessage(&GameInterface, "lslllll", MSG_INTERFACE_MSG_TO_NODE, "SHIP", 0, x, y, x + MAP_SHIP_W, y + MAP_SHIP_H); }
 	// the picture faces right: sailing west it is mirrored
 	if (mapTarget != "" && mapToX < mapX)
 	{
@@ -432,6 +448,8 @@ void Map_SailTo(int index)
 	if (index < 0 || index >= mapListCount || !mapActive) { return; }
 	string at = "l" + index;
 	mapTarget = MapList.(at);
+	// a voyage is followed by the view again
+	mapManual = false;
 	mapToX = Map_IslandX(mapTarget);
 	mapToY = Map_IslandY(mapTarget);
 	Trace("PDM map: sail to " + mapTarget + " at " + mapToX + ", " + mapToY);
@@ -562,9 +580,93 @@ void Map_ShowDate()
 	if (text != mapDateShown) { mapDateShown = text; Trace("PDM map date: " + text); }
 }
 
+// the cursor of the map (MAP.dll): the flame arrow, and at the edge of the window, 10 px wide, an arrow to the side the map goes
+void Map_Pointer(int dir)
+{
+	if (dir == mapPointer) { return; }
+	mapPointer = dir;
+	Trace("PDM map: pointer " + dir);
+	string name = "map";
+	if (dir > 0) { name = "map" + (dir - 1); }
+	if (!CheckAttribute(&PdmScreens, "pointer." + name)) { return; }
+	string line = PdmScreens.pointer.(name);
+	SendMessage(&GameInterface, "ls", MSG_INTERFACE_SET_MOUSE_POINTER, line);
+}
+
+// the side of the edge the mouse is at: 1 up, 2 up-right, 3 right, 4 down-right, 5 down, 6 down-left, 7 left, 8 up-left, 0 none
+// (MAP.dll, the same numbers; the window of the interface in its coordinates)
+int Map_EdgeDir(float mx, float my)
+{
+	float w = 800 + 2 * mapEdge;
+	float h = 600 + 2 * mapTopEdge;
+	int dx = 0;
+	int dy = 0;
+	if (mx < MAP_EDGE_PX) { dx = -1; }
+	if (mx > w - MAP_EDGE_PX) { dx = 1; }
+	if (my < MAP_EDGE_PX) { dy = -1; }
+	if (my > h - MAP_EDGE_PX) { dy = 1; }
+	if (dx == 0 && dy == -1) { return 1; }
+	if (dx == 1 && dy == -1) { return 2; }
+	if (dx == 1 && dy == 0) { return 3; }
+	if (dx == 1 && dy == 1) { return 4; }
+	if (dx == 0 && dy == 1) { return 5; }
+	if (dx == -1 && dy == 1) { return 6; }
+	if (dx == -1 && dy == 0) { return 7; }
+	if (dx == -1 && dy == -1) { return 8; }
+	return 0;
+}
+
+// the mouse at the edge of the window scrolls the map, MAP_SCROLL_PX per tick (the original: 1 px per 10 ms), up to its edges
+void Map_Scroll()
+{
+	if (!CheckAttribute(&GameInterface, "mousepos.x")) { return; }
+	int dir = Map_EdgeDir(stf(GameInterface.mousepos.x), stf(GameInterface.mousepos.y));
+	Map_Pointer(dir);
+	Map_ScrollDir(dir);
+}
+
+void Map_ScrollDir(int dir)
+{
+	if (dir == 0) { return; }
+	float dx = 0.0;
+	float dy = 0.0;
+	if (dir == 2 || dir == 3 || dir == 4) { dx = MAP_SCROLL_PX; }
+	if (dir == 6 || dir == 7 || dir == 8) { dx = -MAP_SCROLL_PX; }
+	if (dir == 1 || dir == 2 || dir == 8) { dy = -MAP_SCROLL_PX; }
+	if (dir == 4 || dir == 5 || dir == 6) { dy = MAP_SCROLL_PX; }
+	float left = mapLeft + dx;
+	float top = mapTop + dy;
+	if (left > MAP_W - mapViewW) { left = MAP_W - mapViewW; }
+	if (top > MAP_H - mapViewH) { top = MAP_H - mapViewH; }
+	if (left < 0.0) { left = 0.0; }
+	if (top < 0.0) { top = 0.0; }
+	if (left == mapLeft && top == mapTop) { return; }
+	mapManual = true;
+	mapLeft = left;
+	mapTop = top;
+	Map_View();
+}
+
+// the test of the scroll: the mouse cannot be moved by the script, so the edge is given directly (the left edge, then the upper one)
+int mapAutoScrolls = 0;
+void Map_AutoScroll()
+{
+	if (!mapActive) { return; }
+	float l0 = mapLeft;
+	float t0 = mapTop;
+	Map_Pointer(7);
+	Map_ScrollDir(7);
+	Map_ScrollDir(1);
+	mapAutoScrolls++;
+	if (mapAutoScrolls < 40) { PostEvent("Map_AutoScroll", MAP_TICK_MS); return; }
+	Trace("PDM map: scrolled " + (mapLeft - l0) + " " + (mapTop - t0) + " manual " + mapManual);
+	PostEvent("Map_AutoQuit", 1500);
+}
+
 void Map_Tick()
 {
 	if (!mapActive) { return; }
+	if (!encShown) { Map_Scroll(); }
 	// the window of an encounter stops the ship until it is answered (encounter.c)
 	if (encShown) { mapAnchorTo = -1.0; mapAnchorMeet = false; mapNote = false; Map_ShowAnchors(); PostEvent("Map_Tick", MAP_TICK_MS); return; }
 	if (encForce == 1) { Enc_Tick(MAP_TICK_MS); }
@@ -677,6 +779,7 @@ void Map_Release()
 	DelEventHandler("Map_Exit", "Map_Exit");
 	DelEventHandler("Map_AutoSail", "Map_AutoSail");
 	DelEventHandler("Map_AutoQuit", "Map_AutoQuit");
+	DelEventHandler("Map_AutoScroll", "Map_AutoScroll");
 	DelEventHandler("Map_AutoAnchor", "Map_AutoAnchor");
 	DelEventHandler("Enc_Auto", "Enc_Auto");
 	SendMessage(&GameInterface, "l", MSG_INTERFACE_RELEASE);
