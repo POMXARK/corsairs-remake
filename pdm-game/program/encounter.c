@@ -129,6 +129,26 @@ float Enc_Closeness(float x, float y)
 }
 
 // a tick of the sail: ms since the last one
+// does the crew rise: on the step of the map (reputation below -30: 1 in (|rep|-30)*6), at the weekly reminder in debt
+// (|rep|-1 tries of 1 in 100, TryBunt 0x10008c40); TOWN_AUTO=40 makes it sure; the mutiny itself (BuntR1) is not made
+bool Enc_Bunt(bool weekly)
+{
+	if (TownAuto == 40) { return true; }
+	int rep = Pdm_Count(PlayerCard, "reputation");
+	if (rep < -35) { rep = -35; }
+	if (weekly)
+	{
+		for (int i = 1; i < 0 - rep; i++)
+		{
+			if (rand(99) == 50) { return true; }
+		}
+		return false;
+	}
+	if (rep >= -30) { return false; }
+	int n = (0 - rep - 30) * 6;
+	return rand(n - 1) == n / 2;
+}
+
 void Enc_Tick(int ms)
 {
 	if (encShown) { return; }
@@ -143,6 +163,13 @@ void Enc_Tick(int ms)
 		encAcc = makeint(limit) + 1;
 	}
 	if (encAcc < limit) { return; }
+	// the crew with a bad captain mutinies instead of the meeting (the check of 0x10008b50 at the step of the map)
+	if (Enc_Bunt(false))
+	{
+		encAcc = 0;
+		Enc_Show(12, Enc_Text("MapMessageBunt"));
+		return;
+	}
 	int col = makeint(x);
 	int row = makeint(y);
 	// the layers with a pattern in this cell: the four nations and the island
@@ -300,6 +327,7 @@ void Enc_Show(int type, string text)
 	int e = mapEdge;
 	int t = mapTopEdge;
 	encKind = type;
+	if (type == 12) { Trace("PDM map: mutiny message"); }
 	encPlain = type == 5 || type == 11 || type == 12 || type == 33;
 	encPay = 0;
 	if (type == 4 || type == 3)
@@ -371,6 +399,7 @@ void Enc_Command(string node)
 	{
 		Enc_Hide();
 		if (TownAuto == 38 && encKind == 11) { PostEvent("Map_AutoQuit", 500); }
+		if (TownAuto == 40 && encKind == 12) { PostEvent("Map_AutoQuit", 500); }
 		return;
 	}
 	if (encPay > 0)

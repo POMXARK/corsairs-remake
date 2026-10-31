@@ -135,6 +135,8 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	// the test of the debt (38): no gold at the end of the month; of the weekly pay (39): in debt, gold enough
 	if (TownAuto == 38) { gameHours = 3905.0 + 400.0; PlayerCard.money = 10; }
 	if (TownAuto == 39) { PlayerCard.money = 1000; mapDebt = true; }
+	// the test of the mutiny (40): a hated captain, the step of the map ends in the message
+	if (TownAuto == 40) { PlayerCard.reputation = -35; encForce = 1; }
 	mapTarget = "";
 	encShown = false;
 	mapAnchorTo = -1.0;
@@ -185,7 +187,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	mapActive = true;
 	PostEvent("Map_Tick", MAP_TICK_MS);
 	Trace("PDM map: from " + fromIsland + " at " + mapX + ", " + mapY);
-	if (TownAuto == 6 || TownAuto == 28 || TownAuto == 37 || TownAuto == 38 || TownAuto == 39) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
+	if (TownAuto == 6 || TownAuto == 28 || TownAuto == 37 || TownAuto == 38 || TownAuto == 39 || TownAuto == 40) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
 	if (TownAuto == 27) { PostEvent("Map_AutoAnchor", MAP_AUTO_MS); }
 	if (TownAuto == 30 || TownAuto == 32 || TownAuto == 33) { PostEvent("Map_AutoScroll", MAP_AUTO_MS); }
 }
@@ -539,6 +541,13 @@ void Map_Week()
 	Trace("PDM map: week " + week);
 	Sound_Once("mapweek");
 	if (!mapDebt || week == 0) { return; }
+	if (Enc_Bunt(true))
+	{
+		Map_NoteHide();
+		Trace("PDM map: bunt");
+		Enc_Show(12, Enc_Text("MapMessageBunt"));
+		return;
+	}
 	// in debt: a reminder with the text for the reputation of the captain; Yes pays everything at once
 	int sum = Pdm_Count(&PlayerShipCard, "crew") * 5;
 	Map_NoteHide();
