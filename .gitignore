@@ -20,3 +20,7 @@ ComfyUI-Easy-Install/
 work_3D/
 # portable Blender next to the game
 blender-*/
+
+# local: IDE, the 3D work link, the engine link
+.idea/
+work_3D
