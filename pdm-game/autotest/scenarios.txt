@@ -37,6 +37,7 @@ status-screens|town|City_HighRock|22|PDM status: pages ok|120
 ransack-screens|town|City_HighRock|23|PDM status: pages ok|120
 prize-button|town|City_HighRock|23|PDM prize: button ok|120
 prize-change|town|City_HighRock|23|PDM prize: change ok|120
+prize-refusal|town|City_HighRock|23|PDM prize: refusal text ok|120
 prize-step|town|City_HighRock|23|PDM prize: transfer step ok|120
 prize-cargo|town|City_HighRock|23|PDM prize: cargo ok|120
 map-encounter|sea||24|PDM encounter: autotest done, enemy [0-9]+|200

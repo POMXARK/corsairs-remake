@@ -574,13 +574,29 @@ void Board_Prize()
 	Board_TakePrize();
 }
 
+// the last refusal of the prize buttons: the key of the text of ShipExchange (crew, class, skills), "" after a success
+string prizeRefusal = "";
+
+// the text of the refusal for the message box over the screen, "" if the last button was not refused
+string Board_RefusalText()
+{
+	if (prizeRefusal == "" || !CheckAttribute(&PdmScreens, "shipexchange.t." + prizeRefusal)) { return ""; }
+	return PdmScreens.shipexchange.t.(prizeRefusal);
+}
+
 // the same rules at the button "Взять призовой корабль" of ShipExchange: the prize is taken once, a refusal leaves it offered
 bool Board_TakePrize()
 {
+	prizeRefusal = "";
 	if (prizeType == "") { return false; }
 	string myType = PlayerShipCard.type_key;
 	string why = Screen_PrizeCheck(prizeOurs, sti(PdmShipTypes.(myType).mincrew), prizeCrew, sti(PdmShipTypes.(prizeType).mincrew), sti(PdmShipTypes.(prizeType).class), Screen_HeroRank());
-	if (why != "") { Trace("PDM prize: refused, " + why); return false; }
+	if (why != "")
+	{
+		Trace("PDM prize: refused, " + why);
+		prizeRefusal = why;
+		return false;
+	}
 	Trade_AddShip(prizeType, prizeName);
 	Trace("PDM prize: taken " + prizeType);
 	prizeType = "";
@@ -592,10 +608,12 @@ bool Board_TakePrize()
 // the crew of the hero stays on board up to the room of the new ship, the rest goes to the prize
 bool Board_ChangeShip()
 {
+	prizeRefusal = "";
 	if (prizeType == "") { return false; }
 	if (sti(PdmShipTypes.(prizeType).class) < Screen_RankClass(Screen_HeroRank()))
 	{
 		Trace("PDM prize: change refused, skills");
+		prizeRefusal = "class";
 		return false;
 	}
 	string oldType = PlayerShipCard.type_key;

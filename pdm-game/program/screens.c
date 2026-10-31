@@ -1160,13 +1160,21 @@ bool Screen_Click(string node)
 {
 	if (node == "LB_CHANGESHIP" && screenName == "shipexchange")
 	{
-		Board_ChangeShip();
+		if (!Board_ChangeShip())
+		{
+			string refusalChange = Board_RefusalText();
+			if (refusalChange != "") { Screen_Message(refusalChange, ""); }
+		}
 		Screen_PrizeShip();
 		return true;
 	}
 	if (node == "LB_TAKEPRIZE" && screenName == "shipexchange")
 	{
-		Board_TakePrize();
+		if (!Board_TakePrize())
+		{
+			string refusal = Board_RefusalText();
+			if (refusal != "") { Screen_Message(refusal, ""); }
+		}
 		return true;
 	}
 	string to = Screen_Target(node);
@@ -1310,6 +1318,18 @@ void Screen_StatusAuto()
 		int after = Trade_Ships();
 		if (first && !second && after == before + 1) { Trace("PDM prize: button ok"); }
 		else { Trace("PDM prize: button FAIL fleet " + before + "->" + after); }
+	}
+	if (b == "@transfer")
+	{
+		// the window of the refusal: a prize with a crew of one man cannot be taken, the text is the one of RANSACK.dll
+		prizeType = "sloop";
+		prizeCrew = 0;
+		prizeOurs = 1;
+		bool refusedTake = Board_TakePrize();
+		string refusalText = Board_RefusalText();
+		if (!refusedTake && refusalText != "" && prizeRefusal == "crew") { Trace("PDM prize: refusal text ok " + prizeRefusal); }
+		else { Trace("PDM prize: refusal text FAIL " + prizeRefusal); }
+		prizeType = "";
 	}
 	if (b == "@shipexchange")
 	{
