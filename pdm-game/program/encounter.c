@@ -31,6 +31,7 @@ int encAcc = 0;
 bool encShown = false;
 int encPay = 0;         // the sum the window of the pay (message 6) asks, 0 for the other windows
 bool encPlain = false; // the window only says something: "OK" closes it, no battle
+int encKind = -1;       // the number of the message shown (Mapparammessage<n>, 32 the weekly pay)
 // the type of the message (Mapparammessage<n>), the nation and the pattern met
 int encType = -1;
 int encNation = ENC_PIRATE;
@@ -52,10 +53,11 @@ string Enc_Text(string key)
 	return PdmEncText.(key);
 }
 
-// text with the first %s replaced
+// text with the first %s (or %d: the pay windows) replaced
 string Enc_Format(string text, string arg)
 {
 	int at = findSubStr(text, "%s", 0);
+	if (at < 0) { at = findSubStr(text, "%d", 0); }
 	if (at < 0) { return text; }
 	string head = "";
 	if (at > 0) { head = strcut(text, 0, at - 1); }
@@ -297,7 +299,8 @@ void Enc_Show(int type, string text)
 	encShown = true;
 	int e = mapEdge;
 	int t = mapTopEdge;
-	encPlain = type == 5;
+	encKind = type;
+	encPlain = type == 5 || type == 11 || type == 12 || type == 33;
 	encPay = 0;
 	if (type == 4 || type == 3)
 	{
@@ -310,7 +313,7 @@ void Enc_Show(int type, string text)
 	Enc_Node("MSGSCROLL", ENC_SCROLL_L + e, ENC_SCROLL_T + t, ENC_SCROLL_R + e, ENC_SCROLL_B + t);
 	Enc_Node("EDITMESSAGES", 240 + e, 190 + t, 550 + e, 340 + t);
 	Enc_SetText("EDITMESSAGES", text);
-	if (type == 3 || type == 4 || type == 5)
+	if (type == 3 || type == 4 || encPlain)
 	{
 		Enc_Node("LB_OK", 350 + e, 371 + t, 450 + e, 401 + t);
 	}
@@ -355,18 +358,45 @@ void Enc_Hide()
 void Enc_Command(string node)
 {
 	if (!encShown) { return; }
+	if (encKind == 33)
+	{
+		// "У вас не хватает золота!": the crew is angry, the reputation falls by 5 (ProcessButtonYes of MAP.dll, cases 0x21, 0xb)
+		Enc_Hide();
+		Pdm_AddReputation(-5);
+		Trace("PDM map: debt, reputation " + PlayerCard.reputation);
+		Enc_Show(11, Enc_Text("MapMessageReputation"));
+		return;
+	}
+	if (encKind == 11 || encKind == 12)
+	{
+		Enc_Hide();
+		if (TownAuto == 38 && encKind == 11) { PostEvent("Map_AutoQuit", 500); }
+		return;
+	}
 	if (encPay > 0)
 	{
 		if (node == "LB_YES")
 		{
+			// enough gold - the whole sum is paid and the debt is gone, else nothing is taken and the crew goes into debt
 			int pay = encPay;
-			if (pay > sti(PlayerCard.money)) { pay = sti(PlayerCard.money); }
-			PlayerCard.money = sti(PlayerCard.money) - pay;
-			Trace("PDM map: paid " + pay);
+			if (pay <= sti(PlayerCard.money))
+			{
+				PlayerCard.money = sti(PlayerCard.money) - pay;
+				mapDebt = false;
+				Trace("PDM map: paid " + pay);
+			}
+			else
+			{
+				mapDebt = true;
+				Trace("PDM map: not enough gold for " + pay);
+				Enc_Hide();
+				Enc_Show(33, Enc_Text("MapMessageNotEnoughMoney"));
+				return;
+			}
 		}
 		else { Trace("PDM map: not paid"); }
 		Enc_Hide();
-		if (TownAuto == 28) { PostEvent("Map_AutoQuit", 500); }
+		if (TownAuto == 28 || TownAuto == 39) { PostEvent("Map_AutoQuit", 500); }
 		return;
 	}
 	if (node == "LB_NO")

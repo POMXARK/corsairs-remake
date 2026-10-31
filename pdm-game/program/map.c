@@ -86,6 +86,7 @@ int mapIslandCount = 0;
 // the keys of PdmIslands in the order of the list
 object MapIslands;
 bool mapNote;           // the note "якорь брошен" is up (it needs no answer, the ship stands)
+bool mapDebt = false;   // the crew was not paid for lack of gold (MAP.dll +0x167c48): the weekly reminder comes
 int mapWeek = -1;       // the week of the month last seen (day / 7), -1 before the first look
 int mapPayMonth = -1;   // the month the crew was last asked to be paid in
 string mapLastIsland;
@@ -126,10 +127,14 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	mapLastIsland = fromIsland;
 	mapPayMonth = -1;
 	mapWeek = -1;
+	mapDebt = false;
 	// the test of the pay (28) starts a few hours before the end of June
 	if (TownAuto == 28) { gameHours = 3905.0 + 400.0; PlayerCard.money = 1000; }
 	// the test of the week (37) starts a few hours before the 8th of January
-	if (TownAuto == 37) { gameHours = 164.0; }
+	if (TownAuto == 37 || TownAuto == 39) { gameHours = 164.0; }
+	// the test of the debt (38): no gold at the end of the month; of the weekly pay (39): in debt, gold enough
+	if (TownAuto == 38) { gameHours = 3905.0 + 400.0; PlayerCard.money = 10; }
+	if (TownAuto == 39) { PlayerCard.money = 1000; mapDebt = true; }
 	mapTarget = "";
 	encShown = false;
 	mapAnchorTo = -1.0;
@@ -180,7 +185,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	mapActive = true;
 	PostEvent("Map_Tick", MAP_TICK_MS);
 	Trace("PDM map: from " + fromIsland + " at " + mapX + ", " + mapY);
-	if (TownAuto == 6 || TownAuto == 28 || TownAuto == 37) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
+	if (TownAuto == 6 || TownAuto == 28 || TownAuto == 37 || TownAuto == 38 || TownAuto == 39) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
 	if (TownAuto == 27) { PostEvent("Map_AutoAnchor", MAP_AUTO_MS); }
 	if (TownAuto == 30 || TownAuto == 32 || TownAuto == 33) { PostEvent("Map_AutoScroll", MAP_AUTO_MS); }
 }
@@ -533,6 +538,27 @@ void Map_Week()
 	if (first) { return; }
 	Trace("PDM map: week " + week);
 	Sound_Once("mapweek");
+	if (!mapDebt || week == 0) { return; }
+	// in debt: a reminder with the text for the reputation of the captain; Yes pays everything at once
+	int sum = Pdm_Count(&PlayerShipCard, "crew") * 5;
+	Map_NoteHide();
+	Trace("PDM map: week pay window " + Map_RepMessage());
+	Enc_Show(32, Enc_Format(Enc_Text("MapMessageReputation" + Map_RepMessage()), "" + sum));
+	encPay = sum;
+}
+
+// which of the seven texts MapMessageReputation0-6 the reminder uses (SetReputationMessage, MAP.dll 0x10008a50): the reputation
+// (not below -35) moved 5 away from 0, tenths cut, within -3..3, then 3 added
+int Map_RepMessage()
+{
+	int rep = Pdm_Count(PlayerCard, "reputation");
+	if (rep < -35) { rep = -35; }
+	int q = 0;
+	if (rep < 0) { q = (rep - 5) / 10; }
+	else { q = (rep + 5) / 10; }
+	if (q < -3) { q = -3; }
+	if (q > 3) { q = 3; }
+	return q + 3;
 }
 
 // the end of the month: the crew wants its pay (message 6; ours: 5 per man of the crew, MAP.dll sums it up from fields not decoded)

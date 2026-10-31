@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 NATIONS = ["England", "Pirate", "France", "Spain"]
-TEXT_KEYS = re.compile(r"^(months|Mapparammessage\d+|MapMessageShips|MapMessageAttack|MapMessageWAR|t_MapFleet|attack\d+|mapships_\d+|"
+TEXT_KEYS = re.compile(r"^(months|Mapparammessage\d+|MapMessageShips|MapMessageAttack|MapMessageWAR|MapMessage(NotEnoughMoney|Reputation[0-6]?|Bunt|WeekMoney|Tornado)|t_MapFleet|attack\d+|mapships_\d+|"
                        r"pattern\d+|map(English|Pirates|French|Spanish)1?|MapparamIslandNoNation|mapEngland|mapPirate|mapFrance|mapSpain|Mapparam(Untilsunrise|Untilsunset|Oneday|Twodays|Threedays|Untilencounter)|lbMapOK|lbMapEngage|lbMapIgnore)$")
 
 
@@ -88,7 +88,7 @@ def main():
         k, sep, v = line.partition("=")
         k = k.strip()
         if sep and TEXT_KEYS.match(k):
-            out.append(f'\tPdmEncText.{k} = "{v.strip().replace(chr(34), chr(92) + chr(34))}";')
+            out.append(f'\tPdmEncText.{k} = "{v.strip().replace(chr(34), chr(39))}";')
             count += 1
     out += [f'\tTrace("PDM encounters: {patterns} patterns, {cells} cells, {count} texts");', "}", ""]
     path = dst / "program" / "data" / "pdm_encounters.c"
