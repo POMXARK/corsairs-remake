@@ -886,7 +886,8 @@ class Converter:
             n, l = self.ship_portraits()
             nodes += n
             lines += l
-        if ("FORMATEDTEXT", "EDITFACENAME") in nodes:
+        # the pages of the status keep their buttons in that corner, the pages of the saves have no face block
+        if ("FORMATEDTEXT", "EDITFACENAME") in nodes and out_name in ("shipexchange", "transfer", "trade", "shipyard"):
             # the portrait of the hero of the face block (rect_face = 94,516,64,64 of [Common], IMAGES/FACES/ourface.tga);
             # the frames around it (ramka_yourface/facename/facemoney) are drawn by the DLL, their pieces are not in the game folder
             image = Image.open(self.pdm.find("IMAGES/FACES/ourface.tga")).convert("RGBA")
