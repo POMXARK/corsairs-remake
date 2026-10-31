@@ -1148,6 +1148,12 @@ bool Screen_Page(string node)
 	if (screenName == "options") { return Options_Click(node); }
 	if (screenName == "loadgame" || screenName == "savegame") { return Save_ScreenClick(node); }
 	if (screenName != "messagebox" || node != "LB_YES") { return false; }
+	if (screenMessageYes == "swap")
+	{
+		Board_SwapShips();
+		Screen_Click("LB_NO");
+		return true;
+	}
 	if (screenMessageYes != "delete" && screenMessageYes != "overwrite") { return false; }
 	Save_ScreenYes();
 	Screen_Click("LB_NO");
@@ -1163,7 +1169,7 @@ bool Screen_Click(string node)
 		if (!Board_ChangeShip())
 		{
 			string refusalChange = Board_RefusalText();
-			if (refusalChange != "") { Screen_Message(refusalChange, ""); }
+			if (refusalChange != "") { Screen_Message(refusalChange, "swap"); }
 		}
 		Screen_PrizeShip();
 		return true;
@@ -1338,6 +1344,20 @@ void Screen_StatusAuto()
 		string refusalText = Board_RefusalText();
 		if (!refusedTake && refusalText != "" && prizeRefusal == "crew") { Trace("PDM prize: refusal text ok " + prizeRefusal); }
 		else { Trace("PDM prize: refusal text FAIL " + prizeRefusal); }
+		prizeType = "";
+	}
+	if (b == "@transfer")
+	{
+		// the class of the prize is out of the range of the rank: the question, "Да" swaps all the same
+		string heroBefore = PlayerShipCard.type_key;
+		prizeType = "manowar";
+		prizeName = "Giant";
+		bool askedSwap = Board_ChangeShip();
+		string askText = Board_RefusalText();
+		bool swapDone = Board_SwapShips();
+		if (!askedSwap && prizeRefusal == "skills" && findSubStr(askText, "умений", 0) >= 0 && swapDone && PlayerShipCard.type_key == "manowar" && prizeType == heroBefore) { Trace("PDM prize: skills question ok"); }
+		else { Trace("PDM prize: skills question FAIL " + prizeRefusal + "," + PlayerShipCard.type_key); }
+		Board_SwapShips();
 		prizeType = "";
 	}
 	if (b == "@shipexchange")

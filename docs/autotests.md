@@ -248,6 +248,9 @@ corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City
 ## prize-cursor (TOWN_AUTO=23)
 Страница «Трюм» передачи: строка товара под курсором в обоих списках начинается с «> »; оба списка показывают одни и те же строки (товары из любого трюма, нет — 0). Тот же сценарий, что `ransack-screens`; маркер `PDM prize: cursor mark ok`.
 
+## prize-skills (TOWN_AUTO=23)
+«Сменить» на корабль, класс которого выше ранга героя: вместо отказа вопрос «умения снизятся… Вы действительно хотите сменить корабль?» (Да/Нет), «Да» меняет корабли всё равно. Тот же сценарий, что `ransack-screens`; маркер `PDM prize: skills question ok`.
+
 ## prize-refusal (TOWN_AUTO=23)
 Отказ кнопок «Взять призовой корабль»/«Сменить»: причина (`crew`, `skills`, `class`) запоминается, а клик на странице показывает окно с текстом RANSACK.dll (`PdmScreens.shipexchange.t.*` из `common.ini`). Тот же сценарий, что `ransack-screens`; маркер `PDM prize: refusal text ok`.
 

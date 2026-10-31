@@ -604,7 +604,8 @@ bool Board_TakePrize()
 }
 
 // "Сменить" of ShipExchange (RANSACK.dll 0x10007cc4 → 0x10007800): the ship of the hero and the prize swap places — the type,
-// the name and the hold; the class of the prize has to be in the range of the rank (else the window about the skills);
+// the name and the hold; if the class of the prize is out of the range of the rank, the question about the skills (Yes/No,
+// the callback 0x100080b0 swaps on "Да", the fall of the skills itself is not made);
 // the crew of the hero stays on board up to the room of the new ship, the rest goes to the prize
 bool Board_ChangeShip()
 {
@@ -613,9 +614,16 @@ bool Board_ChangeShip()
 	if (sti(PdmShipTypes.(prizeType).class) < Screen_RankClass(Screen_HeroRank()))
 	{
 		Trace("PDM prize: change refused, skills");
-		prizeRefusal = "class";
+		prizeRefusal = "skills";
 		return false;
 	}
+	return Board_SwapShips();
+}
+
+// the swap itself (0x10007800); "Да" of the question about the skills does it too
+bool Board_SwapShips()
+{
+	if (prizeType == "") { return false; }
 	string oldType = PlayerShipCard.type_key;
 	string oldName = PlayerShipCard.name;
 	PlayerShipCard.type_key = prizeType;
