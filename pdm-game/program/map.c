@@ -514,19 +514,19 @@ void Map_Pay()
 	encPay = sum;
 }
 
-// the date of a record of the journal, as STATUS.dll writes it ("%s %d, %d, %d.%d": month, day, year, hour.minutes)
+// the date of a record of the journal, as CORE.dll writes it into english.qst ("%s %d, %d, %d.%d": the English month, day, year,
+// hour and minutes, both without a leading zero: "June 12, 1601, 17.0")
 string Map_RecordDate(int total)
 {
 	int day = (total / 24) % 365;
 	int mon = 0;
 	while (day >= Map_MonthDays(mon)) { day = day - Map_MonthDays(mon); mon++; }
-	string months = Enc_Text("months");
+	string months = "January,February,March,April,May,June,July,August,September,October,November,December";
 	int from = 0;
 	for (int i = 0; i < mon; i++) { from = findSubStr(months, ",", from) + 1; }
 	int to = findSubStr(months, ",", from);
 	if (to < 0) { to = strlen(months); }
-	string min = "00";
-	return strcut(months, from, to - 1) + " " + (day + 1) + ", " + (1601 + total / 8760) + ", " + (total % 24) + "." + min;
+	return strcut(months, from, to - 1) + " " + (day + 1) + ", " + (1601 + total / 8760) + ", " + (total % 24) + ".0";
 }
 
 string Map_DateText(bool withTime)

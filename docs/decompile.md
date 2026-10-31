@@ -202,5 +202,6 @@ MAP.dll только показывает дату на карте: узел `Ma
 ## Журнал (STATUS.dll, CLogBook)
 - `ref/pdm-decomp/STATUS.dll.c`: Init/Realize ~395–540 (узлы `lb_Next/lb_Prev`, `s_Loyal/Neutral/Hostile`, `s_Nation%d` для наций ≠ 1, `EditPage1/2`, `title%d`), `FUN_10001e50` (LoadFile, нормализует переводы строк в `\r`), `FUN_10001f20` (ListPages: ширина знаков шрифта из таблицы, перенос по пробелу, до 0x3fff страниц).
 - Откуда тексты: CORE.dll пишет `RESOURCE\TEXTS\RECORDS\%s.rcd` в `RESOURCE\QUESTS\english.qst` (строки CORE.dll 0x100194a0, 0x10019508); STATUS.dll читает этот файл. В папке игры `english.qst` нет — создаётся при игре.
+- Запись в `english.qst` (CORE.dll, `ref/pdm-decomp/CORE.dll.c` ~680, `FUN_1000dec0`): дата `%s %d, %d, %d.%d` с английским месяцем, 2 байта перевода строки, текст, 4 байта разделителя. Строки `s_Accepted/s_NotAccepted` в STATUS.dll (~500) нигде не используются дальше — списка квестов нет.
 - Ghidra: имена функций CLogBook в `strings.txt` есть, в `.c` они `FUN_100…` — искать по строкам `s_LogBook_…`.
 
