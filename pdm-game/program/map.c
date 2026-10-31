@@ -447,6 +447,7 @@ void Map_Land(int cx, int cy)
 	}
 	Trace("PDM map: land " + near + " (" + text + ")");
 	if (TownAuto == 6) { PostEvent("Map_AutoQuit", 1500); }
+	Sound_Once("mapisland");
 	Enc_Show(5, text);
 }
 
@@ -598,6 +599,7 @@ void Map_Anchor(int n)
 	if (n >= 2 && n <= 4) { mapAnchorTo = gameHours + 24.0 * (n - 1); }
 	if (n == 5) { mapAnchorMeet = true; }
 	Trace("PDM map anchor: " + n);
+	Sound_Once("yakor");
 	Map_ShowAnchors();
 	Map_Note(Enc_Text("Mapparammessage7"));
 }

@@ -447,3 +447,10 @@ DIALOGS/*.d                            <A action> у реплики запуск
 
 **Тупики.** `RESOURCE\QUESTS\*.ql` — не тексты журнала, а скрипты квестов (двоичные); `english.qst` в оригинале нет, ищется только в STATUS.dll/CORE.dll.
 
+
+
+## Карта: звуки (msound.ini)
+- Механика: на карте мира MAP.dll проигрывает эффекты по алиасам `RESOURCE/SOUNDS/msound.ini`: `yakor` (`_yakordrop`) при броске якоря и `mapisland` (`_EvLand`, два варианта) при сообщении «Земля!» (смена ближайшего острова).
+- Остальные алиасы карты (`mapship`, `mapenemy` — встречи; `mapevent2` — `_paymoney`, выплата жалованья; `mapattack`, `mapweek` — `_Event1`) в msound.ini есть, привязка к событиям не декодирована.
+- Перенесено: `Sound_Once` (sound.c), вызовы в `Map_Anchor` и `Map_Land` (map.c); файлы алиасов уже конвертирует `tools/pdm_sound.py`. Тесты `map-sound-land`, `map-sound-anchor`.
+- Чего ещё нет: звуки встреч, выплаты, шторма.

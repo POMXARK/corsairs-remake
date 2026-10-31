@@ -87,6 +87,13 @@ int Sound_Loop(string alias)
 		SOUND_FADE_MS, 0, 1.0);
 }
 
+// a sound of the effects once, by its alias of msound.ini (yakor, mapisland ...)
+void Sound_Once(string alias)
+{
+	Trace("PDM sound: " + alias);
+	SendMessage(&Sound, "lslllllllf", MSG_SOUND_PLAY, alias, PCM_STEREO, VOLUME_FX, false, false, false, 0, 0, 1.0);
+}
+
 // the sounds of a kind of location (the sound line of a .loc: town, tavern, cave ...), by day;
 // many: whether the location is full of people
 void Sound_Location(string kind, bool many)
