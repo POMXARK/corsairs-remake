@@ -1285,6 +1285,15 @@ void Screen_StatusAuto()
 		int stepBack = Transfer_Move(false);
 		if (stepMoved > 0 && stepBack == stepMoved && Trade_Onboard(Transfer_Nth(0)) == stepHad) { Trace("PDM prize: transfer step ok " + stepMoved); }
 		else { Trace("PDM prize: transfer step FAIL " + stepMoved + "," + stepBack); }
+		// the cursor of the lists: "> " stands before the goods that the arrows move
+		transferSel = 1;
+		Trade_TransferLists();
+		string cursorId = Trade_Id(Transfer_Nth(1));
+		string cursorName = Screen_Name("goods", PdmGoods.(cursorId).filename, "name");
+		int markAt = findSubStr(transferShown, "> ", 0);
+		if (markAt >= 0 && markAt == findSubStr(transferShown, "> " + cursorName, 0) && findSubStr(transferShown, "> ", markAt + 1) < 0) { Trace("PDM prize: cursor mark ok"); }
+		else { Trace("PDM prize: cursor mark FAIL"); }
+		transferSel = 0;
 		// the prize ship stands on the right again (the button above took it)
 		prizeType = "pinas";
 		int enemyHold = Trade_PrizeTwentieths() / 20;

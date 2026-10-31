@@ -457,32 +457,32 @@ void Trade_Lists()
 	Screen_Text("EDITHELP", line);
 }
 
+// the text of the left list of Transfer as shown (the row of the cursor starts with "> ")
+string transferShown = "";
+
 // [Transfer] of the ransack: the goods of the hero's hold on the left, of the prize ship (PrizeShip.cargo.n<i>) on the right,
-// one row a kind of goods that is on board, with the weight and the room of the hold above the lists
+// one row a kind of goods that lies in either hold (both lists have the same rows, the cursor is marked in both),
+// with the weight and the room of the hold above the lists
 void Trade_TransferLists()
 {
 	string names = "";
 	string onboard = "";
 	string otherNames = "";
 	string otherCount = "";
+	int cursor = Transfer_Nth(transferSel);
 	int all = Trade_Goods();
 	for (int i = 0; i < all; i++)
 	{
+		if (!Transfer_Has(i)) { continue; }
 		string id = Trade_Id(i);
 		string goods = Screen_Name("goods", PdmGoods.(id).filename, "name");
-		int mine = Trade_Onboard(i);
-		if (mine > 0)
-		{
-			names = names + goods + "\n";
-			onboard = onboard + mine + "\n";
-		}
-		string at = "n" + i;
-		if (CheckAttribute(&PrizeShip, "cargo." + at))
-		{
-			otherNames = otherNames + goods + "\n";
-			otherCount = otherCount + PrizeShip.cargo.(at) + "\n";
-		}
+		if (i == cursor) { goods = "> " + goods; }
+		names = names + goods + "\n";
+		onboard = onboard + Trade_Onboard(i) + "\n";
+		otherNames = otherNames + goods + "\n";
+		otherCount = otherCount + Transfer_Prize(i) + "\n";
 	}
+	transferShown = names;
 	Screen_Text(PdmScreens.transfer.list.shiptovarname, names);
 	Screen_Text(PdmScreens.transfer.list.shiponboard, onboard);
 	Screen_Text(PdmScreens.transfer.list.shiptovarname1, otherNames);
@@ -606,8 +606,8 @@ int Transfer_Move(bool toHero)
 // the cursor of Transfer and the arrows between the lists; true if the node was one of them
 bool Transfer_Click(string node)
 {
-	if (node == "LB_TOVARUP" || node == "LB_TOVARUP1") { if (transferSel > 0) { transferSel--; } return true; }
-	if (node == "LB_TOVARDOWN" || node == "LB_TOVARDOWN1") { if (transferSel < Transfer_Kinds() - 1) { transferSel++; } return true; }
+	if (node == "LB_TOVARUP" || node == "LB_TOVARUP1") { if (transferSel > 0) { transferSel--; } Trade_TransferLists(); return true; }
+	if (node == "LB_TOVARDOWN" || node == "LB_TOVARDOWN1") { if (transferSel < Transfer_Kinds() - 1) { transferSel++; } Trade_TransferLists(); return true; }
 	if (node == "LB_LEFT") { Transfer_Move(true); Trade_TransferLists(); return true; }
 	if (node == "LB_RIGHT") { Transfer_Move(false); Trade_TransferLists(); return true; }
 	return false;
