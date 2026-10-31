@@ -133,7 +133,7 @@ float Enc_Closeness(float x, float y)
 // (|rep|-1 tries of 1 in 100, TryBunt 0x10008c40); TOWN_AUTO=40 makes it sure; the mutiny itself (BuntR1) is not made
 bool Enc_Bunt(bool weekly)
 {
-	if (TownAuto == 40) { return true; }
+	if (TownAuto == 40 || TownAuto == 43) { return true; }
 	int rep = Pdm_Count(PlayerCard, "reputation");
 	if (rep < -35) { rep = -35; }
 	if (weekly)
@@ -400,6 +400,14 @@ void Enc_Command(string node)
 		Enc_Hide();
 		if (TownAuto == 38 && encKind == 11) { PostEvent("Map_AutoQuit", 500); }
 		if (TownAuto == 40 && encKind == 12) { PostEvent("Map_AutoQuit", 500); }
+		// the mutiny: the movie of the hanging (BuntR1, Bunt -> Hanging, MAP.dll 0x10008d30), then the game is over - the main menu
+		if (encKind == 12 && TownAuto != 40)
+		{
+			Trace("PDM map: mutiny movie");
+			Map_Release();
+			Cut_Start("BuntR1", "menu");
+			return;
+		}
 		if (TownAuto == 42) { PostEvent("Map_AutoQuit", 500); }
 		return;
 	}

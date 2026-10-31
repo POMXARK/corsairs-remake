@@ -277,3 +277,6 @@ corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City
 
 ## map-storm
 Механика: шторм на карте (сообщение 10). `TOWN_AUTO=42`: игра в начале суток 13:00, шанс снят; на втором шаге хода час становится 15 — окно с `MapMessageTornado`, «ОК» закрывает, выход. Маркер: `PDM map: storm message`. Сценарий: `map-storm|sea||42|…|300`.
+
+## map-bunt-movie
+Механика: бунт команды — после сообщения 12 ролик `BuntR1`, затем главное меню. `TOWN_AUTO=43`: репутация −35, бунт обязателен; после «ОК» проигрываются Bunt и Hanging, затем выход. Маркер: `PDM cutscene: BuntR1 done`.

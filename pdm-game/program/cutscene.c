@@ -634,6 +634,7 @@ void Cut_End()
 	DelEventHandler("Control Activation", "Cut_Control");
 	Trace("PDM cutscene: " + cutPlaylist + " done");
 	if (cutAfter == "exit") { ExitProgram(); return; }
+	if (cutAfter == "menu") { if (TownAuto == 43) { ExitProgram(); } else { Menu_Start(); } return; }
 	Pdm_NewGame();
 	string island = PlayerCard.address.island;
 	Town_Start(PdmIslands.(island).town, "sea");
