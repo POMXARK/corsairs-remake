@@ -802,6 +802,17 @@ string Screen_ViewId()
 // the ship on the right of ShipExchange: the nodes S_<NAME>1 made by pdm_ui.py (second_ship) get the values of the prize type
 void Screen_PrizeShip()
 {
+	// S_HULL/S_RIG are the lines of the repair (as on the ship page), the wear is the percent under the titles;
+	// the wear of a prize is not kept: whole (our)
+	Screen_Text("S_HULL", "");
+	Screen_Text("S_RIG", "");
+	Screen_Text("EDITHULLPERCENT", Screen_HullPercent() + "%");
+	Screen_Text("EDITRIGPERCENT", Screen_RigPercent() + "%");
+	if (prizeType != "")
+	{
+		Screen_Text("EDITHULLPERCENT1", "100%");
+		Screen_Text("EDITRIGPERCENT1", "100%");
+	}
 	string names = "S_TYPE,S_CLASS,S_HITPOINTS,S_SPEEDRATE,S_TURNRATE,S_MAXCREW,S_MINCREW,S_CAPACITY,S_GUNPORTS";
 	int at = 0;
 	while (at < strlen(names))
