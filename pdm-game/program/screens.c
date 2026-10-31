@@ -1394,6 +1394,27 @@ void Screen_StatusAuto()
 		int markAt = findSubStr(transferShown, "> ", 0);
 		if (markAt >= 0 && markAt == findSubStr(transferShown, "> " + cursorName, 0) && findSubStr(transferShown, "> ", markAt + 1) < 0) { Trace("PDM prize: cursor mark ok"); }
 		else { Trace("PDM prize: cursor mark FAIL"); }
+		// the window of the lists: with the cursor on the last row the first rows have scrolled out and the mark is in sight
+		// a prize with a full hold of 12 kinds of goods makes the lists longer than the window
+		string pad = ",";
+		for (int padK = 0; padK < 12; padK++)
+		{
+			string pat = "n" + padK;
+			if (!Transfer_Has(padK)) { PrizeShip.cargo.(pat) = 1; pad = pad + padK + ","; }
+		}
+		int kindsAll = Transfer_Kinds();
+		transferSel = kindsAll - 1;
+		Trade_TransferLists();
+		string firstId = Trade_Id(Transfer_Nth(0));
+		string firstName = Screen_Name("goods", PdmGoods.(firstId).filename, "name");
+		string lastId = Trade_Id(Transfer_Nth(kindsAll - 1));
+		string lastName = Screen_Name("goods", PdmGoods.(lastId).filename, "name");
+		if (kindsAll > TRANSFER_ROWS && findSubStr(transferShown, firstName, 0) < 0 && findSubStr(transferShown, "> " + lastName, 0) >= 0) { Trace("PDM prize: list scroll ok " + kindsAll); }
+		else { Trace("PDM prize: list scroll FAIL " + kindsAll); }
+		for (int pd = 0; pd < 12; pd++)
+		{
+			if (findSubStr(pad, "," + pd + ",", 0) >= 0) { DeleteAttribute(&PrizeShip, "cargo.n" + pd); }
+		}
 		transferSel = 0;
 		// the prize ship stands on the right again (the button above took it)
 		prizeType = "pinas";

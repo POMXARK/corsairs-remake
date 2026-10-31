@@ -457,6 +457,8 @@ void Trade_Lists()
 	Screen_Text("EDITHELP", line);
 }
 
+#define TRANSFER_ROWS 10
+
 // the text of the left list of Transfer as shown (the row of the cursor starts with "> ")
 string transferShown = "";
 
@@ -471,9 +473,15 @@ void Trade_TransferLists()
 	string otherCount = "";
 	int cursor = Transfer_Nth(transferSel);
 	int all = Trade_Goods();
+	// the lists show TRANSFER_ROWS rows; the window follows the cursor ("наше": the original scrolls with the arrows)
+	int first = 0;
+	if (transferSel >= TRANSFER_ROWS) { first = transferSel - TRANSFER_ROWS + 1; }
+	int row = -1;
 	for (int i = 0; i < all; i++)
 	{
 		if (!Transfer_Has(i)) { continue; }
+		row++;
+		if (row < first || row >= first + TRANSFER_ROWS) { continue; }
 		string id = Trade_Id(i);
 		string goods = Screen_Name("goods", PdmGoods.(id).filename, "name");
 		if (i == cursor) { goods = "> " + goods; }

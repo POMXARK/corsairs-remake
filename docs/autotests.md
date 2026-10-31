@@ -285,3 +285,6 @@ corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City
 Механика: герой-пират — порог нападения пиратов выше на 40. `TOWN_AUTO=44`: нация героя 1, принудительная встреча с пиратами. Маркер: `PDM encounter: attack threshold 70`.
 | `menu-controls` | страница «Управление»: список действий/клавиш и прокрутка | `PDM controls: …` |
 | `menu-keys` | перепривязка клавиши щелчком по строке, отмена Esc, «Сбросить» | `PDM keys: autotest done, Ship_TurnLeft 65` (ещё `PDM keys: Ship_TurnLeft is Q (81)`) |
+
+## prize-scroll (TOWN_AUTO=23)
+Списки страницы «Трюм» показывают 10 строк: когда курсор уходит ниже, окно сдвигается — первые строки пропадают, строка курсора («> ») остаётся на виду. Тот же сценарий, что `ransack-screens`; маркер `PDM prize: list scroll ok <число видов>`.
