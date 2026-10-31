@@ -11,6 +11,7 @@ town-face|town|City_HighRock|40|PDM face: autotest done|120
 sea-out|sea||4|PDM: sea at the island|180
 sea-port|sea||5|PDM: sea at the island|200
 sea-map|sea||6|PDM: sea, to the world map|300
+map-date|sea||6|PDM map date: 1[3-9] Июнь|300
 battle-fire|battle||7|PDM: autotest done, battle|300
 battle-board|battle||8|PDM: autotest done, boarding|300
 battle-sail|battle||9|PDM: battle, sail to done|200

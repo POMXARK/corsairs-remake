@@ -46,6 +46,11 @@ float mapToX = 0.0;
 float mapToY = 0.0;
 // the course of the ship on the map, it crosses the transitions (the original's worldMap.playerShipAY)
 float mapAY = 0.0;
+// the game date: hours from 1 January of 1601, 00:00 (the original keeps seconds, minutes, hours, day, month, year in the hero of MAP.dll);
+// the start is 12 June 17:00; 1 s of real sailing is about 37 game hours (measured in the original); years of 365 days (ours)
+float gameHours = 3905.0;
+#define MAP_HOURS_PER_TICK 1.48
+string mapDateShown = "";
 string mapTarget = "";
 string mapFrom = "";
 bool mapActive = false;
@@ -341,6 +346,46 @@ void Map_SailTo(int index)
 	Trace("PDM map: sail to " + mapTarget + " at " + mapToX + ", " + mapToY);
 }
 
+int Map_MonthDays(int mon)
+{
+	if (mon == 1) { return 28; }
+	if (mon == 3 || mon == 5 || mon == 8 || mon == 10) { return 30; }
+	return 31;
+}
+
+string Map_DateText(bool withTime)
+{
+	int total = makeint(gameHours);
+	int day = (total / 24) % 365;
+	int hour = total % 24;
+	int mon = 0;
+	while (day >= Map_MonthDays(mon)) { day = day - Map_MonthDays(mon); mon++; }
+	string months = Enc_Text("months");
+	int from = 0;
+	for (int i = 0; i < mon; i++) { from = findSubStr(months, ",", from) + 1; }
+	int to = findSubStr(months, ",", from);
+	if (to < 0) { to = strlen(months); }
+	string text = (day + 1) + " " + strcut(months, from, to - 1);
+	if (withTime)
+	{
+		int h12 = hour % 12;
+		if (h12 == 0) { h12 = 12; }
+		string ampm = "am";
+		if (hour >= 12) { ampm = "pm"; }
+		string mins = "00";
+		text = text + "\n" + h12 + ":" + mins + " " + ampm;
+	}
+	return text;
+}
+
+void Map_ShowDate()
+{
+	// on the way only the date, at anchor the time as well (the clock is hidden while the ship sails)
+	string text = Map_DateText(mapTarget == "");
+	Screen_Text("EDITTIME", text);
+	if (text != mapDateShown) { mapDateShown = text; Trace("PDM map date: " + text); }
+}
+
 void Map_Tick()
 {
 	if (!mapActive) { return; }
@@ -373,8 +418,10 @@ void Map_Tick()
 		mapY = mapY + dy * step / d;
 		Map_Fog();
 		Map_View();
+		gameHours = gameHours + MAP_HOURS_PER_TICK;
 		Enc_Tick(MAP_TICK_MS);
 	}
+	Map_ShowDate();
 	PostEvent("Map_Tick", MAP_TICK_MS);
 }
 

@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 NATIONS = ["England", "Pirate", "France", "Spain"]
-TEXT_KEYS = re.compile(r"^(Mapparammessage\d+|MapMessageShips|MapMessageAttack|MapMessageWAR|t_MapFleet|attack\d+|mapships_\d+|"
+TEXT_KEYS = re.compile(r"^(months|Mapparammessage\d+|MapMessageShips|MapMessageAttack|MapMessageWAR|t_MapFleet|attack\d+|mapships_\d+|"
                        r"pattern\d+|map(English|Pirates|French|Spanish)1?|MapparamIslandNoNation|lbMapOK|lbMapEngage|lbMapIgnore)$")
 
 
