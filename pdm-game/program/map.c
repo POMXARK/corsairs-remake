@@ -78,6 +78,10 @@ int mapPointer = -1;
 #define MSG_INTERFACE_SET_MOUSE_POINTER 45063
 #define MAP_EDGE_PX 10
 #define MAP_SCROLL_PX 4
+// Shift (the original: twice) or the left button (ours: four times) held speeds the scroll up; 1 = normal
+int mapFast = 1;
+bool mapShiftDown = false;
+bool mapLmbDown = false;
 int mapIslandCount = 0;
 // the keys of PdmIslands in the order of the list
 object MapIslands;
@@ -148,6 +152,11 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	SetEventHandler("Map_AutoSail", "Map_AutoSail", 0);
 	SetEventHandler("Map_AutoQuit", "Map_AutoQuit", 0);
 	SetEventHandler("Map_AutoScroll", "Map_AutoScroll", 0);
+	SetEventHandler("Control Activation", "Map_KeyDown", 0);
+	SetEventHandler("Control Deactivation", "Map_KeyUp", 0);
+	mapShiftDown = false;
+	mapLmbDown = false;
+	mapFast = 1;
 	SetEventHandler("Map_AutoAnchor", "Map_AutoAnchor", 0);
 	SetEventHandler("Enc_Auto", "Enc_Auto", 0);
 	SendMessage(&GameInterface, "ls", MSG_INTERFACE_INIT, "resource\ini\interfaces\mainmap.ini");
@@ -167,7 +176,7 @@ void Map_Start(string fromIsland, float atX, float atY, float ay)
 	Trace("PDM map: from " + fromIsland + " at " + mapX + ", " + mapY);
 	if (TownAuto == 6 || TownAuto == 28) { PostEvent("Map_AutoSail", MAP_AUTO_MS); }
 	if (TownAuto == 27) { PostEvent("Map_AutoAnchor", MAP_AUTO_MS); }
-	if (TownAuto == 30) { PostEvent("Map_AutoScroll", MAP_AUTO_MS); }
+	if (TownAuto == 30 || TownAuto == 32) { PostEvent("Map_AutoScroll", MAP_AUTO_MS); }
 }
 
 // the islands of islands_x.idf with a model at sea; the dead towns (Highrock_) stand on the living ones
@@ -640,15 +649,39 @@ void Map_Scroll()
 	Map_ScrollDir(dir);
 }
 
+void Map_SetFast()
+{
+	mapFast = 1;
+	if (mapShiftDown) { mapFast = 2; }
+	if (mapLmbDown) { mapFast = 4; }
+}
+
+void Map_KeyDown()
+{
+	string control = GetEventData();
+	if (control == "Map_Shift") { mapShiftDown = true; }
+	if (control == "Map_Lmb") { mapLmbDown = true; }
+	Map_SetFast();
+}
+
+void Map_KeyUp()
+{
+	string control = GetEventData();
+	if (control == "Map_Shift") { mapShiftDown = false; }
+	if (control == "Map_Lmb") { mapLmbDown = false; }
+	Map_SetFast();
+}
+
 void Map_ScrollDir(int dir)
 {
+	float px = MAP_SCROLL_PX * mapFast;
 	if (dir == 0) { return; }
 	float dx = 0.0;
 	float dy = 0.0;
-	if (dir == 2 || dir == 3 || dir == 4) { dx = MAP_SCROLL_PX; }
-	if (dir == 6 || dir == 7 || dir == 8) { dx = -MAP_SCROLL_PX; }
-	if (dir == 1 || dir == 2 || dir == 8) { dy = -MAP_SCROLL_PX; }
-	if (dir == 4 || dir == 5 || dir == 6) { dy = MAP_SCROLL_PX; }
+	if (dir == 2 || dir == 3 || dir == 4) { dx = px; }
+	if (dir == 6 || dir == 7 || dir == 8) { dx = -px; }
+	if (dir == 1 || dir == 2 || dir == 8) { dy = -px; }
+	if (dir == 4 || dir == 5 || dir == 6) { dy = px; }
 	float left = mapLeft + dx;
 	float top = mapTop + dy;
 	if (left > MAP_W - mapViewW) { left = MAP_W - mapViewW; }
@@ -669,12 +702,14 @@ void Map_AutoScroll()
 	if (!mapActive) { return; }
 	float l0 = mapLeft;
 	float t0 = mapTop;
+	// the keys cannot be pressed by the script: the held Shift is given directly (TOWN_AUTO=32)
+	if (TownAuto == 32) { mapShiftDown = true; Map_SetFast(); }
 	Map_Pointer(7);
 	Map_ScrollDir(7);
 	Map_ScrollDir(1);
 	mapAutoScrolls++;
 	if (mapAutoScrolls < 40) { PostEvent("Map_AutoScroll", MAP_TICK_MS); return; }
-	Trace("PDM map: scrolled " + (mapLeft - l0) + " " + (mapTop - t0) + " manual " + mapManual);
+	Trace("PDM map: scrolled " + (mapLeft - l0) + " " + (mapTop - t0) + " manual " + mapManual + " fast " + mapFast);
 	PostEvent("Map_AutoQuit", 1500);
 }
 
@@ -795,6 +830,8 @@ void Map_Release()
 	DelEventHandler("Map_AutoSail", "Map_AutoSail");
 	DelEventHandler("Map_AutoQuit", "Map_AutoQuit");
 	DelEventHandler("Map_AutoScroll", "Map_AutoScroll");
+	DelEventHandler("Control Activation", "Map_KeyDown");
+	DelEventHandler("Control Deactivation", "Map_KeyUp");
 	DelEventHandler("Map_AutoAnchor", "Map_AutoAnchor");
 	DelEventHandler("Enc_Auto", "Enc_Auto");
 	SendMessage(&GameInterface, "l", MSG_INTERFACE_RELEASE);

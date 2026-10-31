@@ -37,6 +37,7 @@
 | `map-anchor` | якорь «На день» (TOWN_AUTO=27): дата 12 → 13 Июнь, якорь поднят | `PDM map anchor: weighed` |
 | `map-open` | в новой игре в списке карты 3 острова (avilia, Belflor, Highrock) | `PDM map: list of 3 islands` |
 | `map-land` | корабль идёт к острову, при входе в клетки вокруг острова — окно «Сэр, земля!» с именем и флагом | `PDM map: land … Сэр, земля` |
+| `map-scroll-fast` | прокрутка карты с зажатым Shift идёт вдвое быстрее (клавиши скрипт нажать не может: Shift задан напрямую, TOWN_AUTO=32; маркер `fast 2`) | `PDM map: scrolled … manual 1 fast 2` |
 | `map-scroll` | мышь у края окна карты: курсор-стрелка и сдвиг карты влево/вверх, корабль не тянет вид назад | `PDM map: scrolled … manual 1` |
 | `logbook-screen` | журнал героя: записи квестов (TEXTS/RECORDS) на страницах книги, «Дальше»/«Назад» листают разворот | `PDM logbook: ok pages N records M` |
 | `logbook-dates` | тот же прогон `TOWN_AUTO=31`: перед каждой записью журнала стоит дата «Месяц день, год, час.мин» (формат `%s %d, %d, %d.%d` STATUS.dll) | `PDM logbook: dates ok` |

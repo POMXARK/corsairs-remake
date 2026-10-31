@@ -32,6 +32,8 @@ void Menu_InterfaceKeys()
 {
 	// key codes are Windows virtual keys, 256/257 are the mouse axes
 	Menu_MapKey("ILClick", 1, 0);
+	Menu_MapKey("Map_Lmb", 1, 0);
+	Menu_MapKey("Map_Shift", 16, 0);
 	Menu_MapKey("IRClick", 2, 0);
 	Menu_MapKey("ITurnH", 256, 0);
 	Menu_MapKey("ITurnV", 257, INVERSE_CONTROL);
