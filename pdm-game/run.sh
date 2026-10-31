@@ -65,6 +65,7 @@ fi
 [ -f "$DIR/resource/textures/weather/skies/clear/sky_up.tga.tx" ] || python3 -I "$TOOLS/make_clear_sky.py" "$DIR/resource"
 [ -f "$DIR/resource/textures/weather/moon.tga.tx" ] || python3 -I "$TOOLS/make_moon.py" "$DIR/resource"
 [ -f "$DIR/resource/textures/cinema/binocular.tga.tx" ] || python3 -I "$TOOLS/make_binocular.py" "$DIR/resource"
+[ -f "$DIR/resource/textures/loading/progress.tga.tx" ] || python3 -I "$TOOLS/pdm_loading.py" "$PDM" "$DIR/resource"
 # the screens of the interface (INI/menu.ini, the world map of INI/map.ini), their pictures, texts and fonts, the dialog window and the voices;
 # again for a map made before its fog
 grep -qs 'MSGSCROLL' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'ISLSCROLL' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'LB_VOICEON_OFF' "$DIR/resource/ini/interfaces/options.ini" && grep -qs 'PDM_HUD_18' "$DIR/resource/ini/fonts.ini" && grep -qs 'PdmScreens.trade.t.exporting' "$DIR/program/data/pdm_screens.c" && grep -qs 'PdmScreens.ships' "$DIR/program/data/pdm_screens.c" && grep -qs 'PdmScreens.pointer.map' "$DIR/program/data/pdm_screens.c" && grep -qs 'PdmScreens.recordlines' "$DIR/program/data/pdm_screens.c" && grep -qs 'PdmScreens.shipexchange.t.crew' "$DIR/program/data/pdm_screens.c" && grep -qs 'S_TYPE1' "$DIR/resource/ini/interfaces/shipexchange.ini" && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
@@ -72,7 +73,7 @@ grep -qs 'MSGSCROLL' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'fog
 # eyes.ini comes with the eye grid of the heads (the blink): the characters of an older world are converted again alone (pdm_character.py all), and the boarding after them
 WORLD_NEW=0
 if [ ! -f "$DIR/program/data/pdm_world.c" ]; then WORLD_NEW=1; python3 -I "$TOOLS/pdm_world.py" "$PDM" "$DIR"
-elif [ ! -f "$DIR/resource/ini/eyes.run" ]; then WORLD_NEW=1; python3 -I "$TOOLS/pdm_character.py" "$PDM" "$DIR/resource" all; fi
+elif [ ! -f "$DIR/resource/ini/chars.run" ]; then WORLD_NEW=1; python3 -I "$TOOLS/pdm_character.py" "$PDM" "$DIR/resource" all; fi
 # the cabin of the boarding, the fighters with the blade drawn and the plates of the bars, after the characters (it
 # writes their .ani again); again for the data written before the plates
 if [ "$WORLD_NEW" = 1 ] || ! grep -qs "PdmBoarding.hud" "$DIR/program/data/pdm_boarding.c"; then python3 -I "$TOOLS/pdm_boarding.py" "$PDM" "$DIR"; fi

@@ -291,3 +291,9 @@ corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City
 
 ## map-anchor-ramp (TOWN_AUTO=27)
 Время на якоре разгоняется (MAP.dll: ускорение 20 → 300): шаг часов на последнем тике больше удвоенного шага первого. Сценарий якоря `map-anchor`; маркер `PDM map anchor: ramp ok <первый> <последний>`.
+
+## greet (TOWN_AUTO=51)
+Приветствие горожанина: герой ставится в 2,5 единицы от первого бродящего NPC; тот должен остановиться, повернуться к герою (отклонение от направления на героя меньше 0,5 рад) и сыграть `hi_1`/`hi_2`. Маркер `PDM greet: autotest done, greeting ok <id> turn off <рад>`; строка `PDM greet: <id> hi_N` — само приветствие.
+
+## loading (TOWN_AUTO=52)
+Баннер «Загрузка» при переходе через дверь: герой в City_HighRock проходит первую дверь улицы, `Town_Go` показывает `ReloadProgressStart()` на время загрузки интерьера (атлас `tools/pdm_loading.py` из `loading0..2.tga` оригинала). Маркер: `PDM loading: autotest done, banner shown`; в `system.log` не должно быть `Progress error!`.

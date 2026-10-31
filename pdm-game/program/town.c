@@ -22,6 +22,7 @@
 #define MSG_CHARACTER_GETAY 30203
 #define MSG_CHARACTER_TELEPORT_AY 30211
 #define MSG_CHARACTER_TURNBYCHR 30341
+#define MSG_CHARACTER_ACTIONPLAY 30350
 #define MSG_CHARACTER_TURNBYPOINT 30342
 #define MSG_CHARACTER_HEADLOOK_DEFAULT 30380
 #define MSG_CHARACTER_HEADLOOK_CHARACTER 30382
@@ -54,6 +55,15 @@
 // original has sensors to walk round others, here a walk not done in a minute ends where it is
 #define TOWN_WANDER_ACTION_S 2
 #define TOWN_WANDER_WAIT 60
+// a townsman who the hero came within TOWN_GREET_DIST of turns to him and plays hi_1 / hi_2 (zombi.dll: the
+// greeting of a meeting; the distance is ours), once until the hero has gone TOWN_GREET_AWAY off; the greeting
+// is given up after TOWN_GREET_MAX ticks when the clip does not end
+#define TOWN_GREET_DIST 4.0
+#define TOWN_GREET_AWAY 8.0
+#define TOWN_GREET_MAX 6
+int townGreets = 0;
+int townBanners = 0;
+int townGreetNpc = -1;
 
 object TownLocation;
 object TownWeather;
@@ -193,7 +203,11 @@ void Town_Handlers()
 	SetEventHandler("EWhr_GetFogDensity", "Town_FogDensity", 0);
 	SetEventHandler("Town_Tick", "Town_Tick", 0);
 	SetEventHandler("Town_Wander", "Town_Wander", 0);
+	SetEventHandler("Location_Character_EndAction", "Town_GreetEnd", 0);
+	SetEventHandler("Town_GreetTest", "Town_GreetTest", 0);
+	SetEventHandler("Town_GreetCheck", "Town_GreetCheck", 0);
 	SetEventHandler("Town_AutoGo", "Town_AutoGo", 0);
+	SetEventHandler("Town_LoadingTest", "Town_LoadingTest", 0);
 	SetEventHandler("Town_CamLook", "Town_CamLook", 0);
 	SetEventHandler("Town_CamQuit", "Town_CamQuit", 0);
 	SetEventHandler("Town_AutoWhere", "Town_AutoWhere", 0);
@@ -328,6 +342,8 @@ void Town_Load(string loc, string from)
 	if (TownAuto == 20) { PostEvent("Town_WindWalk", 3000); }
 	else if (TownAuto == 30) { PostEvent("Town_CharWalk", 3000); }
 	else if (TownAuto == 50) { PostEvent("Town_CamLook", 3000); }
+	else if (TownAuto == 51) { PostEvent("Town_GreetTest", 3000); }
+	else if (TownAuto == 52) { PostEvent("Town_LoadingTest", 3000); }
 	else if (TownAuto == 40 || TownAuto == 41) { PostEvent("TownFace_Start", 3000); }
 	else if (TownAuto && TownAuto != SAVEFILE_AUTO) { PostEvent("Town_AutoGo", 3000); }
 	Trace("PDM town: in " + loc + " from " + from + ", " + townNpcCount + " characters");
@@ -371,6 +387,49 @@ void Town_CamLook()
 	SendMessage(&TownCamera, "lfffl", MSG_CAMERA_TOPOS, TownCX, TownCY, TownCZ, 1);
 	Trace("PDM town: camera look from " + TownCX + ", " + TownCY + ", " + TownCZ + ", signs model " + townSigns);
 	PostEvent("Town_CamQuit", 22000); // the shots of sign-shots.sh are taken at 15 s
+}
+
+// TOWN_AUTO=51: the hero stands where he came in; a townsman within TOWN_GREET_DIST of him greets (Town_Greet).
+// The check, 8 s after the load, wants the first greeter to have turned to the hero (not more than 0.3 rad off the
+// direction to him, townGreetDiff taken at the end of the greeting) and the clip to have ended by itself
+float townGreetDiff = 9.0;
+int townGreetEnded = 0;
+void Town_GreetTest()
+{
+	PostEvent("Town_GreetCheck", 8000);
+}
+
+// the angle between the facing of a townsman and the direction to the hero
+float Town_FacingOff(int i)
+{
+	float x, y, z, hx, hy, hz, ay;
+	SendMessage(&TownNpc[i], "leee", MSG_CHARACTER_GETPOS, &x, &y, &z);
+	SendMessage(&TownHero, "leee", MSG_CHARACTER_GETPOS, &hx, &hy, &hz);
+	SendMessage(&TownNpc[i], "le", MSG_CHARACTER_GETAY, &ay);
+	float diff = ay - atan2(hx - x, hz - z);
+	while (diff > 3.14159) { diff = diff - 6.28318; }
+	while (diff < -3.14159) { diff = diff + 6.28318; }
+	if (diff < 0.0) { diff = -diff; }
+	return diff;
+}
+
+void Town_GreetCheck()
+{
+	if (townGreets > 0 && townGreetDiff < 0.3 && townGreetEnded > 0) { Trace("PDM greet: autotest done, greeting ok " + TownNpc[townGreetNpc].id + " turn off " + townGreetDiff); }
+	else { Trace("PDM greet: autotest done, FAILED greets " + townGreets + " ended " + townGreetEnded + " turn off " + townGreetDiff); }
+	ExitProgram();
+}
+
+// goes through the first door of the street: the banner "Loading" is shown while the interior loads
+void Town_LoadingTest()
+{
+	aref ins;
+	makearef(ins, PdmLocations.(townStreet).interiors);
+	string link = GetAttributeName(GetAttributeN(ins, 0));
+	Town_Go(link);
+	if (townBanners > 0 && townHere != townStreet) { Trace("PDM loading: autotest done, banner shown on the door " + link + " into " + townHere); }
+	else { Trace("PDM loading: autotest done, FAILED banners " + townBanners + " in " + townHere); }
+	ExitProgram();
 }
 
 void Town_CamQuit()
@@ -453,6 +512,8 @@ void Town_PlaceCharacters(aref data)
 		TownNpc[townNpcCount].wander.rest = Town_WanderRest();
 		TownNpc[townNpcCount].wander.walk = 0;
 		TownNpc[townNpcCount].wander.hold = 0;
+		TownNpc[townNpcCount].greet.on = 0;
+		TownNpc[townNpcCount].greet.done = 0;
 		CreateEntity(&TownNpc[townNpcCount], "NPCharacter");
 		Town_SetModel(&TownNpc[townNpcCount], model);
 		Town_Teleport(&TownNpc[townNpcCount], data, p);
@@ -487,6 +548,7 @@ void Town_Wander()
 	makearef(data, PdmLocations.(townHere));
 	float x, y, z, d;
 	string at;
+	Town_GreetTick();
 	for (int i = 0; i < townNpcCount; i++)
 	{
 		if (!sti(TownNpc[i].wander.on) || sti(TownNpc[i].wander.hold)) { continue; }
@@ -505,6 +567,69 @@ void Town_Wander()
 		TownNpc[i].wander.rest = sti(TownNpc[i].wander.rest) - 1;
 		if (sti(TownNpc[i].wander.rest) > 0) { continue; }
 		Town_WanderGo(i, data);
+	}
+}
+
+// the hero near a townsman: he greets (Town_Greet); one the hero has left may greet again
+void Town_GreetTick()
+{
+	float hx, hy, hz, x, y, z, d;
+	SendMessage(&TownHero, "leee", MSG_CHARACTER_GETPOS, &hx, &hy, &hz);
+	for (int i = 0; i < townNpcCount; i++)
+	{
+		if (!sti(TownNpc[i].wander.on)) { continue; }
+		if (sti(TownNpc[i].greet.on))
+		{
+			TownNpc[i].greet.ticks = sti(TownNpc[i].greet.ticks) + 1;
+			if (sti(TownNpc[i].greet.ticks) > TOWN_GREET_MAX) { Town_GreetStop(i); }
+			continue;
+		}
+		SendMessage(&TownNpc[i], "leee", MSG_CHARACTER_GETPOS, &x, &y, &z);
+		d = (x - hx) * (x - hx) + (z - hz) * (z - hz);
+		if (sti(TownNpc[i].greet.done))
+		{
+			if (d > TOWN_GREET_AWAY * TOWN_GREET_AWAY) { TownNpc[i].greet.done = 0; }
+			continue;
+		}
+		if (sti(TownNpc[i].wander.hold) || townTalkNpc >= 0) { continue; }
+		if (d < TOWN_GREET_DIST * TOWN_GREET_DIST) { Town_Greet(i); }
+	}
+}
+
+// he stops, turns to the hero and plays hi_1 or hi_2 (the clip is played once by ActionPlay;
+// Location_Character_EndAction says it is over)
+void Town_Greet(int i)
+{
+	Town_WanderHold(i, true);
+	TownNpc[i].greet.on = 1;
+	TownNpc[i].greet.done = 1;
+	TownNpc[i].greet.ticks = 0;
+	string act = "hi_" + (1 + rand(1));
+	SendMessage(&TownNpc[i], "li", MSG_CHARACTER_TURNBYCHR, &TownHero);
+	SendMessage(&TownNpc[i], "ls", MSG_CHARACTER_ACTIONPLAY, act);
+	townGreets++;
+	if (townGreetNpc < 0) { townGreetNpc = i; }
+	Trace("PDM greet: " + TownNpc[i].id + " " + act);
+}
+
+void Town_GreetStop(int i)
+{
+	SendMessage(&TownNpc[i], "ls", MSG_CHARACTER_ACTIONPLAY, "");
+	TownNpc[i].greet.on = 0;
+	if (townTalkNpc != i) { Town_WanderHold(i, false); }
+}
+
+// the clip is over (the entity raises it for the character of ActionPlay)
+void Town_GreetEnd()
+{
+	aref chr = GetEventData();
+	for (int i = 0; i < townNpcCount; i++)
+	{
+		if (sti(TownNpc[i].greet.on) && TownNpc[i].id == chr.id)
+		{
+			if (i == townGreetNpc) { townGreetDiff = Town_FacingOff(i); townGreetEnded++; }
+			Town_GreetStop(i);
+		}
 	}
 }
 
@@ -709,8 +834,12 @@ void Town_Go(string link)
 		return;
 	}
 	Town_Release();
+	// the original shows the "Loading" banner on the frozen frame while the location loads (CORE.dll)
+	ReloadProgressStart();
+	townBanners++;
 	// coming out of an interior, the hero appears at its door: the arrival point named by its kind
 	Town_Load(to, from);
+	ReloadProgressEnd();
 	PostEvent("Town_Tick", TOWN_TICK_MS);
 }
 
@@ -796,6 +925,11 @@ void Town_TalkTo(int i)
 	string id = TownNpc[i].id;
 	townTalkNpc = i;
 	townTalkKey = Town_DialogOf(i);
+	if (sti(TownNpc[i].greet.on))
+	{
+		SendMessage(&TownNpc[i], "ls", MSG_CHARACTER_ACTIONPLAY, "");
+		TownNpc[i].greet.on = 0;
+	}
 	Town_WanderHold(i, true);
 	// the window shows "name lastname" of the speaker
 	TownNpc[i].name = PdmCharacters.(id).name;

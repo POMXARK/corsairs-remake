@@ -74,3 +74,5 @@ menu-controls|menu||45|PDM controls: autotest done|60
 menu-keys|menu||46|PDM keys: autotest done, Ship_TurnLeft 65|60
 prize-scroll|town|City_HighRock|23|PDM prize: list scroll ok [0-9]*|120
 map-anchor-ramp|sea||27|PDM map anchor: ramp ok|300
+greet|town|City_HighRock|51|PDM greet: autotest done, greeting ok|90
+loading|town|City_HighRock|52|PDM loading: autotest done, banner shown|90

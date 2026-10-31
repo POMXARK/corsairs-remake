@@ -103,6 +103,7 @@ if (-not (Test-Path "$Demo/resource/textures/weather/skies/haze/sky_up.tga.tx"))
 if (-not (Test-Path "$Demo/resource/textures/weather/skies/clear/sky_up.tga.tx")) { Invoke-Python "$Tools/make_clear_sky.py" "$Demo/resource" }
 if (-not (Test-Path "$Demo/resource/textures/weather/moon.tga.tx")) { Invoke-Python "$Tools/make_moon.py" "$Demo/resource" }
 if (-not (Test-Path "$Demo/resource/textures/cinema/binocular.tga.tx")) { Invoke-Python "$Tools/make_binocular.py" "$Demo/resource" }
+if (-not (Test-Path "$Demo/resource/textures/loading/progress.tga.tx")) { Invoke-Python "$Tools/pdm_loading.py" $Pdm "$Demo/resource" }
 if (-not (Test-Path "$Demo/resource/textures/effects/fire.tx")) { Invoke-Python "$Tools/pdm_effects.py" $Pdm "$Demo/resource" }
 if (-not (Test-Path "$Demo/resource/particles/shothit.xps")) { Invoke-Python "$Tools/make_cannon_fx.py" "$Demo/resource" }
 if (-not (Test-Pattern 'PdmCut.intro' "$Demo/program/data/pdm_cutscenes.c")) { Invoke-Python "$Tools/pdm_cutscene.py" $Pdm $Demo }
@@ -127,7 +128,7 @@ else
     # eyes.ini comes with the eye grid of the heads (the blink): the characters of an older world are converted again alone (pdm_character.py all), and the boarding after them
     $worldNew = $false
     if (-not (Test-Path "$Demo/program/data/pdm_world.c")) { $worldNew = $true; Invoke-Python "$Tools/pdm_world.py" $Pdm $Demo }
-    elseif (-not (Test-Path "$Demo/resource/ini/eyes.run")) { $worldNew = $true; Invoke-Python "$Tools/pdm_character.py" $Pdm "$Demo/resource" all }
+    elseif (-not (Test-Path "$Demo/resource/ini/chars.run")) { $worldNew = $true; Invoke-Python "$Tools/pdm_character.py" $Pdm "$Demo/resource" all }
     # the cabin of the boarding and the fighters with the blade drawn, after the characters
     if ($worldNew -or -not (Test-Pattern 'PdmBoarding.hud' "$Demo/program/data/pdm_boarding.c")) { Invoke-Python "$Tools/pdm_boarding.py" $Pdm $Demo }
 }

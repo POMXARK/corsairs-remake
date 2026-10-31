@@ -6,6 +6,19 @@
 // data\pdm_boarding.c (tools/pdm_boarding.py) the cabin of the boarding, fought in boarding.c.
 // Stages of the port: docs/port-plan.md.
 
+// the library of the locations: its natives must all be declared; of them the game uses the progress view ("Loading" banner)
+native int NativeFindCharacter(ref chr, string id);
+native int NativeFindLocation(ref loc, string id);
+native int NativeFindLoadCharacter();
+native void SetReloadProgressBackImage(string name);
+native void SetReloadNextTipsImage();
+native void ReloadProgressStart();
+native void ReloadProgressUpdate();
+native void ReloadProgressEnd();
+native void SystemDelay(int ms);
+native void ExecuteTechnique(string name);
+native string GetNextLineString();
+#library "ScriptLocationLibrary"
 #define EXECUTE 0
 #define REALIZE 1
 // save.c, here for the files included before it: the files of the quick save and of the save made leaving a town,

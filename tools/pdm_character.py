@@ -67,6 +67,9 @@ ACTIONS = {
     "turn right": ["right_rot", "turn_right_calm", "stand_calm"],
     "dead": ["death_1"],
     "talk": ["talk_1", "stand_calm"],
+    # the greeting of a townsman to the hero who came near (zombi.dll, see docs/decompile.md)
+    "hi_1": ["hi_1"],
+    "hi_2": ["hi_2"],
 }
 
 # the fight of the boarding (Boarding.dll, brd_anim.idf): Storm action <- PDM action, looped, its events.
@@ -419,6 +422,9 @@ def write_ani(path: Path, an_name: str, actions, k: float, frames: int, heights,
             if name in IDLE_PROBABILITY:
                 data.append(("Probability", f"{IDLE_PROBABILITY[name]:g}"))
             section(name, start, end, 0, loop=False, data=data)
+        elif name.startswith("hi_"):
+            # played once by ActionPlay; the end of the clip raises Location_Character_EndAction
+            section(name, start, end, 0, loop=False, data=[("Blend time", "0.2")])
         elif name == "talk":
             # the talk of the soldiers stands otherwise than their idle_1 (75-100 degrees): blended
             # as the gestures (ours)
@@ -556,7 +562,7 @@ def convert_all(res: Path, out: Path, textures=None, scale=DEFAULT_SCALE, worker
         if line:
             li += 1
         report.append((stem, cls, line))
-    (out / "ini" / "eyes.run").write_text("the heads of the characters carry the dense eye mesh\n", encoding="ascii")  # run.sh / run.ps1 look for it
+    (out / "ini" / "chars.run").write_text("the characters carry the dense eye mesh and the greeting clips hi_1, hi_2\n", encoding="ascii")  # run.sh / run.ps1 look for it
     return report
 
 
