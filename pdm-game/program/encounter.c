@@ -363,6 +363,7 @@ void Enc_Command(string node)
 			if (pay > sti(PlayerCard.money)) { pay = sti(PlayerCard.money); }
 			PlayerCard.money = sti(PlayerCard.money) - pay;
 			Trace("PDM map: paid " + pay);
+			Sound_Once("mapevent2");
 		}
 		else { Trace("PDM map: not paid"); }
 		Enc_Hide();

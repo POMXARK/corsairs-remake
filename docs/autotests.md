@@ -242,6 +242,9 @@ corsairs-remake/pdm-game/sign-shots.sh build/Debug/engine /tmp/signs "$PDM" City
 ## prize-change (TOWN_AUTO=23)
 Кнопка «Сменить» страницы «Корабли»: корабль героя и приз меняются местами (тип, имя, трюм, лишняя команда уходит призу); повторное нажатие возвращает всё назад. Тот же сценарий, что `ransack-screens`; маркер `PDM prize: change ok`.
 
+## map-sound-pay (TOWN_AUTO=28)
+Выплата жалованья на карте («Да» в окне сообщения 6) играет алиас `mapevent2` (`_paymoney`). Сценарий как у `map-pay`, свой маркер `PDM sound: mapevent2`. Привязка по имени алиаса — наше.
+
 ## prize-refusal (TOWN_AUTO=23)
 Отказ кнопок «Взять призовой корабль»/«Сменить»: причина (`crew`, `skills`, `class`) запоминается, а клик на странице показывает окно с текстом RANSACK.dll (`PdmScreens.shipexchange.t.*` из `common.ini`). Тот же сценарий, что `ransack-screens`; маркер `PDM prize: refusal text ok`.
 

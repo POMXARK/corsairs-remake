@@ -51,6 +51,7 @@ map-pay|sea||28|PDM map: paid 200|300
 sea-escape|battle||29|PDM sea: chase, escaped to the map|120
 logbook-dates|town|City_HighRock|31|PDM logbook: dates ok|120
 map-list-scroll|sea||33|PDM map: list of [1-9][0-9] islands|120
+map-sound-pay|sea||28|PDM sound: mapevent2|300
 map-sound-land|sea||6|PDM sound: mapisland|300
 map-sound-anchor|sea||27|PDM sound: yakor|300
 map-sound-attack|sea||24|PDM sound: mapattack|200
