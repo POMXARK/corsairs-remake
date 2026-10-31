@@ -68,6 +68,8 @@ FREE_FONT = FREE_FONTS["seawolf"]
 # the fonts are rendered this many times bigger than the virtual screen asks and scaled down by the node,
 # so the text stays sharp in a window bigger than 800x600
 FONT_OVERSAMPLE = 1.5
+# the width of EditPage1 of the journal, px
+PAGE_WIDTH = 280
 # the free fonts are wider than log-russ: at the full height "Продолжить игру" does not fit its button
 FONT_FIT = 0.85
 # the outline of the font of the notes of the toolbar, PDM_HUD_18, in texels
@@ -1124,7 +1126,30 @@ class Converter:
             key = re.sub(r"\W", "_", rcd.stem.lower(), flags=re.ASCII)
             text = " ".join(rcd.read_bytes().decode("cp1251").split()).replace('"', "'").replace("\\", "/")
             lines.append(f'\tPdmScreens.records.{key} = "{text}";')
+            lines.append(f'\tPdmScreens.recordlines.{key} = "{self.wrap(text)}";')
         return lines
+
+    def wrap(self, text):
+        """The text of a record cut into lines of the width of a page of the journal (EditPage1, 280 px), the way
+        ListPages of STATUS.dll cuts it (the original sums the widths of the signs of the font, and breaks at a space);
+        the lines are joined with \\n. The width is that of the font of the page as it is printed (ours: 5 px less)."""
+        entry = self.fonts.get("pdm_logbook_italic_16")
+        if entry is None:
+            return text
+        size, _, _, ttf = entry
+        font = ImageFont.truetype(str(ttf), size)
+        gap = (font.getlength(" ") + size * 0.25) / FONT_OVERSAMPLE
+        limit = PAGE_WIDTH - 5
+        out, line, width = [], "", 0.0
+        for word in text.split(" "):
+            w = font.getlength(word) / FONT_OVERSAMPLE
+            if line and width + gap + w > limit:
+                out.append(line)
+                line, width = word, w
+            else:
+                line, width = (word, w) if not line else (line + " " + word, width + gap + w)
+        out.append(line)
+        return "\\n".join(out)
 
     def names(self, kind):
         """PdmScreens.<kind>.<stem>.name and .about: TEXTS/RUSSIAN/GOODS/<kind>/<stem>.nme and .txt, the name and

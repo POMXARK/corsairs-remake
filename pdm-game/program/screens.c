@@ -242,8 +242,9 @@ void Screen_Fill()
 }
 
 // the journal (STATUS.dll CLogBook): the records of the hero (TEXTS/RECORDS, Pdm_AddRecord) one after the other as the text of
-// the book, cut at a space into the pages of LOGBOOK_PAGE signs; two pages are open, "Дальше" and "Назад" turn them (a spread)
-#define LOGBOOK_PAGE 1250
+// the book, cut into lines by the width of a page (pdm_ui.py), LOGBOOK_LINES lines a page; two pages are open, "Дальше" and "Назад" turn them (a spread)
+// a page: 328 px of EditPage1 by lineSpace 14
+#define LOGBOOK_LINES 23
 int logbookSpread = 0;
 int logbookPages = 0;
 
@@ -277,37 +278,37 @@ string Screen_LogbookBook()
 	{
 		string at = "r" + i;
 		string key = Screen_RecordKey(PlayerCard.records.(at));
-		if (!CheckAttribute(PdmScreens, "records." + key)) { continue; }
+		if (!CheckAttribute(PdmScreens, "recordlines." + key)) { continue; }
 		if (book != "") { book = book + "\n\n"; }
 		// the date of the record before its text
-		book = book + Screen_RecordDate(at) + "\n" + PdmScreens.records.(key);
+		book = book + Screen_RecordDate(at) + "\n" + PdmScreens.recordlines.(key);
 	}
 	return book;
 }
 
-// the page p (from 0) of the book, "" after the last; sets logbookPages
+// the page p (from 0) of the book, "" after the last; sets logbookPages. The lines come cut by the width of the
+// page from pdm_ui.py (PdmScreens.recordlines), a page is LOGBOOK_LINES of them
 string Screen_LogbookPage(string book, int p)
 {
 	int len = strlen(book);
 	int from = 0;
-	int page = 0;
+	int line = 0;
 	string text = "";
-	while (from < len)
+	while (from <= len)
 	{
-		int to = from + LOGBOOK_PAGE - 1;
-		if (to >= len - 1) { to = len - 1; }
-		else
+		int nl = findSubStr(book, "\n", from);
+		int to = nl;
+		if (nl < 0) { to = len; }
+		if (line / LOGBOOK_LINES == p)
 		{
-			// back to a space, so that no word is cut
-			int cut = to;
-			while (cut > from && strcut(book, cut, cut) != " ") { cut--; }
-			if (cut > from) { to = cut; }
+			if (text != "") { text = text + "\n"; }
+			text = text + strcut(book, from, to - 1);
 		}
-		if (page == p) { text = strcut(book, from, to); }
-		from = to + 1;
-		page++;
+		line++;
+		if (nl < 0) { break; }
+		from = nl + 2;   // the break is the two signs \n, the text control turns it into a line
 	}
-	logbookPages = page;
+	logbookPages = (line + LOGBOOK_LINES - 1) / LOGBOOK_LINES;
 	return text;
 }
 
