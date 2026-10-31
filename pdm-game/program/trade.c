@@ -490,6 +490,34 @@ void Trade_TransferLists()
 	Screen_Text("EDITOURWEIGHT", "" + (Trade_Twentieths() / 20));
 	Screen_Text("EDITOURCAPACITY", "" + Trade_ShipCapacity());
 	Screen_Text("EDITOURMONEY", PlayerCard.money);
+	// the ship on the right: no ship won - no figures
+	string enemyWeight = "";
+	string enemyCapacity = "";
+	if (prizeType != "") { enemyWeight = "" + (Trade_PrizeTwentieths() / 20); enemyCapacity = "" + Trade_PrizeCapacity(); }
+	Screen_Text("EDITENEMYWEIGHT", enemyWeight);
+	Screen_Text("EDITENEMYCAPACITY", enemyCapacity);
+}
+
+// the weight of the hold of the won ship on the right in twentieths of a centner (as Trade_Twentieths) and its capacity
+int Trade_PrizeTwentieths()
+{
+	int sum = 0;
+	int n = Trade_Goods();
+	for (int i = 0; i < n; i++)
+	{
+		string at = "n" + i;
+		if (!CheckAttribute(&PrizeShip, "cargo." + at)) { continue; }
+		int w = sti(PrizeShip.cargo.(at)) * Trade_Weight(i);
+		if (Trade_Type(i) != 1) { w = w * 20; }
+		sum = sum + w;
+	}
+	return sum;
+}
+
+int Trade_PrizeCapacity()
+{
+	if (prizeType == "" || !CheckAttribute(&PdmShipTypes, prizeType + ".capacity")) { return 0; }
+	return sti(PdmShipTypes.(prizeType).capacity);
 }
 
 // the cargo of the won ship goes to PrizeShip (the right list of Transfer), the old one is dropped

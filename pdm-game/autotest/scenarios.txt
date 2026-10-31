@@ -57,3 +57,4 @@ map-sound-ship|sea||25|PDM sound: mapship|200
 war-attack|sea||34|PDM war: hostile nation 0 attacks|200
 war-logbook|town|City_HighRock|35|PDM war: logbook loyalty ok|120
 war-from-battle|sea||25|PDM war: nation 0 is hostile now|200
+prize-weight|town|City_HighRock|23|PDM prize: right hold ok [1-9][0-9]* of [1-9][0-9]*|120

@@ -1277,6 +1277,10 @@ void Screen_StatusAuto()
 		int stepBack = Transfer_Move(false);
 		if (stepMoved > 0 && stepBack == stepMoved && Trade_Onboard(Transfer_Nth(0)) == stepHad) { Trace("PDM prize: transfer step ok " + stepMoved); }
 		else { Trace("PDM prize: transfer step FAIL " + stepMoved + "," + stepBack); }
+		// the prize ship stands on the right again (the button above took it)
+		prizeType = "pinas";
+		int enemyHold = Trade_PrizeTwentieths() / 20;
+		if (enemyHold > 0 && Trade_PrizeCapacity() >= enemyHold) { Trace("PDM prize: right hold ok " + enemyHold + " of " + Trade_PrizeCapacity()); }
 		int cargoHad = Trade_Twentieths();
 		int cargoKinds = Trade_PrizeLoadAll();
 		int cargoLeft = 0;
