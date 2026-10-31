@@ -47,3 +47,4 @@ map-scroll|sea||30|PDM map: scrolled -[1-9][0-9.]* -[1-9][0-9.]* manual 1|120
 logbook-screen|town|City_HighRock|31|PDM logbook: ok pages [2-9]|120
 map-pay|sea||28|PDM map: paid 200|300
 sea-escape|battle||29|PDM sea: chase, escaped to the map|120
+logbook-dates|town|City_HighRock|31|PDM logbook: dates ok|120

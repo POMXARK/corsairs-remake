@@ -262,6 +262,13 @@ string Screen_RecordKey(string name)
 	return key;
 }
 
+// the date a record was written on ("" for a save of before the dates)
+string Screen_RecordDate(string at)
+{
+	if (!CheckAttribute(PlayerCard, "recdates." + at)) { return ""; }
+	return Map_RecordDate(sti(PlayerCard.recdates.(at)));
+}
+
 // the whole text of the book
 string Screen_LogbookBook()
 {
@@ -272,7 +279,8 @@ string Screen_LogbookBook()
 		string key = Screen_RecordKey(PlayerCard.records.(at));
 		if (!CheckAttribute(PdmScreens, "records." + key)) { continue; }
 		if (book != "") { book = book + "\n\n"; }
-		book = book + PdmScreens.records.(key);
+		// the date of the record before its text
+		book = book + Screen_RecordDate(at) + "\n" + PdmScreens.records.(key);
 	}
 	return book;
 }
@@ -1213,6 +1221,11 @@ void Screen_StatusAuto()
 	}
 	if (at >= strlen(buttons))
 	{
+		if (TownAuto == 31)
+		{
+			string page1 = Screen_LogbookPage(Screen_LogbookBook(), 0);
+			if (findSubStr(page1, "1601", 0) >= 0) { Trace("PDM logbook: dates ok, first " + strcut(page1, 0, 24)); }
+		}
 		if (TownAuto == 31) { Trace("PDM logbook: ok pages " + logbookPages + " records " + pdmRecords); }
 		Trace("PDM status: pages ok");
 		PostEvent("Town_AutoQuit", 500);

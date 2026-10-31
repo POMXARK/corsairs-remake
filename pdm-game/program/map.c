@@ -505,6 +505,21 @@ void Map_Pay()
 	encPay = sum;
 }
 
+// the date of a record of the journal, as STATUS.dll writes it ("%s %d, %d, %d.%d": month, day, year, hour.minutes)
+string Map_RecordDate(int total)
+{
+	int day = (total / 24) % 365;
+	int mon = 0;
+	while (day >= Map_MonthDays(mon)) { day = day - Map_MonthDays(mon); mon++; }
+	string months = Enc_Text("months");
+	int from = 0;
+	for (int i = 0; i < mon; i++) { from = findSubStr(months, ",", from) + 1; }
+	int to = findSubStr(months, ",", from);
+	if (to < 0) { to = strlen(months); }
+	string min = "00";
+	return strcut(months, from, to - 1) + " " + (day + 1) + ", " + (1601 + total / 8760) + ", " + (total % 24) + "." + min;
+}
+
 string Map_DateText(bool withTime)
 {
 	int total = makeint(gameHours);

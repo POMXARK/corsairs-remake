@@ -59,6 +59,7 @@ void Pdm_AddRecord(string record)
 	// TEXTS\RECORDS\<record>.rcd, the journal (P9)
 	string at = "r" + pdmRecords;
 	PlayerCard.records.(at) = record;
+	PlayerCard.recdates.(at) = makeint(gameHours);
 	pdmRecords++;
 	Trace("PDM story: journal " + record);
 }

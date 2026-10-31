@@ -39,6 +39,7 @@
 | `map-land` | корабль идёт к острову, при входе в клетки вокруг острова — окно «Сэр, земля!» с именем и флагом | `PDM map: land … Сэр, земля` |
 | `map-scroll` | мышь у края окна карты: курсор-стрелка и сдвиг карты влево/вверх, корабль не тянет вид назад | `PDM map: scrolled … manual 1` |
 | `logbook-screen` | журнал героя: записи квестов (TEXTS/RECORDS) на страницах книги, «Дальше»/«Назад» листают разворот | `PDM logbook: ok pages N records M` |
+| `logbook-dates` | тот же прогон `TOWN_AUTO=31`: перед каждой записью журнала стоит дата «Месяц день, год, час.мин» (формат `%s %d, %d, %d.%d` STATUS.dll) | `PDM logbook: dates ok` |
 | `sea-escape` | уход от погони: враг ближе 600 м — отказ, после отрыва «Карта» работает (TOWN_AUTO=29) | `PDM sea: chase, escaped to the map` |
 | `map-pay` | при смене месяца окно «Пора платить команде», «Да» списывает 5 × команда (200) | `PDM map: paid 200` |
 | `battle-fire` / `battle-board` / `battle-sail` / `battle-fort` | залп, абордаж, парусная погоня, бой с фортом | `PDM: autotest done, battle…` |
