@@ -325,10 +325,28 @@ void Screen_Logbook()
 	if (logbookSpread > 0) { prev = PdmScreens.logbook.t.prev; }
 	Screen_Text("LB_NEXT", next);
 	Screen_Text("LB_PREV", prev);
-	// the loyalty of the nations the book shows (england 0, france 2, spain 3): our wars are not there yet, all neutral
-	Screen_Text("S_NATION0", PdmScreens.logbook.t.neutral);
-	Screen_Text("S_NATION2", PdmScreens.logbook.t.neutral);
-	Screen_Text("S_NATION3", PdmScreens.logbook.t.neutral);
+	// the loyalty of the nations the book shows (england 0, france 2, spain 3) by the relation of the hero (encounter.c)
+	// TOWN_AUTO=35: France is hostile, Spain is a friend
+	if (TownAuto == 35) { PlayerCard.relations.n2 = 2; PlayerCard.relations.n3 = 1; }
+	Screen_Text("S_NATION0", Screen_Loyalty(0));
+	Screen_Text("S_NATION2", Screen_Loyalty(2));
+	Screen_Text("S_NATION3", Screen_Loyalty(3));
+	if (TownAuto == 35)
+	{
+		bool okEngland = Screen_Loyalty(0) == PdmScreens.logbook.t.neutral;
+		bool okFrance = Screen_Loyalty(2) == PdmScreens.logbook.t.hostile;
+		bool okSpain = Screen_Loyalty(3) == PdmScreens.logbook.t.loyal;
+		if (okEngland && okFrance && okSpain) { Trace("PDM war: logbook loyalty ok"); }
+	}
+}
+
+// the label of a nation in the journal: "Лояльно" (relation 1), "Враждебно" (2), else "Нейтрально"
+string Screen_Loyalty(int nation)
+{
+	int rel = Enc_Relation(nation);
+	if (rel == 1) { return PdmScreens.logbook.t.loyal; }
+	if (rel == 2) { return PdmScreens.logbook.t.hostile; }
+	return PdmScreens.logbook.t.neutral;
 }
 
 // "Дальше" / "Назад": a spread forward or back, only where there is one
@@ -1213,6 +1231,7 @@ void Screen_StatusAuto()
 	string buttons = "F1,LB_SHIP,LB_GOODS,LB_CHEST,LB_LOGBOOK";
 	if (TownAuto == RANSACKSCR_ID) { buttons = "F1,@shipexchange,@transfer,@messagebox_ransack"; }
 	if (TownAuto == 31) { buttons = "F1,LB_LOGBOOK,LB_NEXT,LB_PREV"; }
+	if (TownAuto == 35) { buttons = "F1,LB_LOGBOOK"; }
 	int at = 0;
 	for (int i = 0; i < step; i++)
 	{

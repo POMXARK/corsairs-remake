@@ -166,7 +166,7 @@ void Enc_Tick(int ms)
 		encPick[0] = ENC_PIRATE;
 		encPats[0] = 21;
 		// TOWN_AUTO=25: the merchants of England (pattern 5), the hero attacks them and they run away
-		if (TownAuto == 25) { encPick[0] = 0; encPats[0] = 5; }
+		if (TownAuto == 25 || TownAuto == 34) { encPick[0] = 0; encPats[0] = 5; }
 		// TOWN_AUTO=26: the pirate squadron of three (pattern 8), the hero attacks, the escorts join the battle
 		if (TownAuto == 26) { encPats[0] = 8; }
 	}
@@ -201,7 +201,16 @@ void Enc_Meet(int nation, int pattern)
 		// needs war with it, which the remake does not have yet
 		encType = 0;
 		if (mc > 0 && wc == 0) { encType = 1; }
+		// a nation at war with the hero (relation 2, MAP.dll isEnemy) attacks by the same roll as pirates, the others never
+		if (Enc_Relation(nation) == 2)
+		{
+			int roll = rand(ENC_ATTACK_ROLL - 1);
+			if (TownAuto == 34) { roll = ENC_ATTACK_ROLL - 1; }
+			if (roll > ENC_ATTACK_MIN) { encType = 3; }
+			else { encType = 2; }
+		}
 	}
+	if (encForce == 3 && TownAuto == 34) { encForce = 0; }
 	if (encForce == 3) { encType = 4; if (TownAuto == 25) { encType = 1; } encForce = 0; }
 	string text = Enc_Message(encType, nation, pattern, encCount);
 	Trace("PDM encounter: nation " + nation + ", pattern " + pattern + ", type " + encType + ", " + encCount + " ship(s) at " + encIsland);
@@ -209,7 +218,17 @@ void Enc_Meet(int nation, int pattern)
 	if (encType == 3 || encType == 4) { Sound_Once("mapattack"); }
 	else if (encType == 2) { Sound_Once("mapenemy"); }
 	else { Sound_Once("mapship"); }
+	if (TownAuto == 34 && encType == 3) { Trace("PDM war: hostile nation " + nation + " attacks"); }
 	Enc_Show(encType, text);
+}
+
+// the relation of the hero with a nation: 0 neutral, 1 ally, 2 hostile (relations.idf; the table of the hero is
+// PlayerCard.relations.n<nation>)
+int Enc_Relation(int nation)
+{
+	string at = "n" + nation;
+	if (!CheckAttribute(&PlayerCard, "relations." + at)) { return 0; }
+	return sti(PlayerCard.relations.(at));
 }
 
 string Enc_Message(int type, int nation, int pattern, int count)
@@ -393,6 +412,13 @@ void Enc_MakeEnemy(string key, string typeKey, int nation)
 void Enc_Battle()
 {
 	Enc_Hide();
+	// ours (the original gives no source of the relation): the hero who attacks a nation becomes its enemy
+	if (encNation != ENC_PIRATE && Enc_Relation(encNation) != 2)
+	{
+		string rel = "n" + encNation;
+		PlayerCard.relations.(rel) = 2;
+		Trace("PDM war: nation " + encNation + " is hostile now");
+	}
 	string pat = "p" + encPattern;
 	bool war = sti(PdmPattern.(pat).wc) > 0;
 	if (encType == 1) { war = false; }

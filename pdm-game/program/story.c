@@ -222,6 +222,7 @@ void Pdm_NewGame()
 	PlayerCard.money = 0;
 	PlayerCard.rank = 1;
 	PlayerCard.reputation = 0;
+	DeleteAttribute(&PlayerCard, "relations");
 	PlayerCard.experience = 0;
 	PlayerCard.island = PlayerCard.address.island;
 	PdmLogic_NewGame();
