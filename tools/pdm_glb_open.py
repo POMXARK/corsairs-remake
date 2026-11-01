@@ -2,7 +2,7 @@
 
   blender -P tools/pdm_glb_open.py -- <file.glb> [action]
 
-Drops the helper bone shape (Icosphere in glTF_not_exported) the importer makes, draws the bones as octahedrons in
+Does not make the helper bone shape (Icosphere in glTF_not_exported) of the importer, which breaks the import in the window, draws the bones as octahedrons in
 front of the mesh and sets the action (default idle_1), so the model can be posed (T-pose for 3D generation) and the
 clips of the game looked at in the Dope Sheet / Action Editor.
 """
@@ -12,7 +12,9 @@ import bpy
 
 args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.import_scene.gltf(filepath=args[0])
+# disable_bone_shape: the importer of Blender 5.4 alpha fails in the window on the Icosphere it makes for the bones
+# (bpy.context.object is None), and nothing but the sphere is imported
+bpy.ops.import_scene.gltf(filepath=args[0], disable_bone_shape=True)
 for coll in [c for c in bpy.data.collections if c.name == "glTF_not_exported"]:
     for obj in list(coll.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
