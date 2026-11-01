@@ -27,3 +27,21 @@ for arm in (o for o in bpy.data.objects if o.type == "ARMATURE"):
     arm.animation_data_create()
     arm.animation_data.action = bpy.data.actions.get(args[1] if len(args) > 1 else "idle_1")
     bpy.context.view_layer.objects.active = arm
+
+
+def frame_all():
+    """The whole model in the 3D view, with the textures (a timer: the window exists only after the script)."""
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            if area.type == "VIEW_3D":
+                region = next(r for r in area.regions if r.type == "WINDOW")
+                area.spaces[0].shading.color_type = "TEXTURE"
+                with bpy.context.temp_override(window=window, area=area, region=region):
+                    bpy.ops.view3d.view_all()
+                    bpy.ops.view3d.view_axis(type="FRONT")
+                    bpy.ops.view3d.view_all()
+    return None
+
+
+bpy.context.preferences.view.show_splash = False
+bpy.app.timers.register(frame_all, first_interval=1.0)
