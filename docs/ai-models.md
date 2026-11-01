@@ -84,6 +84,8 @@ python tools/pdm_models_all.py pdm-game hero1 --install                         
 
 Подводный камень: `WTiVoNativeMeshToMesh` падает на `MemoryError: bad allocation` в `tetrahedralize_neighbors` (CGAL), «subprocess crashed with exit code 1» (2026-11-01, RTX 5080 16 ГБ VRAM, ПК с 32 ГБ ОЗУ). Вход 6,65 млн вершин / 13,3 млн граней, разрешение 2048, proxy 25 млн точек; к моменту тетраэдризации свободно было 5,4 ГБ ОЗУ и 7,4 ГБ коммита, а процессу нужно больше. Видеопамять и CUDA ни при чём. Лечение: разрешение 1536 и proxy 12 млн (как у автора видео), закрыть браузер и лишние программы, увеличить файл подкачки Windows; значения 2048 / 25 млн нужны машине с 64 ГБ ОЗУ. Прогон до WTiVo (BiRefNet, MoGe, три прохода Pixal3D за ~1,5 мин) работает.
 
+Подводный камень: `LODTailorTheMeshTrimmer` падает на `FileNotFoundError: [WinError 2]` (2026-11-01): нода запускает Blender командой из поля `blender_path`, по умолчанию `blender`, а в PATH его нет. Лечение: вписать полный путь в `blender_path` ноды (у нас `C:\corsairs-remake\blender-5.4.0-alpha+main.93eeecf73c12-windows.amd64-release\blender.exe`, чистый, без аддонов); из `pdm_models_all.py` / `pdm_comfy_api.py` — ключ `--blender`. С `R=1536` и proxy 12 млн WTiVo прошёл за 112 с: 10,7 млн вершин / 21,4 млн граней, watertight, ОЗУ хватило (свободно было 12 ГБ минимум).
+
 Установка (Windows): ComfyUI Easy-Install + ComfyUI-Trellis2 (VisualBruno) и ноды из README https://github.com/pixelartistry/PixelArtistry-Watertight-Meshes (проще всего его `watertightMeshes_win_installer.bat`: прочитайте файл перед запуском). Нужен чистый Blender без аддонов.
 
 Полный журнал установки на Windows и подводные камни: [ai-models-watertight-setup.md](ai-models-watertight-setup.md).
