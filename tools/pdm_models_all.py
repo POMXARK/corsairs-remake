@@ -33,6 +33,7 @@ def main():
     ap.add_argument("--steps", default=",".join(STEPS))
     ap.add_argument("--install", action="store_true")
     ap.add_argument("--parts", action="store_true", help="a character part by part (pdm_model_views.PARTS)")
+    ap.add_argument("--tpose", action="store_true", help="the views with both arms raised (pdm_model_views --tpose)")
     ap.add_argument("--only-parts", help="with --parts: the groups taken from the networks (head,torso,...), the rest stays original")
     ap.add_argument("--redo", action="store_true")
     ap.add_argument("--quality", default="normal")
@@ -49,7 +50,8 @@ def main():
             sys.exit(f"pdm_models_all: no step {s} (views, refine, model, optimize)")
     ai = a.game / "data" / "ai_models"
     if "views" in steps and a.models:  # without names the views that are there are taken
-        run(TOOLS / "pdm_model_views.py", a.game, *a.models, *(["--parts"] if a.parts else []))
+        run(TOOLS / "pdm_model_views.py", a.game, *a.models, *(["--parts"] if a.parts else []),
+            *(["--tpose"] if a.tpose else []))
     models = [m.split("/")[-1] for m in a.models]
     if a.parts:
         sys.path.insert(0, str(TOOLS))
