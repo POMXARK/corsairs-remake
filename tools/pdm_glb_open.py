@@ -13,12 +13,15 @@ import sys
 import bpy
 
 args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-GAME_FPS = 10
+SCENE_FPS = 30  # the clips of the game are 10 FPS; 30 only smooths the playback: the keys are in seconds, the speed stays the game's
 
 
 def main():
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
+    # before the import: the importer turns the seconds of the keys into frames at the fps of the scene
+    bpy.context.scene.render.fps = SCENE_FPS
+    bpy.context.scene.render.fps_base = 1.0
     bpy.ops.import_scene.gltf(filepath=args[0], disable_bone_shape=True)
     for coll in [c for c in bpy.data.collections if c.name == "glTF_not_exported"]:
         bpy.data.collections.remove(coll)
@@ -28,10 +31,6 @@ def main():
         arm.animation_data_create()
         action = bpy.data.actions.get(args[1] if len(args) > 1 else "idle_1")
         arm.animation_data.action = action
-        # the clips of the game play at FPS = 10 (tools/pdm_character.py, the .an header): the scene runs at the same rate
-        # so the keys of the GLB, in seconds, land on the frames of the original and the speed is the game's
-        bpy.context.scene.render.fps = GAME_FPS
-        bpy.context.scene.render.fps_base = 1.0
         if action:
             bpy.context.scene.frame_start, bpy.context.scene.frame_end = (int(f) for f in action.frame_range)
         bpy.context.view_layer.objects.active = arm
