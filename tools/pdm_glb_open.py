@@ -13,6 +13,7 @@ import sys
 import bpy
 
 args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+GAME_FPS = 10
 
 
 def main():
@@ -27,6 +28,10 @@ def main():
         arm.animation_data_create()
         action = bpy.data.actions.get(args[1] if len(args) > 1 else "idle_1")
         arm.animation_data.action = action
+        # the clips of the game play at FPS = 10 (tools/pdm_character.py, the .an header): the scene runs at the same rate
+        # so the keys of the GLB, in seconds, land on the frames of the original and the speed is the game's
+        bpy.context.scene.render.fps = GAME_FPS
+        bpy.context.scene.render.fps_base = 1.0
         if action:
             bpy.context.scene.frame_start, bpy.context.scene.frame_end = (int(f) for f in action.frame_range)
         bpy.context.view_layer.objects.active = arm
