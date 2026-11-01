@@ -34,7 +34,7 @@ from PIL import Image
 TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS))
 sys.path.insert(0, str(TOOLS.parent / "engine" / "demos" / "common"))
-from pdm_gm2glb import build  # noqa: E402
+from pdm_gm2glb import build, read_rig  # noqa: E402
 from pdm_model_views import read_gm, read_tx, texture_index, texture_of  # noqa: E402
 from storm_formats import write_tx  # noqa: E402
 
@@ -70,7 +70,7 @@ def export(game: Path, folder: Path, names):
         orig = game / "data" / "ai_models" / "orig" / path.relative_to(game / "resource" / "models")
         gm = read_gm(orig if orig.exists() else path)
         out = folder / "models" / f"{name}.glb"
-        out.write_bytes(build(gm, index))
+        out.write_bytes(build(gm, index, read_rig(game, path) if gm["skinned"] else None))
         manifest["models"][name] = md5(out)
         for tex in {o[1] for o in gm["objects"] if o[1]}:
             tx = texture_of(index, tex)
