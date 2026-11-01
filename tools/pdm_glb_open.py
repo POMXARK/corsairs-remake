@@ -25,7 +25,10 @@ def main():
         arm.data.display_type = "OCTAHEDRAL"
         arm.show_in_front = True
         arm.animation_data_create()
-        arm.animation_data.action = bpy.data.actions.get(args[1] if len(args) > 1 else "idle_1")
+        action = bpy.data.actions.get(args[1] if len(args) > 1 else "idle_1")
+        arm.animation_data.action = action
+        if action:
+            bpy.context.scene.frame_start, bpy.context.scene.frame_end = (int(f) for f in action.frame_range)
         bpy.context.view_layer.objects.active = arm
     if bpy.app.background:
         return None
@@ -34,6 +37,7 @@ def main():
             if area.type == "VIEW_3D":
                 region = next(r for r in area.regions if r.type == "WINDOW")
                 area.spaces[0].shading.color_type = "TEXTURE"
+                area.spaces[0].shading.show_specular_highlight = False  # no gloss: the game has none
                 with bpy.context.temp_override(window=window, area=area, region=region):
                     bpy.ops.view3d.view_axis(type="FRONT")
                     bpy.ops.view3d.view_all()

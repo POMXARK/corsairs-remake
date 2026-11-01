@@ -61,7 +61,7 @@ def read_rig(game: Path, model: Path):
 TURN = np.array((-1.0, 1.0, -1.0, 1.0))  # char space -> glTF space is a half turn about y: x and z flip, in a quaternion too
 
 
-def add_rig(rig, nodes, scene_nodes, accessor):
+def add_rig(rig, nodes, scene_nodes, accessor, names=None):
     """The joints as nodes (frame 0 the rest pose), the skin and an animation per action; returns the doc parts."""
     parents, rot, roots, joints, fps = rig["parents"], rig["rot"], rig["roots"], rig["joints"], rig["fps"]
     bones, frames = rot.shape[:2]
@@ -76,7 +76,7 @@ def add_rig(rig, nodes, scene_nodes, accessor):
     turn = np.diag((-1.0, 1.0, -1.0, 1.0))
     ibm = np.stack([np.linalg.inv(turn @ w @ turn).T for w in world]).astype("<f4")  # column-major
     for b in range(bones):
-        node = {"name": f"bone_{b:02d}", "rotation": (rot[b, 0] * TURN).tolist(),
+        node = {"name": (names or {}).get(b, f"bone_{b:02d}"), "rotation": (rot[b, 0] * TURN).tolist(),
                 "translation": ((roots[0] if parents[b] < 0 else joints[b]) * flip3).tolist()}
         kids = [c for c in range(bones) if parents[c] == b]
         if kids:
@@ -156,7 +156,16 @@ def build(gm, index, rig=None):
     scene_nodes = list(range(len(nodes)))
     extra = {}
     if rig:
-        extra = add_rig(rig, nodes, scene_nodes, accessor)
+        # a bone carrying the vertices of one object is named after it (its texture: hero_new_arm_top)
+        names, taken_all = {}, []
+        for o in gm["objects"]:
+            used = set(np.unique(o[5]).tolist())
+            label = Path(o[1]).stem if o[1] else o[0]
+            if len(used) == 1 and label and used.copy().pop() not in names:
+                n = 1 + sum(t == label for t in taken_all)
+                taken_all.append(label)
+                names[used.pop()] = label if n == 1 else f"{label}_{n}"
+        extra = add_rig(rig, nodes, scene_nodes, accessor, names)
     doc = {"asset": {"version": "2.0", "generator": "pdm_gm2glb"}, "scene": 0,
            "scenes": [{"nodes": scene_nodes}], "nodes": nodes, **extra,
            "meshes": [{"primitives": [pr], "name": o[0]} for pr, o in zip(meshes_prims, gm["objects"])],
