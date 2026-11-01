@@ -11,7 +11,10 @@ is drawn in the pose it is bound in, the one pdm_glb2gm.py binds the new model t
 <model>_<part>_front.png ...: each group is made into 3D on its own, so a hand cannot grow into the coat or the blade
 into the hand, and pdm_glb2gm.py --parts binds every group to its own bones only.
 
-usage: pdm_model_views.py <game dir> <model> [<model> ...] [--out data/ai_models/views] [--size 1024] [--yaw 0] [--parts]
+--tpose raises both arms of a skinned character to the sides (each arm as one piece, about the shoulder joint of animation/<name>.an):
+the image models separate the arms from the body better, and the new model then gets the bind pose a rig expects.
+
+usage: pdm_model_views.py <game dir> <model> [<model> ...] [--out data/ai_models/views] [--size 1024] [--yaw 0] [--parts] [--tpose]
   <model>: a path under resource/models without .gm (characters/hero1), or a name found there (hero1)
 """
 import argparse
@@ -24,6 +27,7 @@ import numpy as np
 from PIL import Image
 
 TOOLS = Path(__file__).resolve().parent
+sys.path.insert(0, str(TOOLS))
 sys.path.insert(0, str(TOOLS.parent / "engine" / "demos" / "common"))
 from storm_formats import read_tx  # noqa: E402
 
@@ -126,6 +130,38 @@ def parts_of(gm):
             for part, idx in PART_OBJECTS.items()}
 
 
+def tpose(gm, game: Path, path: Path):
+    """The model with both arms (the bones of parts_of arm_l, arm_r) turned about their shoulder in the picture plane until
+    the hand lies level with the shoulder, outwards; the rest as it is. The shoulder is the joint of the first bone of the
+    arm summed up the parents of animation/<name>.an (x mirrored as the vertices are)."""
+    from pdm_gm2glb import read_rig  # noqa: E402
+    rig = read_rig(game, path)
+    if rig is None:
+        sys.exit(f"pdm_model_views: {path.stem} has no animation/*.an: no --tpose")
+    parts = parts_of(gm)
+    objects = [list(o) for o in gm["objects"]]
+    for arm in ("arm_l", "arm_r"):
+        bones = sorted(parts[arm])
+        at, b = rig["roots"][0].astype(np.float64).copy(), bones[0]
+        chain = []
+        while b >= 0:
+            chain.append(b)
+            b = rig["parents"][b]
+        for b in chain[:-1]:
+            at += rig["joints"][b]
+        pivot = at * (-1, 1, 1)
+        hand = np.concatenate([o[2] for o in gm["objects"] if o[5].size and set(o[5].tolist()) == {bones[-1]}])
+        d = hand.mean(0) - pivot
+        side = 1.0 if pivot[0] > 0 else -1.0
+        a = math.atan2(0.0, side) - math.atan2(d[1], d[0])
+        rot = np.array([[math.cos(a), -math.sin(a), 0], [math.sin(a), math.cos(a), 0], [0, 0, 1]])
+        for o in objects:
+            if o[5].size and set(o[5].tolist()) <= set(bones):
+                o[2] = (o[2] - pivot) @ rot.T + pivot
+                o[3] = o[3] @ rot.T
+    return {**gm, "objects": [tuple(o) for o in objects]}
+
+
 def texture_index(game: Path) -> dict:
     """<name>.tga -> the .tx of resource/textures with that name, any folder (lower case)."""
     return {p.name[:-3].lower(): p for p in (game / "resource" / "textures").rglob("*.tx")}
@@ -203,6 +239,7 @@ def main():
     ap.add_argument("--out", type=Path)
     ap.add_argument("--size", type=int, default=1024)
     ap.add_argument("--yaw", type=float, default=0.0, help="degrees: turns the model so that its face is the front")
+    ap.add_argument("--tpose", action="store_true", help="a skinned character with both arms raised to the sides")
     ap.add_argument("--parts", action="store_true", help="a skinned character part by part (PARTS)")
     a = ap.parse_args()
     out = a.out or a.game / "data" / "ai_models" / "views"
@@ -211,6 +248,10 @@ def main():
     for model in a.models:
         path = find_model(a.game, model)
         gm = read_gm(path)
+        if a.tpose:
+            if not gm["skinned"]:
+                sys.exit(f"pdm_model_views: {path.stem} is not a skinned model: no --tpose")
+            gm = tpose(gm, a.game, path)
         missing = sorted({o[1] for o in gm["objects"] if o[1] and not texture_of(textures, o[1])})
         if a.parts:
             if not gm["skinned"]:
