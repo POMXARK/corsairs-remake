@@ -21,7 +21,7 @@ CFG = {"head": (0.02, 15000, 2048), "torso": (0.04, 20000, 2048), "arm_l": (0.05
        "arm_r": (0.05, 8000, 1024), "sword": (0.05, 4000, 1024), "legs": (0.04, 15000, 2048)}
 WHAT = {"head": "head", "torso": "torso", "arm_l": "left arm with the hand", "arm_r": "right arm with the hand",
         "sword": "thin sabre", "legs": "legs with the boots"}
-EXTRA = {"head": " Keep the eyes exactly as in the picture: open, white eyeballs, dark irises, round pupils, eyelids. Keep both ears visible and uncovered, the hair goes behind the ears, never over them. Keep the closed mouth as in the picture: one clean line between the lips, no teeth, no second lip line.",
+EXTRA = {"head": " Keep the eyes exactly as in the picture: open, white eyeballs, dark irises, round pupils, eyelids. Keep both ears visible and uncovered, the hair goes behind the ears, never over them. Keep the hair exactly as in the picture, including a ponytail or long strands at the back: do not shorten or remove them. Soft even matte lighting, no glossy highlights or shine on the skin, no reflections. Keep the closed mouth as in the picture: one clean line between the lips, no teeth, no second lip line.",
          "arm_l": " A clean hand with five separate fingers.", "arm_r": " A clean hand with five separate fingers.",
          "legs": "", "torso": "", "sword": ""}
 OUTLINE = {"head": "The outline must be smooth and organic like a real person: a round skull, a natural jaw and chin, natural hair, a round neck, no angular polygon silhouette."}
@@ -249,6 +249,35 @@ class PDMPartSave:
         text = "\n".join(log)
         print(text, flush=True)
         return {"ui": {"text": [text]}, "result": (text,)}
+
+
+def _patch_flash_decode():
+    """TextGenerate (Qwen3.5 describes the view) crashed in comfy_kitchen.flash_attention_decode_gqa:
+    "Unsupported Flash Attention tensor strides" - the CUDA kernel wants contiguous q/k/v, the KV cache gives views.
+    Make them contiguous; if the kernel still refuses, use the torch version of the same computation."""
+    try:
+        import comfy_kitchen
+        from comfy_kitchen import flash_attention as fa
+    except Exception:
+        return
+    orig = fa.flash_attention_decode_gqa
+    if getattr(orig, "_pdm", False):
+        return
+
+    def safe(q, k, v, kv_lengths, return_lse=False, causal=True):
+        q, k, v = q.contiguous(), k.contiguous(), v.contiguous()
+        try:
+            return orig(q, k, v, kv_lengths, return_lse=return_lse, causal=causal)
+        except RuntimeError:
+            out, lse = fa._decode_gqa_torch(q, k, v, kv_lengths, causal)
+            return (out, lse) if return_lse else out
+    safe._pdm = True
+    fa.flash_attention_decode_gqa = safe
+    if getattr(comfy_kitchen, "flash_attention_decode_gqa", None) is orig:
+        comfy_kitchen.flash_attention_decode_gqa = safe
+
+
+_patch_flash_decode()
 
 
 NODE_CLASS_MAPPINGS = {"PDMPartViews": PDMPartViews, "PDMPartSave": PDMPartSave, "PDMSheetSplit": PDMSheetSplit}

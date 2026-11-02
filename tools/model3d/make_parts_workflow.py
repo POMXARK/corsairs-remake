@@ -87,8 +87,9 @@ def main():
     for o in node_views["outputs"]:
         o["links"] = [x for x in o["links"] if x in links]
     # refine_prompt (widget 2): the VLM of the subgraph (Qwen3.5 PE) looks at the view and rewrites our prompt by what it shows
+    # pdm_parts patches flash_attention_decode_gqa (contiguous q/k/v, torch fallback), so the VLM can run again
     for ref in [REFINE[1140]]:
-        nodes[ref]["widgets_values"][2] = False  # True crashes: comfy_kitchen flash_attention_decode_gqa, "Unsupported Flash Attention tensor strides" (torch cu128)
+        nodes[ref]["widgets_values"][2] = True
     # DecimateMesh (186) 700000 faces -> UnwrapMesh cut them into 10 358 tiny charts, the 4096 atlas was confetti
     # (the log of the first run). 60000 faces unwrap into big charts; the detail comes from reference_mesh / normal map.
     nodes[186]["widgets_values"][0] = 60000
