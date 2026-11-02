@@ -405,6 +405,16 @@ def hard_delete(path, confirm):
 DATA = os.environ.get("DISKVIEW_DATA") or os.path.join(os.path.expanduser("~"), ".diskview")
 
 
+def log(msg):
+    """Журнал ошибок и ответов модели: ~/.diskview/diskview.log (для разбора, когда что-то «не сработало»)."""
+    try:
+        os.makedirs(DATA, exist_ok=True)
+        with open(os.path.join(DATA, "diskview.log"), "a", encoding="utf-8") as f:
+            f.write("%s %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), msg))
+    except OSError:
+        pass
+
+
 def _jload(name, default):
     try:
         with open(os.path.join(DATA, name), encoding="utf-8") as f:
@@ -441,7 +451,7 @@ def http_json(url, body=None, key="", timeout=300):
         return json.loads(r.read())
 
 
-def llm(prompt, model="", max_tokens=300, temp=0.2, prof=None, timeout=300):
+def llm(prompt, model="", max_tokens=300, temp=0.2, prof=None, timeout=300, as_json=False):
     """Один вызов модели через активный профиль: Ollama или любой OpenAI-совместимый сервер."""
     p = prof or profile()
     model = model or p.get("model", "")
@@ -451,11 +461,13 @@ def llm(prompt, model="", max_tokens=300, temp=0.2, prof=None, timeout=300):
     url = p["url"].rstrip("/")
     if p["type"] == "ollama":
         r = http_json(url + "/api/generate", {"model": model, "prompt": prompt, "stream": False, "think": False,
-                                              "options": {"temperature": temp, "num_predict": max_tokens}}, p.get("key", ""), timeout)
+                                              "options": {"temperature": temp, "num_predict": max_tokens},
+                                              **({"format": "json"} if as_json else {})}, p.get("key", ""), timeout)
         text = r.get("response", "")
     else:
         r = http_json(url + "/chat/completions", {"model": model, "messages": [{"role": "user", "content": prompt}],
-                                                  "temperature": temp, "max_tokens": max_tokens}, p.get("key", ""), timeout)
+                                                  "temperature": temp, "max_tokens": max_tokens,
+                                                  **({"response_format": {"type": "json_object"}} if as_json else {})}, p.get("key", ""), timeout)
         text = r["choices"][0]["message"]["content"]
     text = re.sub(r"<think>.*?(</think>|$)", "", text or "", flags=re.S).strip()
     return text
@@ -986,13 +998,16 @@ def autotag_run(cand, model, web=True, force=False):
     prompt = ("Ты раскладываешь папки компьютера по коллекциям и тегам.\nСУЩЕСТВУЮЩИЕ коллекции: %s\nСУЩЕСТВУЮЩИЕ теги: %s\n"
               "Правила: сначала используй существующие коллекции и теги (точное имя); новую коллекцию/тег создавай, только если ничего не подходит; "
               "коллекций мало и они широкие (например «Музыка и FL Studio», «Игры», «Проекты», «Установщики», «Архивы», «Системное»), "
-              "теги короткие, 2-4 на папку, по-русски, строчными. Верни ТОЛЬКО JSON-массив "
-              "[{\"path\":\"как в карточке\",\"collection\":\"имя\",\"tags\":[...],\"note\":\"одна фраза: что это\"}] по одному объекту на папку.\n"
+              "теги короткие, 2-4 на папку, по-русски, строчными. Верни ТОЛЬКО JSON-объект {\"items\": "
+              "[{\"path\":\"как в карточке\",\"collection\":\"имя\",\"tags\":[...],\"note\":\"одна фраза: что это\"}]} по одному элементу на папку, без рассуждений. "
+              "Теги ОБЯЗАТЕЛЬНЫ (2-4 штуки, не пустой список), описание — про конкретную папку, не начинай его словом «Коллекция». "
+              "Пример элемента: {\"path\":\"D:\\\\Music\\\\FL\",\"collection\":\"Музыка\",\"tags\":[\"fl studio\",\"сэмплы\",\"проекты\"],\"note\":\"Проекты и сэмплы FL Studio\"}.\n"
               "%sКарточки:\n%s" % ("; ".join(cols) or "нет", "; ".join(tg) or "нет",
                                "Если у карточки есть «веб:» — это справка из интернета по названию папки, опирайся на неё, когда по содержимому неясно (она по одному названию и может быть неточной: если не сходится с типами файлов и содержимым — игнорируй).\n" if web else "",
                                "\n".join(card_line(c) + (" | веб: " + hints[c["path"]] if hints.get(c["path"]) else "") for c in cand)))
     try:
-        txt = llm(prompt, model, 1500, timeout=600)
+        txt = llm(prompt, model, 2500, timeout=900, as_json=True)
+        log("autotag ответ модели (%s): %s" % (model, txt[:1500].replace("\n", " ")))
         has_path = lambda v: any(isinstance(x, dict) and "path" in x for x in v)
         try:
             arr = loose_json(txt, list, has_path)
@@ -1000,9 +1015,10 @@ def autotag_run(cand, model, web=True, force=False):
             d = loose_json(txt, dict, lambda v: "path" in v or any(isinstance(x, list) and has_path(x) for x in v.values()))
             arr = [d] if "path" in d else next(v for v in d.values() if isinstance(v, list) and has_path(v))
     except Exception as e:
-        return {"ok": False, "error": "не вышло: %s" % e}
+        log("autotag: %s\nответ модели: %s" % (e, locals().get("txt", "")[:2000]))
+        return {"ok": False, "error": "не вышло: %s (подробности в ~/.diskview/diskview.log)" % e}
     byp = {c["path"]: c for c in cand}
-    log = LIB.setdefault("autolog", [])
+    alog = LIB.setdefault("autolog", [])
     new_cols, done = [], 0
     names = {c["path"] for c in cand}
     for it in arr:
@@ -1013,10 +1029,15 @@ def autotag_run(cand, model, web=True, force=False):
             continue
         c = byp[p]
         tags = []
-        for t in it.get("tags", [])[:5]:
+        raw = it.get("tags") or it.get("теги") or []
+        if isinstance(raw, str):
+            raw = re.split(r"[,;]", raw)
+        for t in list(raw)[:5]:
             t = _norm(t)
             if t and t not in tags:
                 tags.append(t)
+        if not tags and it.get("collection"):
+            tags = [_norm(it["collection"])]
         LIB["tags"][p] = {"tags": tags, "note": str(it.get("note", ""))[:300], "size": c["size"], "dir": c.get("isdir", True), "auto": True}
         wc = web_card(p, c.get("query", "")) if web and p in hints and hints[p] else {}
         if wc:
@@ -1031,12 +1052,12 @@ def autotag_run(cand, model, web=True, force=False):
                 new_cols.append(name)
             col["items"].append({"path": p, "size": c["size"], "dir": c.get("isdir", True), "auto": True})
             entry["col"] = col["id"]
-        log.append(entry)
+        alog.append(entry)
         done += 1
     # то, что модель пропустила, не зацикливает: помечаем пустой авто-записью
-    for p in names - {e["path"] for e in log}:
+    for p in names - {e["path"] for e in alog}:
         LIB["tags"][p] = {"tags": [], "note": "", "size": byp[p]["size"], "dir": True, "auto": True, "skipped": True}
-        log.append({"path": p, "col": ""})
+        alog.append({"path": p, "col": ""})
     lib_touch()
     return {"ok": True, "done": done, "left": len(autotag_candidates(1000)), "new_cols": new_cols}
 
