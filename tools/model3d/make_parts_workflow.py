@@ -71,6 +71,9 @@ def main():
         inp = next(i for i in ref["inputs"] if i["name"] == "images.image_2")
         inp["link"] = new_link(front_ref, 0, REFINE[old], ref["inputs"].index(inp), "IMAGE")
         nodes[front_ref]["outputs"][0]["links"].append(inp["link"])
+    # UnwrapMesh (196): "pec" cuts the dense voxel-born mesh into hundreds of small charts (the atlas of ComfyUI_00007 is
+    # confetti); "adaptive" (CPU) is slower and should give fewer, bigger charts. Not checked in ComfyUI yet.
+    nodes[196]["widgets_values"][0] = "adaptive"
     # previews of the raw views of the part
     prev_ids = []
     for i, v in enumerate(("front", "left", "back", "right")):

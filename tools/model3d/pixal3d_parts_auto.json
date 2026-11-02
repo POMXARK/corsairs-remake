@@ -1,5 +1,5 @@
 {
- "id": "5d4db1b4-a6fe-4e5b-a18c-74a395f35fcf",
+ "id": "116cc9f7-3622-4c62-acb0-41b5da5c7566",
  "revision": 0,
  "last_node_id": 2017,
  "last_link_id": 4825,
@@ -1385,7 +1385,7 @@
     }
    },
    "widgets_values": [
-    "pec",
+    "adaptive",
     2048,
     1,
     0.0002
