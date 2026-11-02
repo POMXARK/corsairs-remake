@@ -90,11 +90,11 @@ def main():
     # pdm_parts patches flash_attention_decode_gqa (contiguous q/k/v, torch fallback), so the VLM can run again
     for ref in [REFINE[1140]]:
         nodes[ref]["widgets_values"][2] = True
-    # TextGenerate wrote up to 16256 tokens (9 minutes at 5 tokens/s in ComfyUI_00009); a description needs ~300
+    # TextGenerate wrote up to 16256 tokens (9 minutes at 5 tokens/s in ComfyUI_00009); the description took 2916 tokens, cut at 400 the sheet came out as a collage of tiny heads
     for sg in g["definitions"]["subgraphs"]:
         for n in sg["nodes"]:
             if n["type"] == "TextGenerate":
-                n["widgets_values"][1] = 400
+                n["widgets_values"][1] = 4096
     # DecimateMesh (186) 700000 faces -> UnwrapMesh cut them into 10 358 tiny charts, the 4096 atlas was confetti
     # (the log of the first run). 60000 faces unwrap into big charts; the detail comes from reference_mesh / normal map.
     nodes[186]["widgets_values"][0] = 60000
