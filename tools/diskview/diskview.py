@@ -1931,7 +1931,8 @@ function render(){if(!rootPath&&view!="lib"&&view!="launch")return;({tree:rTree,
 const RK=["можно чистить","осторожно","защищено"];
 const tg=n=>(n.tags||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join("")+(n.note?` <span title="${esc(n.note)}">📝</span>`:"")+((n.colls||[]).length?` <span title="${esc(n.colls.join(", "))}">📚</span>`:"");
 let LB={collections:[],tags:[]},tagFilter="";
-async function libLoad(){LB=await api("/api/lib");$("#coll").innerHTML=LB.collections.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")||"<option value=''>нет коллекций</option>"}
+async function libLoad(){LB=await api("/api/lib");$("#coll").innerHTML=`<option value="">Все коллекции</option>`+LB.collections.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("");if(!LB.collections.some(c=>c.id==LCOL))LCOL="";$("#coll").value=LCOL}
+$("#coll").onchange=e=>{LCOL=e.target.value;if(view=="lib"||view=="launch")render()};
 libLoad();
 function pick(n){sel=n;$("#sel").textContent=n?`${n.path||n.name} — ${fmt(n.size)}`:"—";const ok=n&&n.path;$("#rev").disabled=$("#cp").disabled=!ok;$("#tomap").disabled=!(n&&n.dir);
  $("#desc").disabled=!(n&&n.dir&&n.path);$("#web").disabled=!(n&&n.path);$("#tr").disabled=$("#rm").disabled=!(ok&&n.risk!==2);$("#tocoll").disabled=$("#tags").disabled=!ok;$("#sug").disabled=!(n&&n.dir&&ok)}
@@ -2061,7 +2062,7 @@ async function rLib(){await libLoad();const m=$("#main");
    const SORT={size:(a,b)=>b.size-a.size,freq:(a,b)=>(b.n30||0)-(a.n30||0)||(b.n||0)-(a.n||0),last:(a,b)=>(b.last||0)-(a.last||0),idle:(a,b)=>(idle(b)??-1)-(idle(a)??-1)};if(SORT[LSORT])its.sort(SORT[LSORT]);const tot=its.reduce((a,i)=>a+i.size,0);if(!its.length&&(tagFilter||LAUTO||LIDLE||q))return"";
    return `<div style="margin:12px 0"><b>${c.auto?"🤖 ":""}${esc(c.name)}</b> — ${its.length} шт., ${fmt(tot)} <button data-ren="${c.id}">переименовать</button> <button data-del="${c.id}">удалить коллекцию</button></div><div class="grid" style="padding:0;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">`+groupItems(its,c.id).map(i=>itemCard({...i,colls:[]},{rm:c.id})).join("")+`</div>`}).join("")||"<i>Ничего не найдено. Добавьте папки в коллекции или запустите авторазметку.</i>"};
  body();
- $("#lq").oninput=e=>{LQ=e.target.value;body()};$("#lcs").onchange=e=>{LCOL=e.target.value;body()};$("#lau").onchange=e=>{LAUTO=e.target.checked;body()};$("#lid").onchange=e=>{LIDLE=e.target.checked;body()};$("#lso").value=LSORT;$("#lso").onchange=e=>{LSORT=e.target.value;body()};
+ $("#lq").oninput=e=>{LQ=e.target.value;body()};$("#lcs").onchange=e=>{LCOL=e.target.value;$("#coll").value=LCOL;body()};$("#lau").onchange=e=>{LAUTO=e.target.checked;body()};$("#lid").onchange=e=>{LIDLE=e.target.checked;body()};$("#lso").value=LSORT;$("#lso").onchange=e=>{LSORT=e.target.value;body()};
  const lay=$("#lay"),sp=$("#spl");sp.onmousedown=ev=>{ev.preventDefault();const mv=e=>{const r=lay.getBoundingClientRect();LW=Math.max(320,Math.min(r.width-240,e.clientX-r.left));lb.style.width=LW+"px";lb.style.flex="none"},up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);lsset("dv.lw",LW)};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up)};
  $("#aitg").onclick=()=>{LAIS=!LAIS;lsset("dv.ai",LAIS);rLib()};
  if(!window.__enr){window.__enr=true;(async()=>{let f=0;while(true){const r=await api("/api/enrich",{});if(!r.ok||!r.tried)break;f+=r.found;const p=$("#atp");if(p&&view=="lib")p.textContent="Ищу обложки и описания в Steam… найдено "+f+(r.left?", осталось "+r.left:"");await libLoad();if(view=="lib"&&!document.querySelector("#cadd:disabled")&&!document.querySelector("[data-k]"))body();if(!r.left)break}window.__enr=false;const p=$("#atp");if(p&&view=="lib"&&f)p.textContent="Обложки и описания добавлены: "+f}) ()}
@@ -2172,7 +2173,7 @@ async function rLaunch(){await libLoad();const m=$("#main");
  let items=(await api("/api/launcher")).items,tf="";
  const draw=()=>{const f=$("#lf").value.toLowerCase();const tags=[...new Set(items.flatMap(i=>i.tags))];
   $("#lt").innerHTML=tags.map(t=>`<span class="chip" data-t="${esc(t)}" style="${t==tf?"outline:2px solid var(--acc)":""}">${esc(t)}</span>`).join("");
-  const sh=items.filter(i=>(!tf||i.tags.includes(tf))&&(!f||(i.name+" "+i.tags.join(" ")+" "+i.note+" "+i.colls.join(" ")).toLowerCase().includes(f)));
+  const cn=(LB.collections.find(c=>c.id==LCOL)||{}).name,sh=items.filter(i=>(!tf||i.tags.includes(tf))&&(!cn||i.colls.includes(cn))&&(!f||(i.name+" "+i.tags.join(" ")+" "+i.note+" "+i.colls.join(" ")).toLowerCase().includes(f)));
   GRP={};$("#lg").innerHTML=groupItems(sh).map(i=>itemCard(i)).join("")||`<div style="padding:12px;color:var(--mut)">Пусто. Добавьте папки и файлы в коллекции («В коллекцию» внизу) или нажмите «Установленные программы…».</div>`};
  draw();$("#lf").oninput=draw;
  $("#lt").onclick=e=>{if(e.target.dataset.t!==undefined){tf=tf==e.target.dataset.t?"":e.target.dataset.t;draw()}};
