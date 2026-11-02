@@ -594,10 +594,10 @@ def web_lookup(q):
     return out
 
 
-def web_info(path, model="", save=True):
+def web_info(path, model="", save=True, q=""):
     """Неизвестный exe/папка: найти в интернете, при наличии модели — пересказать и дать подсказки по действиям;
     описание и картинка сохраняются в библиотеку (теги пути)."""
-    q = web_name(path)
+    q = q or web_name(path)
     if not q:
         return {"error": "нет имени для поиска"}
     try:
@@ -870,11 +870,23 @@ def suggest(path, model):
     prompt = ("По карточке папки предложи 3-5 коротких тегов (одно-два слова, по-русски, строчными: что это и для чего) "
               "и одну фразу назначения. Верни ТОЛЬКО JSON: {\"tags\":[...],\"note\":\"...\"}\n" + card_line(c))
     try:
-        m = re.search(r"\{.*\}", llm(prompt, model, 200), re.S)
-        j = json.loads(m.group(0))
+        j = loose_json(llm(prompt, model, 200), dict)
         return {"tags": [str(t).strip().lower() for t in j.get("tags", [])][:6], "note": str(j.get("note", ""))}
     except Exception as e:
         return {"error": "не вышло: %s" % e}
+
+
+def loose_json(text, want):
+    """Первый корректный JSON нужного типа в ответе модели (вокруг может быть текст, скобки, пояснения)."""
+    dec = json.JSONDecoder()
+    for m in re.finditer(r"\[" if want is list else r"\{", text):
+        try:
+            v, _ = dec.raw_decode(text[m.start():])
+        except ValueError:
+            continue
+        if isinstance(v, want):
+            return v
+    raise ValueError("в ответе модели нет JSON: %s" % text[:80].replace("\n", " "))
 
 
 def _norm(s):
@@ -897,22 +909,28 @@ def autotag_candidates(limit):
     return out
 
 
-def web_hint(path, q=""):
-    """Короткая справка из интернета по имени папки (кэш в библиотеке, в т.ч. «ничего не нашли»)."""
+def web_card(path, q=""):
+    """Справка из интернета по имени (кэш в библиотеке, в т.ч. «ничего не нашли»): {title, text, image, url}."""
     q = q or web_name(path)
     if len(q) < 3 or q.isdigit():
-        return ""
+        return {}
     cache = LIB.setdefault("webcache", {})
-    if q.lower() not in cache:
+    k = q.lower()
+    if not isinstance(cache.get(k), dict):
         try:
             w = web_lookup(q)
-            cache[q.lower()] = ((w["title"] + ": " if w["title"] else "") + w["text"])[:260]
+            cache[k] = {"title": w["title"], "text": w["text"][:400], "image": w["image"], "url": w["url"]}
         except Exception:
-            return ""
-    return cache[q.lower()]
+            return {}
+    return cache[k]
 
 
-def autotag(model, n=8, web=True):
+def web_hint(path, q=""):
+    w = web_card(path, q)
+    return ((w["title"] + ": " if w.get("title") else "") + w.get("text", ""))[:260] if w else ""
+
+
+def autotag(model, n=6, web=True):
     """Один пакет: модель видит существующие коллекции и теги и по возможности использует их; новые создаёт, только
     если ничего не подходит. Всё помечается auto и откатывается autotag_undo; правки пользователя снимают метку."""
     cand = autotag_candidates(n)
@@ -942,7 +960,10 @@ def autoplace(b):
         col["items"].append({"path": p, "size": b.get("size", 0), "dir": b.get("dir", False)})
         if LIB["tags"].get(p, {}).get("skipped"):
             LIB["tags"].pop(p)
-        LIB["tags"].setdefault(p, {"tags": [], "note": name, "size": b.get("size", 0), "dir": b.get("dir", False)})
+        t = LIB["tags"].setdefault(p, {"tags": [], "note": name, "size": b.get("size", 0), "dir": b.get("dir", False)})
+        wc = web_card(p, name) if b.get("web", True) else {}
+        if wc:
+            t["web"] = wc
         lib_touch()
         return {"ok": True, "collection": "Программы", "tags": [], "fallback": r.get("error", "")}
     return {"ok": True, "collection": ", ".join(_PCOLL.get(p, [])), "tags": LIB["tags"].get(p, {}).get("tags", []),
@@ -971,8 +992,12 @@ def autotag_run(cand, model, web=True, force=False):
                                "Если у карточки есть «веб:» — это справка из интернета по названию папки, опирайся на неё, когда по содержимому неясно (она по одному названию и может быть неточной: если не сходится с типами файлов и содержимым — игнорируй).\n" if web else "",
                                "\n".join(card_line(c) + (" | веб: " + hints[c["path"]] if hints.get(c["path"]) else "") for c in cand)))
     try:
-        m = re.search(r"\[.*\]", llm(prompt, model, 1500, timeout=600), re.S)
-        arr = json.loads(m.group(0))
+        txt = llm(prompt, model, 1500, timeout=600)
+        try:
+            arr = loose_json(txt, list)
+        except ValueError:
+            d = loose_json(txt, dict)
+            arr = [d] if "path" in d else next((v for v in d.values() if isinstance(v, list)), [])
     except Exception as e:
         return {"ok": False, "error": "не вышло: %s" % e}
     byp = {c["path"]: c for c in cand}
@@ -990,6 +1015,9 @@ def autotag_run(cand, model, web=True, force=False):
             if t and t not in tags:
                 tags.append(t)
         LIB["tags"][p] = {"tags": tags, "note": str(it.get("note", ""))[:300], "size": c["size"], "dir": c.get("isdir", True), "auto": True}
+        wc = web_card(p, c.get("query", "")) if web and p in hints and hints[p] else {}
+        if wc:
+            LIB["tags"][p]["web"] = wc
         entry = {"path": p, "col": ""}
         name = str(it.get("collection", "")).strip()
         if name:
@@ -1041,6 +1069,30 @@ def launch(path):
     return {"ok": True}
 
 
+def in_library(path):
+    return path in LIB["tags"] or any(it["path"] == path for c in LIB["collections"] for it in c["items"]) or any(p["path"] == path for p in program_list())
+
+
+def icon_png(path):
+    """Иконка exe (Windows): извлекается один раз через PowerShell и кэшируется; только для путей из библиотеки/списка программ."""
+    if os.name != "nt" or not path.lower().endswith(".exe") or not in_library(path) or not os.path.isfile(path):
+        return None
+    out = os.path.join(DATA, "icons", hashlib.sha1(path.lower().encode()).hexdigest()[:16] + ".png")
+    if not os.path.exists(out):
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        ps = "Add-Type -AssemblyName System.Drawing;$i=[System.Drawing.Icon]::ExtractAssociatedIcon($env:DV_P);$i.ToBitmap().Save($env:DV_O,[System.Drawing.Imaging.ImageFormat]::Png)"
+        try:
+            subprocess.run(["powershell", "-NoProfile", "-Command", ps], env=dict(os.environ, DV_P=path, DV_O=out), timeout=20,
+                           creationflags=0x08000000, capture_output=True)
+        except Exception:
+            return None
+    try:
+        with open(out, "rb") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
 def launcher_items():
     out = {}
     for c in LIB["collections"]:
@@ -1050,7 +1102,7 @@ def launcher_items():
             e["colls"].append(c["name"])
     for p, e in out.items():
         tg = LIB["tags"].get(p, {})
-        e["tags"], e["note"] = tg.get("tags", []), tg.get("note", "")
+        e["tags"], e["note"], e["web"], e["auto"] = tg.get("tags", []), tg.get("note", ""), tg.get("web") or {}, bool(tg.get("auto"))
         e.update(LIB.get("usage", {}).get(p, {"n": 0, "last": 0}))
     return sorted(out.values(), key=lambda x: (-x["last"], x["name"].lower()))
 
@@ -1063,7 +1115,7 @@ def lib_info():
     cols = []
     for c in LIB["collections"]:
         items = [dict(it, exists=os.path.exists(it["path"]), tags=LIB["tags"].get(it["path"], {}).get("tags", []),
-                      note=LIB["tags"].get(it["path"], {}).get("note", ""), auto=bool(it.get("auto") and LIB["tags"].get(it["path"], {}).get("auto"))) for it in c["items"]]
+                      note=LIB["tags"].get(it["path"], {}).get("note", ""), name=os.path.basename(it["path"].rstrip("\\/")) or it["path"], web=LIB["tags"].get(it["path"], {}).get("web") or {}, auto=bool(it.get("auto") and LIB["tags"].get(it["path"], {}).get("auto"))) for it in c["items"]]
         cols.append({"id": c["id"], "name": c["name"], "auto": bool(c.get("auto")), "items": items})
     return {"collections": cols, "tags": sorted(cnt.items(), key=lambda x: -x[1]), "cards": len(CARDS), "todo": len(autotag_candidates(100000)), "undo": len(LIB.get("autolog", []))}
 
@@ -1104,7 +1156,10 @@ def lib_action(b):
         p = b.get("path", "")
         tags = [t.strip().lower() for t in b.get("tags", []) if t.strip()]
         if tags or b.get("note", "").strip():
+            web = LIB["tags"].get(p, {}).get("web")
             LIB["tags"][p] = {"tags": tags, "note": b.get("note", "").strip(), "size": b.get("size", 0), "dir": b.get("dir", True)}
+            if web:
+                LIB["tags"][p]["web"] = web
             for c in cols:
                 for i in c["items"]:
                     if i["path"] == p:
@@ -1163,6 +1218,11 @@ class H(BaseHTTPRequestHandler):
             el = time.time() - SC.t0 if SC.state == "scanning" else SC.elapsed
             return self.send({"state": SC.state, "files": SC.files, "bytes": SC.bytes, "cur": SC.cur,
                               "elapsed": el, "errors": SC.errors, "root": SC.root_path})
+        if u.path == "/api/icon":
+            b = icon_png(q.get("path", ""))
+            if b is None:
+                return self.send(b"", 404, "image/png")
+            return self.send(b, ctype="image/png")
         if u.path == "/api/lib":
             return self.send(lib_info())
         if u.path == "/api/launcher":
@@ -1223,7 +1283,7 @@ class H(BaseHTTPRequestHandler):
         if u.path == "/api/autotag/undo":
             return self.send(autotag_undo())
         if u.path == "/api/web":
-            return self.send(web_info(b.get("path", ""), b.get("model", "")))
+            return self.send(web_info(b.get("path", ""), b.get("model", ""), q=b.get("q", "")))
         if u.path == "/api/describe":
             return self.send(describe(b.get("path", ""), b.get("model", "")))
         if u.path == "/api/reveal":
@@ -1417,16 +1477,24 @@ async function rOld(){const m=$("#main");m.innerHTML=`<div style="padding:8px 12
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+t],{type:"text/csv"}));a.download="dead-folders.csv";a.click()};
  $("#ap").onclick=run;run()}
 // ---- библиотека: коллекции, теги, помощник
+let LQ="",LCOL="",LAUTO=false;
 async function rLib(){await libLoad();const m=$("#main");
- m.innerHTML=`<div style="display:flex;height:100%"><div id="lb" style="width:46%;overflow:auto;padding:8px 12px;border-right:1px solid var(--line)"></div>
+ m.innerHTML=`<div style="display:flex;height:100%"><div id="lb" style="width:62%;overflow:auto;padding:8px 12px;border-right:1px solid var(--line)"></div>
  <div style="flex:1;display:flex;flex-direction:column;min-width:0"><div id="msgs" style="flex:1;overflow:auto;padding:8px 12px"></div>
  <div style="padding:8px 12px;display:flex;gap:6px"><input id="q" style="flex:1" placeholder="Спросите о своих данных: что у меня из FL Studio? что можно архивировать?"><button id="askb" class="p">Спросить</button></div></div></div>`;
  const lb=$("#lb");const tags=LB.tags.map(([t,n])=>`<span class="chip" data-t="${esc(t)}" style="${t==tagFilter?"outline:2px solid var(--acc)":""}">${esc(t)} ${n}</span>`).join("")||"<i>тегов пока нет</i>";
- lb.innerHTML=`<div><input id="cn" placeholder="новая коллекция"> <button id="cadd">Создать</button> <button id="atg" class="p" title="Модель смотрит существующие коллекции и теги, раскладывает неразмеченные папки; потом всё можно править или откатить">🤖 Авторазметка (${LB.todo})</button>${LB.undo?` <button id="atu">Отменить авторазметку (${LB.undo})</button>`:""} <button id="rtg">Переименовать тег…</button> <label title="Имя папки уходит в Википедию/DuckDuckGo, чтобы понять незнакомые программы"><input type="checkbox" id="atw" checked> сверять с интернетом</label></div><div id="atp" style="color:var(--mut)"></div><div style="margin:8px 0">Теги (клик — фильтр): ${tags}</div><div style="color:var(--mut);margin-bottom:6px">Карточек для помощника: ${LB.cards}. Выберите папку на других вкладках → «В коллекцию» / «Теги…» / «Теги ИИ».</div>`+
-  LB.collections.map(c=>{const its=c.items.filter(i=>!tagFilter||i.tags.includes(tagFilter));const tot=its.reduce((a,i)=>a+i.size,0);
-   return `<div style="margin:10px 0"><b>${c.auto?"🤖 ":""}${esc(c.name)}</b> — ${its.length} шт., ${fmt(tot)} <button data-ren="${c.id}">переименовать</button> <button data-del="${c.id}">удалить коллекцию</button>`+
-   its.map(i=>`<div class="r" data-c="${c.id}" data-p="${esc(i.path)}" style="padding:2px 0 2px 8px;cursor:pointer;${i.exists?"":"opacity:.5"}">${i.auto?"🤖 ":""}${i.dir?"📁":"📄"} ${esc(i.path)} · ${fmt(i.size)} ${i.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join("")}${i.note?`<div style="color:var(--mut);margin-left:20px">${esc(i.note)}</div>`:""}${i.exists?"":" (нет на диске)"} <a href="#" data-rm="${c.id}" data-p="${esc(i.path)}">✕</a></div>`).join("")+`</div>`}).join("");
+ const bar=`<div><input id="cn" placeholder="новая коллекция"> <button id="cadd">Создать</button> <button id="atg" class="p" title="Модель смотрит существующие коллекции и теги, раскладывает неразмеченные папки; потом всё можно править или откатить">🤖 Авторазметка (${LB.todo})</button>${LB.undo?` <button id="atu">Отменить авторазметку (${LB.undo})</button>`:""} <button id="rtg">Переименовать тег…</button> <label title="Имя папки уходит в Википедию/DuckDuckGo, чтобы понять незнакомые программы"><input type="checkbox" id="atw" checked> сверять с интернетом</label></div><div id="atp" style="color:var(--mut)"></div>
+  <div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input id="lq" placeholder="Поиск: название, тег, описание" value="${esc(LQ)}" style="width:240px"><select id="lcs"><option value="">все коллекции</option>${LB.collections.map(c=>`<option value="${c.id}" ${c.id==LCOL?"selected":""}>${esc(c.name)} (${c.items.length})</option>`).join("")}</select><label><input type="checkbox" id="lau" ${LAUTO?"checked":""}> только 🤖</label></div>
+  <div style="margin:8px 0">Теги (клик — фильтр): ${tags}</div><div id="lbody"></div>`;
+ lb.innerHTML=bar;
+ const body=()=>{const q=LQ.toLowerCase();$("#lbody").innerHTML=LB.collections.filter(c=>!LCOL||c.id==LCOL).map(c=>{
+   const its=c.items.filter(i=>(!tagFilter||i.tags.includes(tagFilter))&&(!LAUTO||i.auto)&&(!q||(i.name+" "+i.path+" "+i.tags.join(" ")+" "+i.note+" "+((i.web&&i.web.text)||"")).toLowerCase().includes(q)));
+   const tot=its.reduce((a,i)=>a+i.size,0);if(!its.length&&(tagFilter||LAUTO||q))return"";
+   return `<div style="margin:12px 0"><b>${c.auto?"🤖 ":""}${esc(c.name)}</b> — ${its.length} шт., ${fmt(tot)} <button data-ren="${c.id}">переименовать</button> <button data-del="${c.id}">удалить коллекцию</button></div><div class="grid" style="padding:0;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">`+its.map(i=>itemCard({...i,colls:[]},{rm:c.id})).join("")+`</div>`}).join("")||"<i>Ничего не найдено. Добавьте папки в коллекции или запустите авторазметку.</i>"};
+ body();
+ $("#lq").oninput=e=>{LQ=e.target.value;body()};$("#lcs").onchange=e=>{LCOL=e.target.value;body()};$("#lau").onchange=e=>{LAUTO=e.target.checked;body()};
  lb.onclick=async e=>{const t=e.target;
+  if(await cardAct(e,p=>{for(const c of LB.collections){const i=c.items.find(x=>x.path==p);if(i)return i}},async()=>{await libLoad();rLib()}))return;
   if(t.id=="cadd"){const r=await api("/api/lib",{action:"create",name:$("#cn").value});if(!r.ok)return alert(r.error);return rLib()}
   if(t.id=="rtg"){const o=prompt("Какой тег переименовать (или объединить)?");if(!o)return;const n=prompt("Новое имя (если такой тег уже есть — теги объединятся; пусто — удалить тег):","");if(n===null)return;await api("/api/lib",{action:"rename_tag",old:o,new:n});return rLib()}
   if(t.dataset.ren){const c=LB.collections.find(x=>x.id==t.dataset.ren);const n=prompt("Новое имя коллекции:",c.name);if(!n)return;const r=await api("/api/lib",{action:"rename",id:c.id,name:n});if(!r.ok)return alert(r.error);return rLib()}
@@ -1438,7 +1506,7 @@ async function rLib(){await libLoad();const m=$("#main");
   if(t.dataset.t!==undefined){tagFilter=tagFilter==t.dataset.t?"":t.dataset.t;return rLib()}
   if(t.dataset.del){if(confirm("Удалить коллекцию (файлы не затрагиваются)?")){await api("/api/lib",{action:"delete",id:t.dataset.del});rLib()}return}
   if(t.dataset.rm){e.preventDefault();await api("/api/lib",{action:"remove",id:t.dataset.rm,path:t.dataset.p});return rLib()}
-  const row=t.closest(".r");if(row){const c=LB.collections.find(x=>x.id==row.dataset.c),it=c.items.find(x=>x.path==row.dataset.p);pick({...it,name:it.path})}};
+  const tl=t.closest(".tile");if(tl){for(const c of LB.collections){const it=c.items.find(x=>x.path==tl.dataset.p);if(it){pick({...it,name:it.name||it.path,risk:0});break}}}};
  const msgs=$("#msgs"),say=(who,html)=>{const d=document.createElement("div");d.style.margin="8px 0";d.innerHTML=`<b>${who}</b><div>${html}</div>`;msgs.appendChild(d);msgs.scrollTop=1e9;return d};
  say("Помощник","Я ищу по карточкам папок (названия, типы файлов, даты, программа, ваши теги и заметки) и отвечаю через локальную модель. Содержимое файлов не читается.");
  const go=async()=>{const q=$("#q").value.trim();if(!q)return;$("#q").value="";say("Вы",esc(q));const w=say("Помощник","думаю…");
@@ -1449,17 +1517,37 @@ async function rLib(){await libLoad();const m=$("#main");
    const row=e.target.closest(".r");if(row&&row.dataset.i!==undefined){const c=r.sources[row.dataset.i];pick({path:c.path,name:c.name,size:c.size,dir:true,risk:0,tags:c.tags,note:c.note})}}};
  $("#askb").onclick=go;$("#q").onkeydown=e=>{if(e.key=="Enter")go()}}
 // ---- лаунчер: всё нужное из одного места
+// ---- карточка элемента (лаунчер и библиотека): иконка/картинка, описание, теги, правка
+const bn=p=>p.replace(/[\\/]+$/,"").split(/[\\/]/).pop()||p;
+const iconUrl=i=>/\.exe$/i.test(i.path)?"/api/icon?path="+encodeURIComponent(i.path):(i.web&&i.web.image||"");
+function itemCard(i,o={}){const ic=iconUrl(i),fb=i.dir?"📁":"📄",desc=i.note||(i.web&&i.web.text)||"";
+ return `<div class="tile" data-p="${esc(i.path)}" style="${i.exists===false?"opacity:.5":""}"><div style="display:flex;gap:8px;align-items:center">
+  <div style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;font-size:28px">${ic?`<img src="${esc(ic)}" referrerpolicy="no-referrer" loading="lazy" style="max-width:44px;max-height:44px;border-radius:6px" onerror="this.replaceWith(document.createTextNode('${fb}'))">`:fb}</div>
+  <div style="min-width:0;flex:1"><b title="${esc(i.path)}">${i.auto?"🤖 ":""}${esc(i.name||bn(i.path))}</b><div style="color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((i.colls||[]).join(", "))}${i.colls&&i.colls.length?" · ":""}${fmt(i.size||0)}</div></div></div>
+  ${desc?`<div style="margin:6px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:normal">${esc(desc)}</div>`:`<div style="margin:6px 0;color:var(--mut)">нет описания</div>`}
+  <div style="white-space:normal">${(i.tags||[]).map(t=>`<span class="chip">${esc(t)} <a href="#" data-act="rmtag" data-t="${esc(t)}" title="убрать тег">✕</a></span>`).join("")}<span class="chip" data-act="addtag" title="добавить тег">＋ тег</span></div>
+  <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap"><button data-act="note" title="изменить описание">✎ описание</button><button data-act="web" title="найти в интернете: описание и картинка">🌐</button><button data-act="rv" title="показать в Проводнике">📂</button>${o.rm?`<button data-act="rmc" data-c="${o.rm}" title="убрать из коллекции">✕ из коллекции</button>`:""}</div>
+  ${i.n!==undefined?`<div style="color:var(--mut);font-size:12px">${i.n?`запусков ${i.n}, последний ${dt(i.last)}`:"ещё не запускали"}</div>`:""}</div>`}
+async function cardAct(e,find,done){const b=e.target.closest("[data-act]");if(!b)return false;e.preventDefault();e.stopPropagation();const p=b.closest(".tile").dataset.p,i=find(p),act=b.dataset.act;if(!i)return true;
+ const save=(tags,note)=>api("/api/lib",{action:"tag",path:p,tags,note,size:i.size||0,dir:i.dir!==false});
+ if(act=="rmtag"){await save((i.tags||[]).filter(t=>t!=b.dataset.t),i.note||"")}
+ else if(act=="addtag"){const t=prompt("Новый тег (можно несколько через запятую):");if(!t)return true;await save([...new Set([...(i.tags||[]),...t.split(",").map(x=>x.trim().toLowerCase()).filter(Boolean)])],i.note||"")}
+ else if(act=="note"){const n=prompt("Описание:",i.note||(i.web&&i.web.text)||"");if(n===null)return true;await save(i.tags||[],n)}
+ else if(act=="web"){b.textContent="…";const r=await api("/api/web",{path:p,model:$("#model").value,q:(i.note&&i.note.length<60?i.note:"")||i.name||""});if(r.error)alert(r.error)}
+ else if(act=="rv"){api("/api/reveal",{path:p});return true}
+ else if(act=="rmc"){await api("/api/lib",{action:"remove",id:b.dataset.c,path:p})}
+ await done();return true}
 async function rLaunch(){await libLoad();const m=$("#main");
  m.innerHTML=`<div style="padding:8px 12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="lf" placeholder="Поиск по названию, тегу, заметке" style="width:300px"><span id="lt"></span><button id="pr">Установленные программы…</button></div><div id="pp"></div><div id="lg" class="grid"></div>`;
  let items=(await api("/api/launcher")).items,tf="";
  const draw=()=>{const f=$("#lf").value.toLowerCase();const tags=[...new Set(items.flatMap(i=>i.tags))];
   $("#lt").innerHTML=tags.map(t=>`<span class="chip" data-t="${esc(t)}" style="${t==tf?"outline:2px solid var(--acc)":""}">${esc(t)}</span>`).join("");
   const sh=items.filter(i=>(!tf||i.tags.includes(tf))&&(!f||(i.name+" "+i.tags.join(" ")+" "+i.note+" "+i.colls.join(" ")).toLowerCase().includes(f)));
-  $("#lg").innerHTML=sh.map((i,k)=>`<div class="tile" data-k="${items.indexOf(i)}" style="${i.exists?"":"opacity:.45"}"><b>${i.dir?"📁":/\.exe$/i.test(i.path)?"⚙️":"📄"} ${esc(i.name)}</b><div style="color:var(--mut)">${esc(i.colls.join(", "))} · ${fmt(i.size)}</div><div>${i.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join("")}</div>${i.note?`<div style="color:var(--mut)">${esc(i.note)}</div>`:""}<div style="color:var(--mut);font-size:12px">${i.n?`запусков ${i.n}, последний ${dt(i.last)}`:"ещё не запускали"}${i.exists?"":" · нет на диске"}</div><button data-rv="${items.indexOf(i)}">📂</button></div>`).join("")||`<div style="padding:12px;color:var(--mut)">Пусто. Добавьте папки и файлы в коллекции («В коллекцию» внизу) или нажмите «Установленные программы…».</div>`};
+  $("#lg").innerHTML=sh.map(i=>itemCard(i)).join("")||`<div style="padding:12px;color:var(--mut)">Пусто. Добавьте папки и файлы в коллекции («В коллекцию» внизу) или нажмите «Установленные программы…».</div>`};
  draw();$("#lf").oninput=draw;
  $("#lt").onclick=e=>{if(e.target.dataset.t!==undefined){tf=tf==e.target.dataset.t?"":e.target.dataset.t;draw()}};
- $("#lg").onclick=async e=>{const rv=e.target.dataset.rv;if(rv!==undefined){api("/api/reveal",{path:items[rv].path});return}
-  const t=e.target.closest(".tile");if(!t)return;const it=items[t.dataset.k];pick({...it,risk:0});const r=await api("/api/launch",{path:it.path});if(!r.ok)alert(r.error);else{it.n++;it.last=Date.now()/1000;draw()}};
+ $("#lg").onclick=async e=>{if(await cardAct(e,p=>items.find(x=>x.path==p),async()=>{items=(await api("/api/launcher")).items;draw()}))return;
+  const t=e.target.closest(".tile");if(!t)return;const it=items.find(x=>x.path==t.dataset.p);pick({...it,risk:0});const r=await api("/api/launch",{path:it.path});if(!r.ok)alert(r.error);else{it.n++;it.last=Date.now()/1000;draw()}};
  $("#pr").onclick=async()=>{const pp=$("#pp");pp.innerHTML="читаю реестр…";const ps=(await api("/api/programs")).programs;
   pp.innerHTML=`<div style="padding:0 12px 8px">Установленные программы (${ps.length}). Коллекция для добавления выбрана внизу. <input id="pf" placeholder="фильтр"></div><div style="max-height:220px;overflow:auto;padding:0 12px 8px" id="pl"></div>`;
   const dp=()=>{const f=$("#pf").value.toLowerCase();$("#pl").innerHTML=ps.map((p,i)=>[p,i]).filter(([p])=>!f||p.name.toLowerCase().includes(f)).slice(0,300).map(([p,i])=>`<div class="r" style="padding:2px 0">${esc(p.name)} <span style="color:var(--mut)">${esc(p.publisher)} · ${p.size?fmt(p.size):""} · ${esc(p.path)}</span> <button data-a="${i}">+ в коллекцию</button></div>`).join("")};
