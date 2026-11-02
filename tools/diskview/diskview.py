@@ -897,9 +897,9 @@ def autotag_candidates(limit):
     return out
 
 
-def web_hint(path):
+def web_hint(path, q=""):
     """Короткая справка из интернета по имени папки (кэш в библиотеке, в т.ч. «ничего не нашли»)."""
-    q = web_name(path)
+    q = q or web_name(path)
     if len(q) < 3 or q.isdigit():
         return ""
     cache = LIB.setdefault("webcache", {})
@@ -918,11 +918,43 @@ def autotag(model, n=8, web=True):
     cand = autotag_candidates(n)
     if not cand:
         return {"ok": True, "done": 0, "left": 0, "new_cols": [], "msg": "размечать нечего"}
+    return autotag_run(cand, model, web)
+
+
+def autoplace(b):
+    """«В коллекцию» без выбранной коллекции: модель подбирает существующую или создаёт новую и ставит теги."""
+    p = b.get("path", "")
+    if not p:
+        return {"ok": False, "error": "нет пути"}
+    name = b.get("name") or web_name(p)
+    card = {"path": p, "name": name, "size": b.get("size", 0), "files": 0, "t": [0, 0, 0], "cats": [], "subs": [], "top": [],
+            "prog": ("%s %s" % (name, b.get("publisher", ""))).strip() if b.get("publisher") is not None else "",
+            "query": name, "isdir": bool(b.get("dir", False))}
+    try:
+        r = autotag_run([card], b.get("model", ""), b.get("web", True), True)
+    except Exception as e:
+        r = {"ok": False, "error": str(e)}
+    if not r.get("ok") or p not in _PCOLL:
+        # модели нет или она не справилась: кладём в общую коллекцию, чтобы действие не пропало
+        col = next((c for c in LIB["collections"] if c["name"] == "Программы"), None) or {"id": "p%d" % int(time.time() * 1000), "name": "Программы", "items": []}
+        if col not in LIB["collections"]:
+            LIB["collections"].append(col)
+        col["items"].append({"path": p, "size": b.get("size", 0), "dir": b.get("dir", False)})
+        if LIB["tags"].get(p, {}).get("skipped"):
+            LIB["tags"].pop(p)
+        LIB["tags"].setdefault(p, {"tags": [], "note": name, "size": b.get("size", 0), "dir": b.get("dir", False)})
+        lib_touch()
+        return {"ok": True, "collection": "Программы", "tags": [], "fallback": r.get("error", "")}
+    return {"ok": True, "collection": ", ".join(_PCOLL.get(p, [])), "tags": LIB["tags"].get(p, {}).get("tags", []),
+            "note": LIB["tags"].get(p, {}).get("note", ""), "new": r["new_cols"]}
+
+
+def autotag_run(cand, model, web=True, force=False):
     hints = {}
     if web:
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(8) as ex:
-            for c, h in zip(cand, ex.map(lambda c: web_hint(c["path"]), cand)):
+            for c, h in zip(cand, ex.map(lambda c: web_hint(c["path"], c.get("query", "")), cand)):
                 hints[c["path"]] = h
     cnt = {}
     for v in LIB["tags"].values():
@@ -957,7 +989,7 @@ def autotag(model, n=8, web=True):
             t = _norm(t)
             if t and t not in tags:
                 tags.append(t)
-        LIB["tags"][p] = {"tags": tags, "note": str(it.get("note", ""))[:300], "size": c["size"], "dir": True, "auto": True}
+        LIB["tags"][p] = {"tags": tags, "note": str(it.get("note", ""))[:300], "size": c["size"], "dir": c.get("isdir", True), "auto": True}
         entry = {"path": p, "col": ""}
         name = str(it.get("collection", "")).strip()
         if name:
@@ -966,7 +998,7 @@ def autotag(model, n=8, web=True):
                 col = {"id": "a%d%d" % (int(time.time() * 1000), len(LIB["collections"])), "name": name, "items": [], "auto": True}
                 LIB["collections"].append(col)
                 new_cols.append(name)
-            col["items"].append({"path": p, "size": c["size"], "dir": True, "auto": True})
+            col["items"].append({"path": p, "size": c["size"], "dir": c.get("isdir", True), "auto": True})
             entry["col"] = col["id"]
         log.append(entry)
         done += 1
@@ -1186,6 +1218,8 @@ class H(BaseHTTPRequestHandler):
             if b.get("start"):
                 LIB["autolog"] = []
             return self.send(autotag(b.get("model", ""), web=b.get("web", True)))
+        if u.path == "/api/autoplace":
+            return self.send(autoplace(b))
         if u.path == "/api/autotag/undo":
             return self.send(autotag_undo())
         if u.path == "/api/web":
@@ -1303,7 +1337,10 @@ $("#web").onclick=async()=>{if(!sel)return;const a=$("#ai");$("#aiw").style.disp
 $("#desc").onclick=async()=>{if(!sel)return;const a=$("#ai");$("#aiw").style.display="block";a.textContent="Думаю… ("+$("#model").value+")";
  const r=await api("/api/describe",{path:sel.path,model:$("#model").value});a.textContent=r.error||r.text};
 async function afterLib(){await libLoad();if(view=="lib")rLib();else if(sel){const p=sel.path;render()}}
-$("#tocoll").onclick=async()=>{if(!sel||!$("#coll").value)return alert("Сначала создайте коллекцию на вкладке «Библиотека».");await api("/api/lib",{action:"add",id:$("#coll").value,path:sel.path,size:sel.size,dir:sel.dir});await afterLib();$("#aiw").style.display="block";$("#ai").textContent="Добавлено в коллекцию."};
+async function place(it){const w=$("#aiw"),a=$("#ai");w.style.display="block";a.textContent="Подбираю коллекцию и теги ("+($("#model").value||"без модели")+")…";
+ const r=await api("/api/autoplace",{...it,model:$("#model").value,web:true});await afterLib();
+ a.textContent=r.ok?"Добавлено в «"+r.collection+"»"+(r.tags&&r.tags.length?", теги: "+r.tags.join(", "):"")+(r.note?"\n"+r.note:"")+(r.fallback?"\n(модель недоступна: "+r.fallback+" — положил в «Программы»)":"")+"\nМожно изменить на вкладке «Библиотека».":r.error}
+$("#tocoll").onclick=async()=>{if(!sel)return;if(!$("#coll").value)return place({path:sel.path,size:sel.size,dir:sel.dir,name:sel.name});await api("/api/lib",{action:"add",id:$("#coll").value,path:sel.path,size:sel.size,dir:sel.dir});await afterLib();$("#aiw").style.display="block";$("#ai").textContent="Добавлено в коллекцию."};
 async function editTags(def){if(!sel)return;const cur=def||{tags:sel.tags||[],note:sel.note||""};
  const t=prompt(`Теги через запятую, после | — для чего (заметка):\n${sel.path}`,cur.tags.join(", ")+(cur.note?" | "+cur.note:""));if(t===null)return;
  const [a,...b]=t.split("|");await api("/api/lib",{action:"tag",path:sel.path,tags:a.split(","),note:b.join("|"),size:sel.size,dir:sel.dir});
@@ -1427,8 +1464,8 @@ async function rLaunch(){await libLoad();const m=$("#main");
   pp.innerHTML=`<div style="padding:0 12px 8px">Установленные программы (${ps.length}). Коллекция для добавления выбрана внизу. <input id="pf" placeholder="фильтр"></div><div style="max-height:220px;overflow:auto;padding:0 12px 8px" id="pl"></div>`;
   const dp=()=>{const f=$("#pf").value.toLowerCase();$("#pl").innerHTML=ps.map((p,i)=>[p,i]).filter(([p])=>!f||p.name.toLowerCase().includes(f)).slice(0,300).map(([p,i])=>`<div class="r" style="padding:2px 0">${esc(p.name)} <span style="color:var(--mut)">${esc(p.publisher)} · ${p.size?fmt(p.size):""} · ${esc(p.path)}</span> <button data-a="${i}">+ в коллекцию</button></div>`).join("")};
   dp();$("#pf").oninput=dp;
-  $("#pl").onclick=async e=>{const a=e.target.dataset.a;if(a===undefined)return;if(!$("#coll").value)return alert("Сначала создайте коллекцию на вкладке «Библиотека».");
-   const p=ps[a];await api("/api/lib",{action:"add",id:$("#coll").value,path:p.path,size:p.size,dir:p.dir});await api("/api/lib",{action:"tag",path:p.path,tags:["программа"],note:p.name,size:p.size,dir:p.dir});rLaunch()}}}
+  $("#pl").onclick=async e=>{const a=e.target.dataset.a;if(a===undefined)return;const p=ps[a];if(!$("#coll").value){await place({path:p.path,size:p.size,dir:p.dir,name:p.name,publisher:p.publisher});return rLaunch()}
+   await api("/api/lib",{action:"add",id:$("#coll").value,path:p.path,size:p.size,dir:p.dir});await api("/api/lib",{action:"tag",path:p.path,tags:["программа"],note:p.name,size:p.size,dir:p.dir});rLaunch()}}}
 addEventListener("resize",()=>view=="map"&&rMap());
 </script></body></html>"""
 
