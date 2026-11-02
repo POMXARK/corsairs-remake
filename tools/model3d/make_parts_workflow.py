@@ -73,13 +73,26 @@ def main():
                    "outputs": [{"name": "prompt", "type": "STRING", "links": []}],
                    "title": "Prompt + tags of every view", "properties": {"Node name for S&R": "PDMPromptJoin"}, "widgets_values": []}
     node_views["outputs"][12]["links"].append(lid)
+    # no download: the Qwen3.5-9B of the Refine subgraph (already on disk, a VLM) reads the views through TextGenerate
+    clip = new_node()
+    nodes[clip] = {"id": clip, "type": "CLIPLoader", "pos": [-3750, 1400], "size": [380, 110], "flags": {}, "order": 1, "mode": 0,
+                   "inputs": [], "outputs": [{"name": "CLIP", "type": "CLIP", "links": []}],
+                   "title": "Qwen3.5-9B (tags of the views)", "properties": {"Node name for S&R": "CLIPLoader"},
+                   "widgets_values": ["qwen3.5_9b_qwen_image_2.1_pe_i2i.int8_convrot.safetensors", "qwen_image", "default"]}
     for i, v in enumerate(("front", "left", "back", "right")):
         vlm = new_node()
-        nodes[vlm] = {"id": vlm, "type": "AILab_QwenVL", "pos": [-3350, 300 + i * 360], "size": [400, 330], "flags": {}, "order": 1, "mode": 0,
-                      "inputs": [{"name": "image", "type": "IMAGE", "link": new_link(views, i, vlm, 0, "IMAGE")}],
-                      "outputs": [{"name": "RESPONSE", "type": "STRING", "links": []}],
-                      "title": f"QwenVL: tags of the {v} view", "properties": {"Node name for S&R": "AILab_QwenVL"},
-                      "widgets_values": ["Qwen3-VL-4B-Instruct", "8-bit (Balanced)", "auto", "Tags", TAGS_PROMPT, 250, False, 1, "fixed"]}
+        nodes[vlm] = {"id": vlm, "type": "TextGenerate", "pos": [-3350, 300 + i * 360], "size": [400, 330], "flags": {}, "order": 2, "mode": 0,
+                      "inputs": [{"name": "clip", "type": "CLIP", "link": new_link(clip, 0, vlm, 0, "CLIP")},
+                                 {"name": "image", "shape": 7, "type": "IMAGE", "link": new_link(views, i, vlm, 1, "IMAGE")},
+                                 {"name": "video", "shape": 7, "type": "IMAGE", "link": None},
+                                 {"name": "audio", "shape": 7, "type": "AUDIO", "link": None},
+                                 {"name": "system_prompt", "shape": 7, "type": "STRING", "link": None}],
+                      "outputs": [{"name": "generated_text", "type": "STRING", "links": []},
+                                  {"name": "thinking", "type": "STRING", "links": None}],
+                      "title": f"tags of the {v} view", "properties": {"Node name for S&R": "TextGenerate"},
+                      # prompt, max_length, sampling on, temperature, top_k, top_p, min_p, repetition, seed, presence, thinking off, ..., mtp
+                      "widgets_values": [TAGS_PROMPT, 200, "on", 0.3, 20, 0.9, 0.05, 1.05, 0, 0, False, False, "auto"]}
+        nodes[clip]["outputs"][0]["links"].append(lid - 1)
         node_views["outputs"][i]["links"].append(lid)
         nodes[join]["inputs"].append({"name": v, "type": "STRING", "link": new_link(vlm, 0, join, i + 1, "STRING")})
         nodes[vlm]["outputs"][0]["links"].append(lid)
