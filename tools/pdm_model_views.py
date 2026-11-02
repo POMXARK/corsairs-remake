@@ -241,7 +241,10 @@ def main():
     ap.add_argument("--yaw", type=float, default=0.0, help="degrees: turns the model so that its face is the front")
     ap.add_argument("--tpose", action="store_true", help="a skinned character with both arms raised to the sides")
     ap.add_argument("--parts", action="store_true", help="a skinned character part by part (PARTS)")
+    ap.add_argument("--bg", default="128,128,128", help="background colour r,g,b (green 0,255,0: Qwen draws no grey neck into it)")
     a = ap.parse_args()
+    global BACKGROUND
+    BACKGROUND = tuple(int(c) for c in a.bg.split(","))
     out = a.out or a.game / "data" / "ai_models" / "views"
     out.mkdir(parents=True, exist_ok=True)
     textures, cache = texture_index(a.game), {}

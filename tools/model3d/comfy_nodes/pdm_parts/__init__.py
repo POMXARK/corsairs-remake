@@ -25,7 +25,7 @@ EXTRA = {"head": " Keep the eyes exactly as in the picture: open, white eyeballs
          "arm_l": " A clean hand with five separate fingers.", "arm_r": " A clean hand with five separate fingers.",
          "legs": "", "torso": "", "sword": ""}
 BACK = " This is the view from behind: the face is NOT visible, draw only the back of the head, the hair and the ears."
-CUT = {"head": " The neck is cut off flat at the bottom: keep that cut in the skin colour, never grey.",
+CUT = {"head": " The neck is cut off flat at the bottom: keep that cut in the skin colour, never grey and never the colour of the background.",
        "torso": "", "arm_l": "", "arm_r": "", "legs": "", "sword": ""}
 SIDE = {"front": "seen from the front", "left": "seen from the left side", "back": "seen from the back",
         "right": "seen from the right side"}
@@ -41,7 +41,7 @@ def prompt_of(part, view):
             "the same camera view, pose, proportions, colours and every detail that <image1> shows. Do not add "
             "anything that is not in <image1>: no hat, no clothes, no mask, no accessories. Smooth surfaces "
             f"without polygon edges, realistic skin and fabric.{'' if view == 'back' else EXTRA[part]}{ref}{BACK if view == 'back' else ''}{CUT[part]} "
-            "A flat grey background.")
+            "A flat bright green background.")
 
 
 def run(cmd, cwd, log):
@@ -114,11 +114,11 @@ class PDMPartViews:
         m = CFG[part][0] if margin < 0 else margin
         log = [f"part {part_index % len(PARTS) + 1}/{len(PARTS)}: {part} of {model}"]
         gamedir = Path(repo) / game
-        views = gamedir / "data" / "ai_models" / ("views_tpose" if tpose else "views")
+        views = gamedir / "data" / "ai_models" / ("views_tpose_green" if tpose else "views_green")
         files = [views / f"{model}_{part}_{v}.png" for v in VIEW_ORDER]
         if rerender or not all(f.exists() for f in files):
             run([python, Path(repo) / "tools" / "pdm_model_views.py", gamedir, model, "--parts", "--size", 1024,
-                 "--out", views] + (["--tpose"] if tpose else []), repo, log)
+                 "--bg", "0,255,0", "--out", views] + (["--tpose"] if tpose else []), repo, log)
         else:
             log.append(f"views exist: {views}")
         pics, side = crop(files, m)
