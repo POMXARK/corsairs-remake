@@ -2135,7 +2135,7 @@ const col=t=>{const h=130*(1-Math.min(age(t)/3,1));return `hsl(${h},55%,45%)`};
 const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 async function api(u,b){const r=await fetch(u,b?{method:"POST",body:JSON.stringify(b)}:{});return r.json()}
 (async()=>{const d=await api("/api/drives");sep=d.sep;$("#drv").innerHTML=d.drives.map(x=>`<button data-d="${esc(x)}">${esc(x)}</button>`).join("");
- $("#path").value=d.drives[0];$("#drv").onclick=e=>{if(e.target.dataset.d)$("#path").value=e.target.dataset.d};
+ $("#path").value=d.drives[0];try{const l=localStorage.getItem("dv_root");if(l)$("#path").value=l}catch(e){}$("#drv").onclick=e=>{if(e.target.dataset.d)$("#path").value=e.target.dataset.d};
  const s=await api("/api/status");if(s.state=="done"){rootPath=s.root;$("#path").value=s.root;show(s)}})();
 $("#go").onclick=async()=>{const r=await api("/api/scan",{path:$("#path").value.trim(),keep:+$("#keep").value});if(r.error)return alert(r.error);
  $("#go").disabled=true;$("#stop").disabled=false;poll=setInterval(tick,500)};
@@ -2143,7 +2143,7 @@ $("#stop").onclick=()=>api("/api/cancel",{});
 async function tick(){const s=await api("/api/status");
  $("#st").textContent=s.state=="scanning"?`Сканирую… ${s.files.toLocaleString()} файлов, ${fmt(s.bytes)}, ${s.elapsed.toFixed(0)} с — ${s.cur}`:`${s.state}: ${s.files.toLocaleString()} файлов, ${fmt(s.bytes)}, ${s.elapsed.toFixed(1)} с, недоступных папок: ${s.errors}`;
  if(s.state!="scanning"){clearInterval(poll);$("#go").disabled=false;$("#stop").disabled=true;if(s.state=="done"||s.state=="cancelled")show(s)}}
-function show(s){rootPath=s.root;mapPath=s.root;$("#st").textContent=`${s.root}: ${s.files.toLocaleString()} файлов, ${fmt(s.bytes)}, ${s.elapsed.toFixed(1)} с, недоступных папок: ${s.errors}`;render()}
+function show(s){rootPath=s.root;try{localStorage.setItem("dv_root",s.root)}catch(e){}mapPath=s.root;$("#st").textContent=`${s.root}: ${s.files.toLocaleString()} файлов, ${fmt(s.bytes)}, ${s.elapsed.toFixed(1)} с, недоступных папок: ${s.errors}`;render()}
 document.addEventListener("click",e=>{const a=e.target.closest(".shots a");if(!a)return;e.preventDefault();e.stopPropagation();
  const L=[...a.closest(".shots").querySelectorAll("a")].map(x=>x.getAttribute("href"));let k=L.indexOf(a.getAttribute("href"));
  const o=document.createElement("div");o.id="lbx";o.innerHTML=`<img referrerpolicy="no-referrer"><b class="lp">‹</b><b class="ln">›</b><b class="lx">✕</b><span class="lc"></span>`;
@@ -2159,7 +2159,7 @@ $("#rsv").onclick=async()=>{const b=$("#rsv");b.disabled=true;b.textContent="↻
 $("#quit").onclick=async()=>{if(!confirm("Остановить сервер DiskView и закрыть программу?"))return;try{await api("/api/quit",{})}catch(x){}document.body.innerHTML='<div style="padding:40px;font:16px sans-serif">Сервер остановлен. Эту вкладку можно закрыть.</div>';window.close()};
 document.querySelector("nav").onclick=e=>{if(!e.target.dataset.v)return;view=e.target.dataset.v;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b==e.target));render()};
 $("#field").onchange=render;
-function render(){if(!rootPath&&view!="lib"&&view!="launch")return;({tree:rTree,map:rMap,old:rOld,lib:rLib,launch:rLaunch})[view]()}
+function render(){if(!rootPath&&view!="lib"&&view!="launch"){$("#main").innerHTML=`<div style="padding:24px;color:var(--mut)">Диск ещё не просканирован (после перезапуска сервера результат сканирования сбрасывается). <button id="go2" class="p">Сканировать ${esc($("#path").value)}</button></div>`;$("#go2").onclick=()=>$("#go").click();return}({tree:rTree,map:rMap,old:rOld,lib:rLib,launch:rLaunch})[view]()}
 const RK=["можно чистить","осторожно","защищено"];
 const tg=n=>(n.tags||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join("")+(n.note?` <span title="${esc(n.note)}">📝</span>`:"")+((n.colls||[]).length?` <span title="${esc(n.colls.join(", "))}">📚</span>`:"");
 let LB={collections:[],tags:[]},tagFilter="";
