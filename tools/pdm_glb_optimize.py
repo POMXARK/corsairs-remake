@@ -118,6 +118,9 @@ def read_glb(path: Path):
 
 
 
+SMOOTH = 0
+
+
 def weld(pos, tris, digits=6):
     """Vertices with one position into one; the triangles that collapse go away."""
     scale = max(float(np.ptp(pos, axis=0).max()), 1e-9)
@@ -158,6 +161,34 @@ def uv_of(orig, tri_uv, points, tri_id):
     return np.einsum("ij,ijk->ik", bary, tri_uv[tri_id])
 
 
+def drop_specks(wpos, wtris, share=0.01):
+    """Connected pieces smaller than `share` of the faces (a shard by a nostril, loose slivers) go away."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    n = len(wpos)
+    a = np.concatenate([wtris[:, 0], wtris[:, 1], wtris[:, 2]])
+    b = np.concatenate([wtris[:, 1], wtris[:, 2], wtris[:, 0]])
+    _, label = connected_components(coo_matrix((np.ones(len(a)), (a, b)), shape=(n, n)), directed=False)
+    size = np.bincount(label[wtris[:, 0]])
+    keep = size[label[wtris[:, 0]]] >= share * len(wtris)
+    return wpos, wtris[keep]
+
+
+def smooth(pos, tris, steps, lam=0.5, mu=-0.53):
+    """Taubin smoothing (shrinks nothing): the quadric decimation keeps eyelid slivers and lip ridges of the voxel mesh."""
+    from scipy.sparse import coo_matrix
+    n = len(pos)
+    a = np.concatenate([tris[:, 0], tris[:, 1], tris[:, 2], tris[:, 1], tris[:, 2], tris[:, 0]])
+    b = np.concatenate([tris[:, 1], tris[:, 2], tris[:, 0], tris[:, 0], tris[:, 1], tris[:, 2]])
+    adj = coo_matrix((np.ones(len(a)), (a, b)), shape=(n, n)).tocsr()
+    adj.data[:] = 1
+    deg = np.maximum(np.asarray(adj.sum(axis=1)).reshape(-1), 1)[:, None]
+    for _ in range(steps):
+        for k in (lam, mu):
+            pos = pos + k * (adj @ pos / deg - pos)
+    return pos
+
+
 def optimize(pos, uv, tris, faces):
     import fast_simplification
     import trimesh
@@ -165,6 +196,7 @@ def optimize(pos, uv, tris, faces):
     tri_pos = pos[tris]                       # (F, 3, 3) original corners
     tri_uv = uv[tris] if uv is not None else None
     wpos, wtris = weld(pos, tris)
+    wpos, wtris = drop_specks(wpos, wtris)
     target = min(faces, len(wtris))
     if len(wtris) > target:
         npos, ntris = fast_simplification.simplify(wpos.astype(np.float32), wtris.astype(np.int32),
@@ -172,6 +204,8 @@ def optimize(pos, uv, tris, faces):
         npos, ntris = npos.astype(np.float64), ntris.astype(np.int64)
     else:
         npos, ntris = wpos, wtris
+    if SMOOTH:
+        npos = smooth(npos, ntris, SMOOTH)
     corners = npos[ntris]                     # (N, 3, 3)
 
     orig = trimesh.Trimesh(tri_pos.reshape(-1, 3), np.arange(len(tri_pos) * 3).reshape(-1, 3), process=False)
@@ -303,7 +337,10 @@ def main():
     ap.add_argument("--out", type=Path)
     ap.add_argument("--faces", type=int, default=12000)
     ap.add_argument("--tex", type=int, default=1024)
+    ap.add_argument("--smooth", type=int, default=0, help="Taubin smoothing steps after the decimation")
     a = ap.parse_args()
+    global SMOOTH
+    SMOOTH = a.smooth
     src_dir = a.glb or a.game / "data" / "ai_models" / "glb"
     dst_dir = a.out or a.game / "data" / "ai_models" / "glb_opt"
     for name in a.names:
