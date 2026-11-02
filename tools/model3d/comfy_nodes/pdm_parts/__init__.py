@@ -314,9 +314,29 @@ def _patch_flash_decode():
 _patch_flash_decode()
 
 
-NODE_CLASS_MAPPINGS = {"PDMPartViews": PDMPartViews, "PDMPartSave": PDMPartSave, "PDMSheetSplit": PDMSheetSplit}
+class PDMPromptJoin:
+    """The prompt of the sheet + the tags that a VLM (QwenVL) read from the picture: nothing is typed by hand."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"prompt": ("STRING", {"forceInput": True}), "tags": ("STRING", {"forceInput": True})}}
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("prompt",)
+    FUNCTION = "join"
+    CATEGORY = "pdm"
+
+    def join(self, prompt, tags):
+        tags = " ".join(str(tags).replace("\n", " ").split()).strip(" ,.")
+        if not tags:
+            return (prompt,)
+        return (f"{prompt} Details that are in <image1> and must stay in every view: {tags}.",)
+
+
+NODE_CLASS_MAPPINGS = {"PDMPartViews": PDMPartViews, "PDMPartSave": PDMPartSave, "PDMSheetSplit": PDMSheetSplit, "PDMPromptJoin": PDMPromptJoin}
 NODE_DISPLAY_NAME_MAPPINGS = {"PDMPartViews": "PDM Part Views (splits the character)",
                               "PDMPartSave": "PDM Part Save (GLB + optimize)",
-                              "PDMSheetSplit": "PDM Sheet Split (2x2 -> 4 views)"}
+                              "PDMSheetSplit": "PDM Sheet Split (2x2 -> 4 views)",
+                              "PDMPromptJoin": "PDM Prompt Join (prompt + tags)"}
 WEB_DIRECTORY = "./js"
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]

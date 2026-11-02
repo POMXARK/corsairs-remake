@@ -16,6 +16,12 @@ LOADERS = {1140: 0, 1143: 1, 1144: 2, 1147: 3}  # LoadImage -> output of PDMPart
 REFINE = {1140: 2000, 1143: 2001, 1144: 2002, 1147: 2003}  # LoadImage -> its Refine subgraph node
 
 
+TAGS_PROMPT = ("List the key visible details of the subject in this picture as comma-separated tags, at most 50, most important first: "
+               "hair (colour, length, style, anything hanging at the back such as a ponytail or braid), face shape, skin marks, "
+               "eyebrows, eyes, nose, mouth, beard or stubble, ears, neck, headwear, jewellery, clothing, colours, materials. "
+               "Only what really is in the picture. Ignore the background and the grid. No filler, no sentences.")
+
+
 def main():
     g = json.load(open(HERE / "pixal3d_4views_refine.json", encoding="utf-8"))
     nodes = {n["id"]: n for n in g["nodes"]}
@@ -59,9 +65,24 @@ def main():
     i_img = next(i for i in n["inputs"] if i["name"] == "images.image_1")
     links.pop(i_prompt["link"], None)
     links.pop(i_img["link"], None)
-    i_prompt["link"] = new_link(views, 12, main, n["inputs"].index(i_prompt), "STRING")
+    # the VLM (QwenVL, Qwen3-VL-4B) reads the tags of the raw sheet itself: hair, tail, beard, marks - nothing is typed by hand
+    vlm, join = new_node(), new_node()
+    nodes[vlm] = {"id": vlm, "type": "AILab_QwenVL", "pos": [-3350, 300], "size": [400, 330], "flags": {}, "order": 1, "mode": 0,
+                  "inputs": [{"name": "image", "type": "IMAGE", "link": new_link(views, 11, vlm, 0, "IMAGE")}],
+                  "outputs": [{"name": "RESPONSE", "type": "STRING", "links": []}],
+                  "title": "QwenVL: tags of the sheet", "properties": {"Node name for S&R": "AILab_QwenVL"},
+                  "widgets_values": ["Qwen3-VL-4B-Instruct", "8-bit (Balanced)", "auto", "Tags", TAGS_PROMPT, 400, False, 1, "fixed"]}
+    node_views["outputs"][11]["links"].append(lid)
+    nodes[join] = {"id": join, "type": "PDMPromptJoin", "pos": [-2900, 300], "size": [260, 80], "flags": {}, "order": 2, "mode": 0,
+                   "inputs": [{"name": "prompt", "type": "STRING", "link": new_link(views, 12, join, 0, "STRING")},
+                              {"name": "tags", "type": "STRING", "link": new_link(vlm, 0, join, 1, "STRING")}],
+                   "outputs": [{"name": "prompt", "type": "STRING", "links": []}],
+                   "title": "Prompt + tags", "properties": {"Node name for S&R": "PDMPromptJoin"}, "widgets_values": []}
+    node_views["outputs"][12]["links"].append(lid - 1)
+    nodes[vlm]["outputs"][0]["links"].append(lid)
+    i_prompt["link"] = new_link(join, 0, main, n["inputs"].index(i_prompt), "STRING")
+    nodes[join]["outputs"][0]["links"].append(lid)
     i_img["link"] = new_link(views, 11, main, n["inputs"].index(i_img), "IMAGE")
-    node_views["outputs"][12]["links"].append(i_prompt["link"])
     node_views["outputs"][11]["links"].append(i_img["link"])
     n["widgets_values"][7] = n["widgets_values"][8] = 2048  # width, height of the sheet (sheet_cell 1024 x 2)
     n["title"] = "Refine the 2x2 sheet of the part (Qwen Image 2.1 Edit)"
@@ -127,10 +148,10 @@ def main():
     # the exact prompt Qwen draws from, to read and copy
     show = new_node()
     nodes[show] = {"id": show, "type": "PreviewAny", "pos": [-3900, 880], "size": [470, 300], "flags": {}, "order": 1, "mode": 0,
-                   "inputs": [{"name": "source", "type": "*", "link": new_link(views, 12, show, 0, "STRING")}], "outputs": [],
+                   "inputs": [{"name": "source", "type": "*", "link": new_link(join, 0, show, 0, "STRING")}], "outputs": [],
                    "title": "Prompt of the sheet (what Qwen gets)", "properties": {"Node name for S&R": "PreviewAny"},
                    "widgets_values": []}
-    node_views["outputs"][12]["links"].append(lid)
+    nodes[join]["outputs"][0]["links"].append(lid)
     nodes[views] = node_views
     # after Save 3D: GLB of the part into the game
     save = new_node()
