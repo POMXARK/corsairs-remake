@@ -19,7 +19,7 @@ REFINE = {1140: 2000, 1143: 2001, 1144: 2002, 1147: 2003}  # LoadImage -> its Re
 TAGS_PROMPT = ("List the key visible details of the subject in this one view as comma-separated tags, at most 25, most important first: "
                "hair (colour, length, style, anything hanging at the back such as a ponytail or braid), face shape, skin marks, "
                "eyebrows, eyes, nose, mouth, beard or stubble, ears, neck, headwear, jewellery, clothing, colours, materials. "
-               "Only what really is in the picture. Ignore the background and the grid. No filler, no sentences.")
+               "Only what really is in the picture. Ignore the green background. No filler, no sentences.")
 
 
 def main():
