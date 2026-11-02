@@ -5,7 +5,10 @@ The Pixal3D/TRELLIS.2 texture is generated per voxel and smears small details (e
 (front, left, back, right, orthographic, cropped to the figure) are sharp and the mesh is built to match them, so every
 texel is projected into the views and coloured from the view that faces it; where no view sees the texel the generated
 colour stays. Usage: pdm_project_views.py in.glb out.glb front.png left.png back.png right.png
-Needs numpy and Pillow only."""
+Before projecting, every view is aligned to the mesh: the mesh is drawn with its own generated texture from the view's side
+and the view is moved by the dense optical flow towards that drawing (the mesh differs from the view by a few pixels at the
+nostrils, the mouth corners, the eyelids), so the sharp details land where the geometry has them.
+Needs numpy, Pillow, scipy and OpenCV (opencv-python-headless)."""
 import io
 import json
 import struct
@@ -68,13 +71,15 @@ def project(positions, name, view, lo, hi):
 ZCACHE = {}
 
 
-def zbuffer(P, tris, name, dv, view, lo, hi, res=1024):
-    """Depth (along the view direction, the nearer the larger) of the mesh as the view sees it: res x res over the picture."""
+def zbuffer(P, tris, name, dv, view, lo, hi, UV, res=1024):
+    """Depth (along the view direction, the nearer the larger) of the mesh as the view sees it: res x res over the picture,
+    and the texture coordinate of the surface seen in every pixel."""
     img = view[0]
     px, py = project(P, name, view, lo, hi)
     px, py = px / img.shape[1] * res, py / img.shape[0] * res
     depth = P @ np.array(dv)
     buf = np.full((res, res), -1e9, np.float32)
+    uvmap = np.zeros((res, res, 2), np.float32)
     for f in tris:
         x, y, z = px[f], py[f], depth[f]
         a = np.floor([x.min(), y.min()]).astype(int)
@@ -89,11 +94,50 @@ def zbuffer(P, tris, name, dv, view, lo, hi, res=1024):
         ok = (l0 >= -.02) & (l1 >= -.02) & (l2 >= -.02) & (X >= 0) & (X < res) & (Y >= 0) & (Y < res)
         if ok.any():
             xs, ys, zz = X[ok], Y[ok], (l0 * z[0] + l1 * z[1] + l2 * z[2])[ok]
-            buf[ys, xs] = np.maximum(buf[ys, xs], zz)
-    return buf
+            win = zz > buf[ys, xs]
+            buf[ys[win], xs[win]] = zz[win]
+            for k in range(2):
+                uvmap[ys[win], xs[win], k] = (l0 * UV[f[0], k] + l1 * UV[f[1], k] + l2 * UV[f[2], k])[ok][win]
+    return buf, uvmap
 
 
-def paint(P, UV, tris, atlas, views, side, step=1):
+FLOW_MAX = 0.03  # the largest shift of a view, as a share of its size: more than that is a different thing, not a misfit
+
+
+def align(name, view, zbuf, uvmap, atlas):
+    """Move the view onto the mesh: dense optical flow from the mesh drawn with its generated texture to the view."""
+    import cv2
+    from scipy.ndimage import binary_erosion
+    img, bbox, inner = view
+    res = zbuf.shape[0]
+    covered = zbuf > -1e8
+    size = atlas.shape[0]
+    drawn = atlas[np.clip((uvmap[..., 1] * size).astype(int), 0, size - 1), np.clip((uvmap[..., 0] * size).astype(int), 0, size - 1)]
+    drawn = drawn * covered[..., None]
+    small = cv2.resize(img, (res, res), interpolation=cv2.INTER_AREA)
+
+    def prep(a):  # the generated texture is smeared and the views are lit differently: compare the structure, not the colour
+        g = cv2.cvtColor(a.clip(0, 255).astype(np.uint8), cv2.COLOR_RGB2GRAY)
+        return cv2.createCLAHE(2.0, (8, 8)).apply(cv2.GaussianBlur(g, (0, 0), 2))
+
+    flow = cv2.calcOpticalFlowFarneback(prep(drawn), prep(small), None, 0.5, 5, 41, 5, 7, 1.5, 0)
+    area = binary_erosion(covered & (small.max(2) > 8), iterations=8)  # outside the figure the flow means nothing
+    flow *= cv2.GaussianBlur(area.astype(np.float32), (0, 0), 6)[..., None]
+    flow = cv2.GaussianBlur(flow, (0, 0), 6)
+    lim = FLOW_MAX * res
+    flow = np.clip(flow, -lim, lim)
+    h, w = img.shape[:2]
+    big = cv2.resize(flow, (w, h), interpolation=cv2.INTER_LINEAR) * (w / res)
+    gx, gy = np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32))
+    mx, my = gx + big[..., 0], gy + big[..., 1]
+    warped = cv2.remap(img, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+    mask = cv2.remap(inner.astype(np.uint8), mx, my, cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT) > 0
+    mag = np.hypot(flow[..., 0], flow[..., 1])[area]
+    print(f"{name}: view moved to the mesh, shift mean {mag.mean():.1f} px, 95 % {np.percentile(mag, 95):.1f} px of {res}")
+    return warped, bbox, mask
+
+
+def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
     """Colours of the texels covered by the triangles, summed over the views: (sum of w*colour, sum of w)."""
     size = atlas.shape[0]
     lo, hi = P.min(0), P.max(0)
@@ -102,8 +146,10 @@ def paint(P, UV, tris, atlas, views, side, step=1):
     zbufs = {}
     for n, dv in dirs.items():
         if (n, dv) not in ZCACHE:
-            ZCACHE[(n, dv)] = zbuffer(P, tris, n, dv, views[n], lo, hi)
-        zbufs[n] = ZCACHE[(n, dv)]
+            ZCACHE[(n, dv)] = zbuffer(P, tris, n, dv, views[n], lo, hi, UV)
+        zbufs[n] = ZCACHE[(n, dv)][0]
+        if do_align:
+            views[n] = align(n, views[n], *ZCACHE[(n, dv)], atlas)
     acc = np.zeros_like(atlas)
     wsum = np.zeros(atlas.shape[:2], np.float32)
     cover = np.zeros(atlas.shape[:2], np.float32)
@@ -153,8 +199,9 @@ def paint(P, UV, tris, atlas, views, side, step=1):
 
 
 def main():
-    src, dst = sys.argv[1:3]
-    views = {n: load_view(p) for n, p in zip(NAMES, sys.argv[3:7])}
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    src, dst = args[:2]
+    views = {n: load_view(p) for n, p in zip(NAMES, args[2:6])}
     j, b = read_glb(src)
     prim = j["meshes"][0]["primitives"][0]
     P = accessor(j, b, prim["attributes"]["POSITION"])
@@ -173,7 +220,7 @@ def main():
         print(f"left view sees {'+' if side > 0 else '-'}x: difference {err:.2f}")
         if best is None or err < best[0]:
             best = (err, side)
-    acc, w, cover = paint(P, UV, tris, atlas, views, best[1])
+    acc, w, cover = paint(P, UV, tris, atlas, views, best[1], do_align="--no-align" not in sys.argv)
     a = np.clip(cover * 3, 0, 1)[..., None]  # follow the views: they win wherever one of them sees the texel
     out = atlas * (1 - a) + acc / np.maximum(w, 1e-6)[..., None] * a
     buf = io.BytesIO()

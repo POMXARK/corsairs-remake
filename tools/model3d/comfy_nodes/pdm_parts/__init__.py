@@ -57,7 +57,7 @@ def sheet_prompt(part):
             "the face is not visible. A flat bright green background in all four cells.")
 
 
-PIP = ["numpy", "Pillow", "scipy", "trimesh", "rtree", "fast-simplification"]
+PIP = ["numpy", "Pillow", "scipy", "trimesh", "rtree", "fast-simplification", "opencv-python-headless"]
 
 
 def run(cmd, cwd, log):
