@@ -58,11 +58,14 @@
 // a townsman who the hero came within TOWN_GREET_DIST of turns to him and plays hi_1 / hi_2 (zombi.dll: the
 // greeting of a meeting; the distance is ours), once until the hero has gone TOWN_GREET_AWAY off; the greeting
 // is given up after TOWN_GREET_MAX ticks when the clip does not end
+// a test of the town that makes no step of its plan in two of these periods has hung: it says where and quits
+#define TOWN_WATCH_MS 40000
 #define TOWN_GREET_DIST 4.0
 #define TOWN_GREET_AWAY 8.0
 #define TOWN_GREET_MAX 6
 int townGreets = 0;
 int townBanners = 0;
+int townWatchStep = -1;
 int townGreetNpc = -1;
 
 object TownLocation;
@@ -211,6 +214,7 @@ void Town_Handlers()
 	SetEventHandler("Town_CamLook", "Town_CamLook", 0);
 	SetEventHandler("Town_CamQuit", "Town_CamQuit", 0);
 	SetEventHandler("Town_AutoWhere", "Town_AutoWhere", 0);
+	SetEventHandler("Town_AutoWatch", "Town_AutoWatch", 0);
 	SetEventHandler("Town_AutoQuit", "Town_AutoQuit", 0);
 	SetEventHandler("Town_AutoTalk", "Town_AutoTalk", 0);
 	SetEventHandler("Town_AutoPick", "Town_AutoPick", 0);
@@ -346,6 +350,7 @@ void Town_Load(string loc, string from)
 	else if (TownAuto == 52) { PostEvent("Town_LoadingTest", 3000); }
 	else if (TownAuto == 40 || TownAuto == 41) { PostEvent("TownFace_Start", 3000); }
 	else if (TownAuto && TownAuto != SAVEFILE_AUTO) { PostEvent("Town_AutoGo", 3000); }
+	if (TownAuto && TownAuto != SAVEFILE_AUTO && townWatchStep == -1) { townWatchStep = -2; PostEvent("Town_AutoWatch", TOWN_WATCH_MS); }
 	Trace("PDM town: in " + loc + " from " + from + ", " + townNpcCount + " characters");
 }
 
@@ -1238,6 +1243,20 @@ void Town_AutoDoor(string link)
 	Trace("PDM town: autotest goes to " + link + " (point " + door + ") at " + x + ", " + z);
 	SendMessage(&TownHero, "lsfff", MSG_NPCHARACTER_SETTASK, "Goto point", x, y, z);
 	PostEvent("Town_AutoWhere", 15000);
+}
+
+void Town_AutoWatch()
+{
+	if (townHere == "") { return; }
+	if (townWatchStep == townPlanStep && townPlanStep < townPlanCount + 1)
+	{
+		Town_AutoWhere();
+		Trace("PDM town: autotest FAILED, hung at step " + townPlanStep + " of " + townPlanCount + " in " + townHere);
+		ExitProgram();
+		return;
+	}
+	townWatchStep = townPlanStep;
+	PostEvent("Town_AutoWatch", TOWN_WATCH_MS);
 }
 
 // where the hero has got to: a door he does not pass is in the log

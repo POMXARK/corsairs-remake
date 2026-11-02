@@ -445,6 +445,9 @@ def llm(prompt, model="", max_tokens=300, temp=0.2, prof=None, timeout=300):
     """Один вызов модели через активный профиль: Ollama или любой OpenAI-совместимый сервер."""
     p = prof or profile()
     model = model or p.get("model", "")
+    if p["type"] == "ollama" and "qwen3" in model:
+        prompt += "\n/no_think"
+    prompt += "\nОтвечай сразу готовым ответом, без рассуждений и пересказа задачи."
     url = p["url"].rstrip("/")
     if p["type"] == "ollama":
         r = http_json(url + "/api/generate", {"model": model, "prompt": prompt, "stream": False, "think": False,
@@ -454,7 +457,8 @@ def llm(prompt, model="", max_tokens=300, temp=0.2, prof=None, timeout=300):
         r = http_json(url + "/chat/completions", {"model": model, "messages": [{"role": "user", "content": prompt}],
                                                   "temperature": temp, "max_tokens": max_tokens}, p.get("key", ""), timeout)
         text = r["choices"][0]["message"]["content"]
-    return re.sub(r"<think>.*?</think>", "", text or "", flags=re.S).strip()
+    text = re.sub(r"<think>.*?(</think>|$)", "", text or "", flags=re.S).strip()
+    return text
 
 
 def list_models(p):
@@ -640,7 +644,7 @@ def describe(path, model):
          "; ".join("%s (%.0f МБ)" % (x[0], x[1] / 2**20) for x in big) or "нет",
          program_of(path) or "не найдена")
     try:
-        return {"text": llm(prompt, model, 300)}
+        return {"text": llm(prompt, model, 500)}
     except Exception as e:
         return {"error": "модель недоступна: %s" % e}
 
@@ -1100,7 +1104,7 @@ footer span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 <div style="color:var(--mut)">Рекомендуется для этой задачи: небольшая инструкционная модель с русским — <b>qwen3:8b</b> (или 4b на слабой видеокарте); для будущего семантического поиска — эмбеддинги <b>bge-m3</b>. Coder/vision-модели не нужны.</div><div id="cwarn" style="color:#c80"></div><div id="cres" style="color:var(--mut);white-space:pre-wrap"></div>
 <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" id="csv2" class="p">Сохранить</button><button type="button" id="cts">Проверить и получить список</button><button type="button" id="cact">Сделать активной</button><button type="button" id="cdel">Удалить</button><button value="x">Закрыть</button></div></form></dialog>
 <div id="tip"></div>
-<div id="ai" style="display:none;padding:6px 12px;background:var(--pan);border-top:1px solid var(--line)"></div>
+<div id="aiw" style="display:none;position:relative;background:var(--pan);border-top:1px solid var(--line)"><button id="aix" title="Закрыть" style="position:absolute;right:8px;top:4px">✕</button><div id="ai" style="padding:6px 40px 6px 12px;max-height:40vh;min-height:60px;overflow:auto;resize:vertical;white-space:pre-wrap;user-select:text"></div></div>
 <footer><span id="sel" style="min-width:200px">—</span><select id="coll" title="Коллекция"></select><button id="tocoll" disabled>В коллекцию</button><button id="tags" disabled>Теги…</button><button id="sug" disabled>Теги ИИ</button><select id="model" title="Локальная модель Ollama"></select><button id="desc" disabled>Что это? (ИИ)</button><button id="rev" disabled>Показать в Проводнике</button><button id="cp" disabled>Копировать путь</button><button id="tomap" disabled>На карте</button><button id="tr" disabled>В корзину</button><button id="rm" disabled style="color:#d33">Удалить навсегда</button></footer>
 <script>
 const $=s=>document.querySelector(s);let sep="\\",view="tree",sel=null,mapPath=null,poll=null,rootPath="";
@@ -1130,7 +1134,7 @@ let LB={collections:[],tags:[]},tagFilter="";
 async function libLoad(){LB=await api("/api/lib");$("#coll").innerHTML=LB.collections.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")||"<option value=''>нет коллекций</option>"}
 libLoad();
 function pick(n){sel=n;$("#sel").textContent=n?`${n.path||n.name} — ${fmt(n.size)}`:"—";const ok=n&&n.path;$("#rev").disabled=$("#cp").disabled=!ok;$("#tomap").disabled=!(n&&n.dir);
- $("#desc").disabled=!(n&&n.dir&&n.path);$("#web").disabled=!(n&&n.path);$("#tr").disabled=$("#rm").disabled=!(ok&&n.risk!==2);$("#ai").style.display="none";$("#tocoll").disabled=$("#tags").disabled=!ok;$("#sug").disabled=!(n&&n.dir&&ok)}
+ $("#desc").disabled=!(n&&n.dir&&n.path);$("#web").disabled=!(n&&n.path);$("#tr").disabled=$("#rm").disabled=!(ok&&n.risk!==2);$("#tocoll").disabled=$("#tags").disabled=!ok;$("#sug").disabled=!(n&&n.dir&&ok)}
 async function loadModels(){const r=await api("/api/models");const m=r.models.slice();if(r.model&&!m.includes(r.model))m.unshift(r.model);
  $("#model").innerHTML=m.map(x=>`<option>${esc(x)}</option>`).join("")||"<option value=''>⚙ задайте модель</option>";$("#model").title="Модель ("+r.profile+(r.recommended?"; рекомендуется "+r.recommended:"")+")";const w=r.model||r.recommended;if(w&&m.includes(w))$("#model").value=w;$("#cmd").placeholder=r.recommended?"рекомендуется "+r.recommended:"имя модели"}
 loadModels();
@@ -1150,20 +1154,21 @@ $("#cts").onclick=async()=>{$("#cres").textContent="Проверяю…";const r
  $("#cres").textContent=(r.ok?"Работает, ответ: "+r.text:"Ошибка: "+r.error)+"\nМоделей на сервере: "+r.models.length+(r.models.length?" (список в поле «Модель»)":"")};
 $("#cact").onclick=async()=>{if(!cur||!cur.id)return $("#cres").textContent="Сначала сохраните профиль.";await api("/api/config",{action:"activate",id:cur.id});await cload(cur.id);await loadModels()};
 $("#cdel").onclick=async()=>{if(cur&&cur.id&&confirm("Удалить профиль?")){await api("/api/config",{action:"delete",id:cur.id});await cload();await loadModels()}};
-$("#web").onclick=async()=>{if(!sel)return;const a=$("#ai");a.style.display="block";a.textContent="Ищу «"+sel.name+"» в интернете…";
+$("#aix").onclick=()=>$("#aiw").style.display="none";
+$("#web").onclick=async()=>{if(!sel)return;const a=$("#ai");$("#aiw").style.display="block";a.textContent="Ищу «"+sel.name+"» в интернете…";
  const r=await api("/api/web",{path:sel.path,model:$("#model").value});if(r.error){a.textContent=r.error;return}
  a.innerHTML=(r.image?`<img src="${esc(r.image)}" referrerpolicy="no-referrer" style="float:right;max-height:120px;margin-left:8px;border-radius:4px">`:"")+`<b>${esc(r.title||r.query)}</b><br>${esc(r.text)}`+(r.tips?`<br><br><b>Что делать:</b><br>${esc(r.tips).replace(/\n/g,"<br>")}`:"")+
   (r.results.length?"<br><br>"+r.results.map(x=>`<a href="${esc(x.url)}" target="_blank" rel="noreferrer">${esc(x.title)}</a>`).join("<br>"):"")+`<br><i>Сохранено в заметке папки (библиотека).</i>`};
-$("#desc").onclick=async()=>{if(!sel)return;const a=$("#ai");a.style.display="block";a.textContent="Думаю… ("+$("#model").value+")";
+$("#desc").onclick=async()=>{if(!sel)return;const a=$("#ai");$("#aiw").style.display="block";a.textContent="Думаю… ("+$("#model").value+")";
  const r=await api("/api/describe",{path:sel.path,model:$("#model").value});a.textContent=r.error||r.text};
 async function afterLib(){await libLoad();if(view=="lib")rLib();else if(sel){const p=sel.path;render()}}
-$("#tocoll").onclick=async()=>{if(!sel||!$("#coll").value)return alert("Сначала создайте коллекцию на вкладке «Библиотека».");await api("/api/lib",{action:"add",id:$("#coll").value,path:sel.path,size:sel.size,dir:sel.dir});await afterLib();$("#ai").style.display="block";$("#ai").textContent="Добавлено в коллекцию."};
+$("#tocoll").onclick=async()=>{if(!sel||!$("#coll").value)return alert("Сначала создайте коллекцию на вкладке «Библиотека».");await api("/api/lib",{action:"add",id:$("#coll").value,path:sel.path,size:sel.size,dir:sel.dir});await afterLib();$("#aiw").style.display="block";$("#ai").textContent="Добавлено в коллекцию."};
 async function editTags(def){if(!sel)return;const cur=def||{tags:sel.tags||[],note:sel.note||""};
  const t=prompt(`Теги через запятую, после | — для чего (заметка):\n${sel.path}`,cur.tags.join(", ")+(cur.note?" | "+cur.note:""));if(t===null)return;
  const [a,...b]=t.split("|");await api("/api/lib",{action:"tag",path:sel.path,tags:a.split(","),note:b.join("|"),size:sel.size,dir:sel.dir});
  const s=sel.path;await afterLib();if(view!="lib")render()}
 $("#tags").onclick=()=>editTags();
-$("#sug").onclick=async()=>{const a=$("#ai");a.style.display="block";a.textContent="Предлагаю теги…";const r=await api("/api/suggest",{path:sel.path,model:$("#model").value});
+$("#sug").onclick=async()=>{const a=$("#ai");$("#aiw").style.display="block";a.textContent="Предлагаю теги…";const r=await api("/api/suggest",{path:sel.path,model:$("#model").value});
  if(r.error){a.textContent=r.error;return}a.textContent="Предложено: "+r.tags.join(", ")+" — "+r.note;editTags({tags:r.tags,note:r.note})};
 async function gone(r){if(!r.ok)return alert("Не вышло: "+r.error);sel=null;pick(null);render()}
 $("#tr").onclick=async()=>{if(sel&&confirm(`Отправить в корзину?\n${sel.path}\n${fmt(sel.size)}\nМесто на диске освободится после очистки корзины.`))gone(await api("/api/trash",{path:sel.path}))};
