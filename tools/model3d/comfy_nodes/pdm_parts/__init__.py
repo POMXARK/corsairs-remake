@@ -177,6 +177,15 @@ def find_glb(mesh):
     return max(new, key=os.path.getmtime) if new else None
 
 
+def despill(img):
+    """The green background leaks into the edge pixels of the figure (olive rim on the hair): clamp green to the
+    larger of red and blue; the pure background (green, nothing else) stays for the background removal."""
+    import torch
+    r, g, b = img[..., 0], img[..., 1], img[..., 2]
+    bg = (g > 0.75) & (r < 0.35) & (b < 0.35)
+    return torch.stack([r, torch.where(bg, g, torch.minimum(g, torch.maximum(r, b))), b], dim=-1)
+
+
 class PDMSheetSplit:
     @classmethod
     def INPUT_TYPES(cls):
@@ -195,7 +204,7 @@ class PDMSheetSplit:
         if h != 1024:
             cells = [torch.nn.functional.interpolate(c.permute(0, 3, 1, 2), size=(1024, 1024), mode="bicubic",
                                                      align_corners=False).permute(0, 2, 3, 1).clamp(0, 1) for c in cells]
-        return tuple(cells)
+        return tuple(despill(c) for c in cells)
 
 
 class PDMPartSave:
