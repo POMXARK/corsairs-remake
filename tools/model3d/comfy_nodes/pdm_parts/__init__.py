@@ -220,7 +220,7 @@ class PDMPartSave:
             "tex": ("INT", {"default": 0, "min": 0, "max": 4096}),
             "optimize": ("BOOLEAN", {"default": True}),
             "python": ("STRING", {"default": "python"}),
-        }}
+        }, "optional": {"front": ("IMAGE",), "left": ("IMAGE",), "back": ("IMAGE",), "right": ("IMAGE",)}}
 
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("info",)
@@ -232,7 +232,7 @@ class PDMPartSave:
     def IS_CHANGED(cls, **kw):
         return float("nan")
 
-    def go(self, mesh, part, model, repo, game, faces, tex, optimize, python):
+    def go(self, mesh, part, model, repo, game, faces, tex, optimize, python, front=None, left=None, back=None, right=None):
         import shutil
         log = [f"saving {model}_{part}"]
         src = find_glb(mesh)
@@ -243,6 +243,20 @@ class PDMPartSave:
         glb.mkdir(parents=True, exist_ok=True)
         name = f"{model}_{part}"
         shutil.copyfile(src, glb / f"{name}.glb")
+        if front is not None and left is not None and back is not None and right is not None:
+            # the generated texture smears eyes and brows: paint it from the four (sharp) views the mesh was made from
+            vdir = gamedir / "data" / "ai_models" / "views" / name
+            vdir.mkdir(parents=True, exist_ok=True)
+            paths = []
+            for vname, t in zip(VIEW_ORDER, (front, left, back, right)):
+                from PIL import Image
+                pth = vdir / f"{vname}.png"
+                Image.fromarray((t[0].cpu().numpy() * 255).clip(0, 255).astype("uint8")).save(pth)
+                paths.append(pth)
+            try:
+                run([python, Path(repo) / "tools" / "pdm_project_views.py", src, glb / f"{name}.glb", *paths], repo, log)
+            except RuntimeError as e:
+                log.append("PROJECTION FAILED, the generated texture stays: " + str(e)[-300:])
         log.append(f"{src} -> {glb / (name + '.glb')} ({os.path.getsize(src) // 1024} KB)")
         _, f0, t0 = CFG[part]
         if optimize:

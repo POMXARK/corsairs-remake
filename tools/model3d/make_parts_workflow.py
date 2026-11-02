@@ -123,11 +123,19 @@ def main():
     lm = new_link(views, 9, save, 2, "STRING")
     node_views["outputs"][8]["links"].append(lp)
     node_views["outputs"][9]["links"].append(lm)
+    # the four views that go into Pixal3D (cropped, background removed) also go to the save node: it paints the texture
+    save_inputs = []
+    for inp in nodes[324]["inputs"]:
+        if inp["name"] in ("front", "left", "back", "right"):
+            src_link = links[inp["link"]]
+            lk = new_link(src_link[1], src_link[2], save, 3 + len(save_inputs), "IMAGE")
+            nodes[src_link[1]]["outputs"][src_link[2]]["links"].append(lk)
+            save_inputs.append({"name": inp["name"], "type": "IMAGE", "link": lk})
     nodes[save] = {"id": save, "type": "PDMPartSave", "pos": [4900, 1287], "size": [470, 420], "flags": {},
                    "order": 99, "mode": 0,
                    "inputs": [{"name": "mesh", "type": "FILE_3D", "link": mesh_l},
                               {"name": "part", "type": "STRING", "link": lp},
-                              {"name": "model", "type": "STRING", "link": lm}],
+                              {"name": "model", "type": "STRING", "link": lm}] + save_inputs,
                    "outputs": [{"name": "info", "type": "STRING", "links": []}],
                    "title": "PDM Part Save: GLB into the game + optimize",
                    "properties": {"Node name for S&R": "PDMPartSave"},

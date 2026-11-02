@@ -1,8 +1,8 @@
 {
- "id": "dc5bed17-6be1-457a-b5a6-a1257586a46f",
+ "id": "0b886298-8442-4f99-8c8d-8e594159d2cf",
  "revision": 0,
  "last_node_id": 2018,
- "last_link_id": 4822,
+ "last_link_id": 4826,
  "nodes": [
   {
    "id": 3,
@@ -2781,7 +2781,8 @@
      "name": "images",
      "type": "IMAGE",
      "links": [
-      1389
+      1389,
+      4823
      ]
     }
    ],
@@ -2834,7 +2835,8 @@
      "name": "images",
      "type": "IMAGE",
      "links": [
-      1399
+      1399,
+      4825
      ]
     }
    ],
@@ -2887,7 +2889,8 @@
      "name": "images",
      "type": "IMAGE",
      "links": [
-      1435
+      1435,
+      4824
      ]
     }
    ],
@@ -2940,7 +2943,8 @@
      "name": "images",
      "type": "IMAGE",
      "links": [
-      1436
+      1436,
+      4826
      ]
     }
    ],
@@ -4312,6 +4316,26 @@
      "name": "model",
      "type": "STRING",
      "link": 4822
+    },
+    {
+     "name": "front",
+     "type": "IMAGE",
+     "link": 4823
+    },
+    {
+     "name": "left",
+     "type": "IMAGE",
+     "link": 4824
+    },
+    {
+     "name": "back",
+     "type": "IMAGE",
+     "link": 4825
+    },
+    {
+     "name": "right",
+     "type": "IMAGE",
+     "link": 4826
     }
    ],
    "outputs": [
@@ -5237,6 +5261,38 @@
    2017,
    2,
    "STRING"
+  ],
+  [
+   4823,
+   340,
+   0,
+   2017,
+   3,
+   "IMAGE"
+  ],
+  [
+   4824,
+   344,
+   0,
+   2017,
+   4,
+   "IMAGE"
+  ],
+  [
+   4825,
+   343,
+   0,
+   2017,
+   5,
+   "IMAGE"
+  ],
+  [
+   4826,
+   346,
+   0,
+   2017,
+   6,
+   "IMAGE"
   ]
  ],
  "groups": [
