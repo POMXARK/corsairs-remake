@@ -877,6 +877,122 @@ def suggest(path, model):
         return {"error": "не вышло: %s" % e}
 
 
+def _norm(s):
+    return re.sub(r"\s+", " ", str(s).strip().lower())
+
+
+def autotag_candidates(limit):
+    """Папки без тегов и вне коллекций (то, что пользователь уже разметил, не трогаем); крупные первыми,
+    вложенные в уже выбранную пропускаем."""
+    out = []
+    for c in sorted(CARDS, key=lambda x: -x["size"]):
+        p = c["path"]
+        if p in LIB["tags"] or p in _PCOLL or c["size"] < (20 << 20) or protected(p):
+            continue
+        if any(under(p, o["path"]) for o in out):
+            continue
+        out.append(c)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def web_hint(path):
+    """Короткая справка из интернета по имени папки (кэш в библиотеке, в т.ч. «ничего не нашли»)."""
+    q = web_name(path)
+    if len(q) < 3 or q.isdigit():
+        return ""
+    cache = LIB.setdefault("webcache", {})
+    if q.lower() not in cache:
+        try:
+            w = web_lookup(q)
+            cache[q.lower()] = ((w["title"] + ": " if w["title"] else "") + w["text"])[:260]
+        except Exception:
+            return ""
+    return cache[q.lower()]
+
+
+def autotag(model, n=8, web=True):
+    """Один пакет: модель видит существующие коллекции и теги и по возможности использует их; новые создаёт, только
+    если ничего не подходит. Всё помечается auto и откатывается autotag_undo; правки пользователя снимают метку."""
+    cand = autotag_candidates(n)
+    if not cand:
+        return {"ok": True, "done": 0, "left": 0, "new_cols": [], "msg": "размечать нечего"}
+    hints = {}
+    if web:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(8) as ex:
+            for c, h in zip(cand, ex.map(lambda c: web_hint(c["path"]), cand)):
+                hints[c["path"]] = h
+    cnt = {}
+    for v in LIB["tags"].values():
+        for t in v.get("tags", []):
+            cnt[t] = cnt.get(t, 0) + 1
+    cols = ["%s (%d)" % (c["name"], len(c["items"])) for c in LIB["collections"]]
+    tg = ["%s (%d)" % (t, k) for t, k in sorted(cnt.items(), key=lambda x: -x[1])[:60]]
+    prompt = ("Ты раскладываешь папки компьютера по коллекциям и тегам.\nСУЩЕСТВУЮЩИЕ коллекции: %s\nСУЩЕСТВУЮЩИЕ теги: %s\n"
+              "Правила: сначала используй существующие коллекции и теги (точное имя); новую коллекцию/тег создавай, только если ничего не подходит; "
+              "коллекций мало и они широкие (например «Музыка и FL Studio», «Игры», «Проекты», «Установщики», «Архивы», «Системное»), "
+              "теги короткие, 2-4 на папку, по-русски, строчными. Верни ТОЛЬКО JSON-массив "
+              "[{\"path\":\"как в карточке\",\"collection\":\"имя\",\"tags\":[...],\"note\":\"одна фраза: что это\"}] по одному объекту на папку.\n"
+              "%sКарточки:\n%s" % ("; ".join(cols) or "нет", "; ".join(tg) or "нет",
+                               "Если у карточки есть «веб:» — это справка из интернета по названию папки, опирайся на неё, когда по содержимому неясно (она по одному названию и может быть неточной: если не сходится с типами файлов и содержимым — игнорируй).\n" if web else "",
+                               "\n".join(card_line(c) + (" | веб: " + hints[c["path"]] if hints.get(c["path"]) else "") for c in cand)))
+    try:
+        m = re.search(r"\[.*\]", llm(prompt, model, 1500, timeout=600), re.S)
+        arr = json.loads(m.group(0))
+    except Exception as e:
+        return {"ok": False, "error": "не вышло: %s" % e}
+    byp = {c["path"]: c for c in cand}
+    log = LIB.setdefault("autolog", [])
+    new_cols, done = [], 0
+    names = {c["path"] for c in cand}
+    for it in arr if isinstance(arr, list) else []:
+        p = it.get("path")
+        if p not in names:
+            continue
+        c = byp[p]
+        tags = []
+        for t in it.get("tags", [])[:5]:
+            t = _norm(t)
+            if t and t not in tags:
+                tags.append(t)
+        LIB["tags"][p] = {"tags": tags, "note": str(it.get("note", ""))[:300], "size": c["size"], "dir": True, "auto": True}
+        entry = {"path": p, "col": ""}
+        name = str(it.get("collection", "")).strip()
+        if name:
+            col = next((x for x in LIB["collections"] if _norm(x["name"]) == _norm(name)), None)
+            if col is None:
+                col = {"id": "a%d%d" % (int(time.time() * 1000), len(LIB["collections"])), "name": name, "items": [], "auto": True}
+                LIB["collections"].append(col)
+                new_cols.append(name)
+            col["items"].append({"path": p, "size": c["size"], "dir": True, "auto": True})
+            entry["col"] = col["id"]
+        log.append(entry)
+        done += 1
+    # то, что модель пропустила, не зацикливает: помечаем пустой авто-записью
+    for p in names - {e["path"] for e in log}:
+        LIB["tags"][p] = {"tags": [], "note": "", "size": byp[p]["size"], "dir": True, "auto": True, "skipped": True}
+        log.append({"path": p, "col": ""})
+    lib_touch()
+    return {"ok": True, "done": done, "left": len(autotag_candidates(1000)), "new_cols": new_cols}
+
+
+def autotag_undo():
+    """Откат авторазметки: убирает только то, что ещё помечено auto (правленное пользователем остаётся)."""
+    n = 0
+    for e in LIB.pop("autolog", []):
+        t = LIB["tags"].get(e["path"])
+        if t and t.get("auto"):
+            LIB["tags"].pop(e["path"])
+            n += 1
+        for c in LIB["collections"]:
+            c["items"] = [i for i in c["items"] if not (i["path"] == e["path"] and i.get("auto"))]
+    LIB["collections"] = [c for c in LIB["collections"] if not (c.get("auto") and not c["items"])]
+    lib_touch()
+    return {"ok": True, "undone": n}
+
+
 def launch(path):
     """Открывает только то, что пользователь сам положил в коллекцию или что есть среди установленных программ."""
     ok = any(it["path"] == path for c in LIB["collections"] for it in c["items"]) or any(p["path"] == path for p in program_list())
@@ -915,9 +1031,9 @@ def lib_info():
     cols = []
     for c in LIB["collections"]:
         items = [dict(it, exists=os.path.exists(it["path"]), tags=LIB["tags"].get(it["path"], {}).get("tags", []),
-                      note=LIB["tags"].get(it["path"], {}).get("note", "")) for it in c["items"]]
-        cols.append({"id": c["id"], "name": c["name"], "items": items})
-    return {"collections": cols, "tags": sorted(cnt.items(), key=lambda x: -x[1]), "cards": len(CARDS)}
+                      note=LIB["tags"].get(it["path"], {}).get("note", ""), auto=bool(it.get("auto") and LIB["tags"].get(it["path"], {}).get("auto"))) for it in c["items"]]
+        cols.append({"id": c["id"], "name": c["name"], "auto": bool(c.get("auto")), "items": items})
+    return {"collections": cols, "tags": sorted(cnt.items(), key=lambda x: -x[1]), "cards": len(CARDS), "todo": len(autotag_candidates(100000)), "undo": len(LIB.get("autolog", []))}
 
 
 def lib_action(b):
@@ -930,6 +1046,19 @@ def lib_action(b):
         cols.append({"id": str(int(time.time() * 1000)), "name": name, "items": []})
     elif a == "delete":
         LIB["collections"] = [c for c in cols if c["id"] != b.get("id")]
+    elif a == "rename":
+        col = next((c for c in cols if c["id"] == b.get("id")), None)
+        name = b.get("name", "").strip()
+        if col is None or not name or any(c is not col and _norm(c["name"]) == _norm(name) for c in cols):
+            return {"ok": False, "error": "пустое или повторное имя"}
+        col["name"] = name
+        col.pop("auto", None)
+    elif a == "rename_tag":
+        old, new = _norm(b.get("old", "")), _norm(b.get("new", ""))
+        for v in LIB["tags"].values():
+            if old in v.get("tags", []):
+                v["tags"] = list(dict.fromkeys(new if t == old else t for t in v["tags"] if new or t != old))
+                v.pop("auto", None)
     elif a in ("add", "remove"):
         col = next((c for c in cols if c["id"] == b.get("id")), None)
         if col is None:
@@ -937,12 +1066,17 @@ def lib_action(b):
         p = b.get("path", "")
         col["items"] = [it for it in col["items"] if it["path"] != p]
         if a == "add":
+            col.pop("auto", None)
             col["items"].append({"path": p, "size": b.get("size", 0), "dir": b.get("dir", True)})
     elif a == "tag":
         p = b.get("path", "")
         tags = [t.strip().lower() for t in b.get("tags", []) if t.strip()]
         if tags or b.get("note", "").strip():
             LIB["tags"][p] = {"tags": tags, "note": b.get("note", "").strip(), "size": b.get("size", 0), "dir": b.get("dir", True)}
+            for c in cols:
+                for i in c["items"]:
+                    if i["path"] == p:
+                        i.pop("auto", None)
         else:
             LIB["tags"].pop(p, None)
     else:
@@ -1048,6 +1182,12 @@ class H(BaseHTTPRequestHandler):
             return self.send(to_trash(b.get("path", "")))
         if u.path == "/api/delete":
             return self.send(hard_delete(b.get("path", ""), b.get("confirm", "")))
+        if u.path == "/api/autotag":
+            if b.get("start"):
+                LIB["autolog"] = []
+            return self.send(autotag(b.get("model", ""), web=b.get("web", True)))
+        if u.path == "/api/autotag/undo":
+            return self.send(autotag_undo())
         if u.path == "/api/web":
             return self.send(web_info(b.get("path", ""), b.get("model", "")))
         if u.path == "/api/describe":
@@ -1245,12 +1385,19 @@ async function rLib(){await libLoad();const m=$("#main");
  <div style="flex:1;display:flex;flex-direction:column;min-width:0"><div id="msgs" style="flex:1;overflow:auto;padding:8px 12px"></div>
  <div style="padding:8px 12px;display:flex;gap:6px"><input id="q" style="flex:1" placeholder="Спросите о своих данных: что у меня из FL Studio? что можно архивировать?"><button id="askb" class="p">Спросить</button></div></div></div>`;
  const lb=$("#lb");const tags=LB.tags.map(([t,n])=>`<span class="chip" data-t="${esc(t)}" style="${t==tagFilter?"outline:2px solid var(--acc)":""}">${esc(t)} ${n}</span>`).join("")||"<i>тегов пока нет</i>";
- lb.innerHTML=`<div><input id="cn" placeholder="новая коллекция"> <button id="cadd">Создать</button></div><div style="margin:8px 0">Теги (клик — фильтр): ${tags}</div><div style="color:var(--mut);margin-bottom:6px">Карточек для помощника: ${LB.cards}. Выберите папку на других вкладках → «В коллекцию» / «Теги…» / «Теги ИИ».</div>`+
+ lb.innerHTML=`<div><input id="cn" placeholder="новая коллекция"> <button id="cadd">Создать</button> <button id="atg" class="p" title="Модель смотрит существующие коллекции и теги, раскладывает неразмеченные папки; потом всё можно править или откатить">🤖 Авторазметка (${LB.todo})</button>${LB.undo?` <button id="atu">Отменить авторазметку (${LB.undo})</button>`:""} <button id="rtg">Переименовать тег…</button> <label title="Имя папки уходит в Википедию/DuckDuckGo, чтобы понять незнакомые программы"><input type="checkbox" id="atw" checked> сверять с интернетом</label></div><div id="atp" style="color:var(--mut)"></div><div style="margin:8px 0">Теги (клик — фильтр): ${tags}</div><div style="color:var(--mut);margin-bottom:6px">Карточек для помощника: ${LB.cards}. Выберите папку на других вкладках → «В коллекцию» / «Теги…» / «Теги ИИ».</div>`+
   LB.collections.map(c=>{const its=c.items.filter(i=>!tagFilter||i.tags.includes(tagFilter));const tot=its.reduce((a,i)=>a+i.size,0);
-   return `<div style="margin:10px 0"><b>${esc(c.name)}</b> — ${its.length} шт., ${fmt(tot)} <button data-del="${c.id}">удалить коллекцию</button>`+
-   its.map(i=>`<div class="r" data-c="${c.id}" data-p="${esc(i.path)}" style="padding:2px 0 2px 8px;cursor:pointer;${i.exists?"":"opacity:.5"}">${i.dir?"📁":"📄"} ${esc(i.path)} · ${fmt(i.size)} ${i.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join("")}${i.note?`<div style="color:var(--mut);margin-left:20px">${esc(i.note)}</div>`:""}${i.exists?"":" (нет на диске)"} <a href="#" data-rm="${c.id}" data-p="${esc(i.path)}">✕</a></div>`).join("")+`</div>`}).join("");
+   return `<div style="margin:10px 0"><b>${c.auto?"🤖 ":""}${esc(c.name)}</b> — ${its.length} шт., ${fmt(tot)} <button data-ren="${c.id}">переименовать</button> <button data-del="${c.id}">удалить коллекцию</button>`+
+   its.map(i=>`<div class="r" data-c="${c.id}" data-p="${esc(i.path)}" style="padding:2px 0 2px 8px;cursor:pointer;${i.exists?"":"opacity:.5"}">${i.auto?"🤖 ":""}${i.dir?"📁":"📄"} ${esc(i.path)} · ${fmt(i.size)} ${i.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join("")}${i.note?`<div style="color:var(--mut);margin-left:20px">${esc(i.note)}</div>`:""}${i.exists?"":" (нет на диске)"} <a href="#" data-rm="${c.id}" data-p="${esc(i.path)}">✕</a></div>`).join("")+`</div>`}).join("");
  lb.onclick=async e=>{const t=e.target;
   if(t.id=="cadd"){const r=await api("/api/lib",{action:"create",name:$("#cn").value});if(!r.ok)return alert(r.error);return rLib()}
+  if(t.id=="rtg"){const o=prompt("Какой тег переименовать (или объединить)?");if(!o)return;const n=prompt("Новое имя (если такой тег уже есть — теги объединятся; пусто — удалить тег):","");if(n===null)return;await api("/api/lib",{action:"rename_tag",old:o,new:n});return rLib()}
+  if(t.dataset.ren){const c=LB.collections.find(x=>x.id==t.dataset.ren);const n=prompt("Новое имя коллекции:",c.name);if(!n)return;const r=await api("/api/lib",{action:"rename",id:c.id,name:n});if(!r.ok)return alert(r.error);return rLib()}
+  if(t.id=="atu"){if(confirm("Убрать всё, что создала авторазметка (и не правили вручную)?")){await api("/api/autotag/undo",{});rLib()}return}
+  if(t.id=="atg"){if(!$("#model").value)return alert("Выберите модель (⚙ Модель).");t.disabled=true;let tot=0,first=true,stop=false;const p=$("#atp");
+   while(!stop){p.textContent="Модель размечает… готово "+tot+(LB.todo?" из ~"+LB.todo:"");const r=await api("/api/autotag",{model:$("#model").value,start:first,web:$("#atw").checked});first=false;
+    if(!r.ok){p.textContent=r.error;break}tot+=r.done;if(!r.left||!r.done&&!r.left){p.textContent="Готово: размечено "+tot+". Проверьте результат ниже: 🤖 — созданное ИИ; правьте, переименовывайте или отмените.";break}if(tot>=200){p.textContent="Размечено "+tot+", осталось "+r.left+" — нажмите ещё раз.";break}}
+   await libLoad();return rLib()}
   if(t.dataset.t!==undefined){tagFilter=tagFilter==t.dataset.t?"":t.dataset.t;return rLib()}
   if(t.dataset.del){if(confirm("Удалить коллекцию (файлы не затрагиваются)?")){await api("/api/lib",{action:"delete",id:t.dataset.del});rLib()}return}
   if(t.dataset.rm){e.preventDefault();await api("/api/lib",{action:"remove",id:t.dataset.rm,path:t.dataset.p});return rLib()}
