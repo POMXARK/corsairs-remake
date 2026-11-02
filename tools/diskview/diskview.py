@@ -1076,6 +1076,21 @@ def ask(q, model):
         if dp:
             return {"answer": "Дубликаты: групп %d, лишних %.1f ГБ." % (dp["count"], dp["wasted"] / 2**30), "sources": [], "dups": dp}
         return {"answer": "Ничего не нашёл. Просканируйте диск или добавьте теги и заметки.", "sources": []}
+    if strong and not dp:
+        def why(c):
+            tg = LIB["tags"].get(c["path"], {})
+            w = tg.get("web") or {}
+            hit = lambda x: any(t in toks(x) for t in strong)
+            if w.get("src") and hit((w.get("title") or "") + " " + " ".join(w.get("genres", [])) + " " + (w.get("text") or "")):
+                m = next((x for x in re.split(r"(?<=[.!?…])\s+", w.get("text") or "") if hit(x)), "")
+                return "%s%s" % (w.get("title", ""), (": «%s»" % m[:160]) if m else " (жанры/название)")
+            if hit(c["name"]) or hit(c["path"]):
+                return "есть в названии"
+            inner = next((x for x in c["subs"] + c["top"] if hit(x)), "")
+            return ("внутри: %s" % inner) if inner else "совпало слово в карточке"
+        return {"answer": "Нашёл по запросу «%s»: %d. Подходят по названию или описанию:\n" % (q, len(hits)) +
+                "\n".join("• %s — %s" % (c["path"], why(c)) for c in hits) +
+                "", "sources": src, "dups": dp}
     if not model and not profile().get("model"):
         return {"answer": "Модель не выбрана (⚙ Модель). Вот найденные папки.", "sources": src, "dups": dp}
     prompt = ("Ты помощник по данным на компьютере пользователя. Ниже карточки папок (метаданные: размер, даты, типы, "
