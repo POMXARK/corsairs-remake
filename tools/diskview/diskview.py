@@ -876,15 +876,15 @@ def suggest(path, model):
         return {"error": "не вышло: %s" % e}
 
 
-def loose_json(text, want):
-    """Первый корректный JSON нужного типа в ответе модели (вокруг может быть текст, скобки, пояснения)."""
+def loose_json(text, want, ok=None):
+    """Первый корректный JSON нужного типа (и подходящий под ok) в ответе модели: вокруг может быть текст, скобки, пояснения."""
     dec = json.JSONDecoder()
     for m in re.finditer(r"\[" if want is list else r"\{", text):
         try:
             v, _ = dec.raw_decode(text[m.start():])
         except ValueError:
             continue
-        if isinstance(v, want):
+        if isinstance(v, want) and (ok is None or ok(v)):
             return v
     raise ValueError("в ответе модели нет JSON: %s" % text[:80].replace("\n", " "))
 
@@ -993,18 +993,21 @@ def autotag_run(cand, model, web=True, force=False):
                                "\n".join(card_line(c) + (" | веб: " + hints[c["path"]] if hints.get(c["path"]) else "") for c in cand)))
     try:
         txt = llm(prompt, model, 1500, timeout=600)
+        has_path = lambda v: any(isinstance(x, dict) and "path" in x for x in v)
         try:
-            arr = loose_json(txt, list)
+            arr = loose_json(txt, list, has_path)
         except ValueError:
-            d = loose_json(txt, dict)
-            arr = [d] if "path" in d else next((v for v in d.values() if isinstance(v, list)), [])
+            d = loose_json(txt, dict, lambda v: "path" in v or any(isinstance(x, list) and has_path(x) for x in v.values()))
+            arr = [d] if "path" in d else next(v for v in d.values() if isinstance(v, list) and has_path(v))
     except Exception as e:
         return {"ok": False, "error": "не вышло: %s" % e}
     byp = {c["path"]: c for c in cand}
     log = LIB.setdefault("autolog", [])
     new_cols, done = [], 0
     names = {c["path"] for c in cand}
-    for it in arr if isinstance(arr, list) else []:
+    for it in arr:
+        if not isinstance(it, dict):
+            continue
         p = it.get("path")
         if p not in names:
             continue
@@ -1277,7 +1280,10 @@ class H(BaseHTTPRequestHandler):
         if u.path == "/api/autotag":
             if b.get("start"):
                 LIB["autolog"] = []
-            return self.send(autotag(b.get("model", ""), web=b.get("web", True)))
+            try:
+                return self.send(autotag(b.get("model", ""), web=b.get("web", True)))
+            except Exception as e:
+                return self.send({"ok": False, "error": "авторазметка: %s" % e})
         if u.path == "/api/autoplace":
             return self.send(autoplace(b))
         if u.path == "/api/autotag/undo":
