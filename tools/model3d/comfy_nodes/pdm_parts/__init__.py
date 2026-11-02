@@ -69,12 +69,23 @@ def crop(paths, margin, size=1024):
             hi = [max(hi[0], xs.max()), max(hi[1], ys.max())]
     side = max(hi[0] - lo[0], hi[1] - lo[1], 8) * (1 + 2 * margin)
     cx, cy = (lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2
-    out = []
+    out, masks = [], []
     for im in pics:
+        a = np.asarray(im).astype(int)
+        sil = Image.fromarray(((np.abs(a - a[0, 0]).sum(axis=2) > 36) * 255).astype("uint8"))
+        mc = Image.new("L", (int(side) + 1, int(side) + 1), 0)
+        mc.paste(sil, (-int(cx - side / 2), -int(cy - side / 2)))
+        masks.append(mc.resize((size, size), Image.LANCZOS))
         canvas = Image.new("RGB", (int(side) + 1, int(side) + 1), tuple(np.asarray(im)[0, 0]))
         canvas.paste(im, (-int(cx - side / 2), -int(cy - side / 2)))
         out.append(canvas.resize((size, size), Image.LANCZOS))
-    return out, int(side)
+    return out, int(side), masks
+
+
+def mask_of(im):
+    import numpy as np
+    import torch
+    return torch.from_numpy(np.asarray(im).astype("float32") / 255.0)[None,]
 
 
 def tensor(im):
@@ -97,9 +108,10 @@ class PDMPartViews:
             "python": ("STRING", {"default": "python"}),
         }}
 
-    RETURN_TYPES = ("IMAGE",) * 4 + ("STRING",) * 7
+    RETURN_TYPES = ("IMAGE",) * 4 + ("STRING",) * 7 + ("MASK",) * 4
     RETURN_NAMES = ("front", "left", "back", "right", "prompt_front", "prompt_left", "prompt_back", "prompt_right",
-                    "part", "model", "info")
+                    "part", "model", "info",
+                    "mask_front", "mask_left", "mask_back", "mask_right")
     OUTPUT_NODE = True
     FUNCTION = "go"
     CATEGORY = "pdm"
@@ -121,12 +133,12 @@ class PDMPartViews:
                  "--bg", "0,255,0", "--out", views] + (["--tpose"] if tpose else []), repo, log)
         else:
             log.append(f"views exist: {views}")
-        pics, side = crop(files, m)
+        pics, side, masks = crop(files, m)
         log.append(f"cropped to {side} px (margin {m}), prompts for the Qwen refine nodes made")
         text = "\n".join(log)
         return {"ui": {"text": [text]},
                 "result": tuple(tensor(p) for p in pics) + tuple(prompt_of(part, v) for v in VIEW_ORDER)
-                + (part, model, text)}
+                + (part, model, text) + tuple(mask_of(k) for k in masks)}
 
 
 def find_glb(mesh):
