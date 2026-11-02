@@ -14,6 +14,7 @@ import sys
 import numpy as np
 from PIL import Image
 
+SHARP = 6  # the view that faces the texel most dominates (power of the weight): blended views ghost the lips and the nose
 NAMES = ("front", "left", "back", "right")
 
 
@@ -42,12 +43,16 @@ def accessor(j, b, i):
 def load_view(path):
     f = np.asarray(Image.open(path).convert("RGB")).astype(np.float32)
     f[..., 1] = np.minimum(f[..., 1], np.maximum(f[..., 0], f[..., 2]))  # green background spill
-    ys, xs = np.where(f.max(2) > 8)
-    return f, (xs.min(), xs.max(), ys.min(), ys.max())
+    mask = f.max(2) > 8
+    ys, xs = np.where(mask)
+    # the rim of the figure is blended with the background (dark lines at the temple, the neck, the ear): do not sample it
+    from scipy.ndimage import binary_erosion
+    inner = binary_erosion(mask, iterations=max(3, f.shape[0] // 400))
+    return f, (xs.min(), xs.max(), ys.min(), ys.max()), inner
 
 
 def project(positions, name, view, lo, hi):
-    _, (x0, x1, y0, y1) = view
+    _, (x0, x1, y0, y1), _ = view
     y = y1 - (positions[:, 1] - lo[1]) / (hi[1] - lo[1]) * (y1 - y0)
     if name == "front":
         t = (positions[:, 0] - lo[0]) / (hi[0] - lo[0])
@@ -60,13 +65,48 @@ def project(positions, name, view, lo, hi):
     return x0 + t * (x1 - x0), y
 
 
+ZCACHE = {}
+
+
+def zbuffer(P, tris, name, dv, view, lo, hi, res=1024):
+    """Depth (along the view direction, the nearer the larger) of the mesh as the view sees it: res x res over the picture."""
+    img = view[0]
+    px, py = project(P, name, view, lo, hi)
+    px, py = px / img.shape[1] * res, py / img.shape[0] * res
+    depth = P @ np.array(dv)
+    buf = np.full((res, res), -1e9, np.float32)
+    for f in tris:
+        x, y, z = px[f], py[f], depth[f]
+        a = np.floor([x.min(), y.min()]).astype(int)
+        e = np.ceil([x.max(), y.max()]).astype(int)
+        d = (y[1] - y[2]) * (x[0] - x[2]) + (x[2] - x[1]) * (y[0] - y[2])
+        if abs(d) < 1e-9 or (e - a).max() > 300:
+            continue
+        X, Y = np.meshgrid(np.arange(a[0], e[0] + 1), np.arange(a[1], e[1] + 1))
+        l0 = ((y[1] - y[2]) * (X + .5 - x[2]) + (x[2] - x[1]) * (Y + .5 - y[2])) / d
+        l1 = ((y[2] - y[0]) * (X + .5 - x[2]) + (x[0] - x[2]) * (Y + .5 - y[2])) / d
+        l2 = 1 - l0 - l1
+        ok = (l0 >= -.02) & (l1 >= -.02) & (l2 >= -.02) & (X >= 0) & (X < res) & (Y >= 0) & (Y < res)
+        if ok.any():
+            xs, ys, zz = X[ok], Y[ok], (l0 * z[0] + l1 * z[1] + l2 * z[2])[ok]
+            buf[ys, xs] = np.maximum(buf[ys, xs], zz)
+    return buf
+
+
 def paint(P, UV, tris, atlas, views, side, step=1):
     """Colours of the texels covered by the triangles, summed over the views: (sum of w*colour, sum of w)."""
     size = atlas.shape[0]
     lo, hi = P.min(0), P.max(0)
     dirs = {"front": (0, 0, 1.), "back": (0, 0, -1.), "left": (side, 0, 0.), "right": (-side, 0, 0.)}
+    reach = 0.05 * float((hi - lo).max())  # a texel deeper than this behind what the view sees is hidden (a ponytail behind the jaw)
+    zbufs = {}
+    for n, dv in dirs.items():
+        if (n, dv) not in ZCACHE:
+            ZCACHE[(n, dv)] = zbuffer(P, tris, n, dv, views[n], lo, hi)
+        zbufs[n] = ZCACHE[(n, dv)]
     acc = np.zeros_like(atlas)
     wsum = np.zeros(atlas.shape[:2], np.float32)
+    cover = np.zeros(atlas.shape[:2], np.float32)
     for f in tris[::step]:
         pp = P[f]
         nrm = np.cross(pp[1] - pp[0], pp[2] - pp[0])
@@ -91,8 +131,8 @@ def paint(P, UV, tris, atlas, views, side, step=1):
             continue
         ax, ay = X[ok], Y[ok]
         for name, dv in dirs.items():
-            lim = 0.1 if name in ("front", "back") else 0.35  # the side views smear the nose, give them less
-            w = np.clip((nrm @ np.array(dv) - lim) / 0.5, 0, 1) ** 2
+            lim = 0.05  # holes between the views stay with the smeared generated colour: let every view reach far, SHARP keeps the best one on top
+            w = np.clip((nrm @ np.array(dv) - lim) / 0.5, 0, 1)
             if w <= 0:
                 continue
             px, py = project(pp, name, views[name], lo, hi)
@@ -100,9 +140,16 @@ def paint(P, UV, tris, atlas, views, side, step=1):
             sy = (l0 * py[0] + l1 * py[1] + l2 * py[2])[ok]
             img = views[name][0]
             c = img[np.clip(sy.astype(int), 0, img.shape[0] - 1), np.clip(sx.astype(int), 0, img.shape[1] - 1)]
-            acc[ay, ax] += c * w
-            wsum[ay, ax] += w
-    return acc, wsum
+            zr = zbufs[name].shape[0]
+            seen = zbufs[name][np.clip((sy / img.shape[0] * zr).astype(int), 0, zr - 1),
+                               np.clip((sx / img.shape[1] * zr).astype(int), 0, zr - 1)]
+            here = (l0[ok] * (pp[0] @ np.array(dv)) + l1[ok] * (pp[1] @ np.array(dv)) + l2[ok] * (pp[2] @ np.array(dv)))
+            iy, ix = np.clip(sy.astype(int), 0, img.shape[0] - 1), np.clip(sx.astype(int), 0, img.shape[1] - 1)
+            vis = (here >= seen - reach) & views[name][2][iy, ix]
+            acc[ay[vis], ax[vis]] += c[vis] * w ** SHARP
+            wsum[ay[vis], ax[vis]] += w ** SHARP
+            cover[ay[vis], ax[vis]] += w ** 2
+    return acc, wsum, cover
 
 
 def main():
@@ -120,14 +167,14 @@ def main():
     # which side of the mesh the "left" view looks at: the sign with the smaller difference to the generated colour
     best = None
     for side in (1., -1.):
-        acc, w = paint(P, UV, tris, atlas, views, side, step=12)
-        m = w > 0.3
+        acc, w, _ = paint(P, UV, tris, atlas, views, side, step=12)
+        m = w > 1e-3
         err = np.abs(acc[m] / w[m][:, None] - atlas[m]).mean() if m.any() else 1e9
         print(f"left view sees {'+' if side > 0 else '-'}x: difference {err:.2f}")
         if best is None or err < best[0]:
             best = (err, side)
-    acc, w = paint(P, UV, tris, atlas, views, best[1])
-    a = np.clip(w * 3, 0, 1)[..., None]  # follow the views: they win wherever one of them sees the texel
+    acc, w, cover = paint(P, UV, tris, atlas, views, best[1])
+    a = np.clip(cover * 3, 0, 1)[..., None]  # follow the views: they win wherever one of them sees the texel
     out = atlas * (1 - a) + acc / np.maximum(w, 1e-6)[..., None] * a
     buf = io.BytesIO()
     Image.fromarray(out.clip(0, 255).astype(np.uint8)).save(buf, format="PNG")
@@ -136,7 +183,7 @@ def main():
     b += buf.getvalue()
     j["buffers"][0]["byteLength"] = len(b) + (-len(b) % 4)
     write_glb(dst, j, b)
-    print(f"{dst}: texture painted from the views, {int((w > 0).mean() * 100)} % of the texels")
+    print(f"{dst}: texture painted from the views, {int((cover > 0).mean() * 100)} % of the texels")
 
 
 if __name__ == "__main__":
