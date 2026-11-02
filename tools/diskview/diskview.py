@@ -471,7 +471,10 @@ def llm(prompt, model="", max_tokens=300, temp=0.2, prof=None, timeout=300, as_j
                                                   "temperature": temp, "max_tokens": max_tokens,
                                                   **({"response_format": {"type": "json_object"}} if as_json else {})}, p.get("key", ""), timeout)
         text = r["choices"][0]["message"]["content"]
-    text = re.sub(r"<think>.*?(</think>|$)", "", text or "", flags=re.S).strip()
+    text = text or ""
+    if "</think>" in text:
+        text = text.rsplit("</think>", 1)[1]
+    text = re.sub(r"<think>.*$", "", text, flags=re.S).strip()
     return text
 
 
@@ -928,6 +931,9 @@ def card_text(c):
     parts = [c["name"]] * 3 + c["path"].replace("\\", " ").replace("/", " ").split() + [k for k, _ in c["cats"]]
     parts += [c["prog"]] + c["subs"] + c["top"] + tg.get("tags", []) * 3 + [tg.get("note", "")]
     parts += _PCOLL.get(c["path"], []) * 2
+    w = tg.get("web") or {}
+    if w.get("src"):
+        parts += [w.get("title", "")] * 3 + w.get("genres", []) * 2 + [w.get("text", "")]
     return " ".join(parts)
 
 
@@ -950,9 +956,22 @@ def index():
     return _IDX
 
 
+RU_EN = {"пират": "pirate", "корабл": "ship", "гонк": "racing", "стрелял": "shooter", "ужас": "horror", "выжива": "survival",
+         "симулят": "simulator", "стратег": "strategy", "война": "war", "космос": "space", "машин": "car", "город": "city"}
+
+
+def query_toks(q):
+    out = toks(q)
+    for t in list(out):
+        for ru, en in RU_EN.items():
+            if t.startswith(ru[:6]):
+                out += toks(en)
+    return out
+
+
 def search(q, k=8):
     cards, tf, ln, df, avg = index()
-    qt = toks(q)
+    qt = query_toks(q)
     n = len(cards)
     sc = []
     for i, m in enumerate(tf):
@@ -974,11 +993,13 @@ def fdate(t):
 
 def card_line(c):
     tg = LIB["tags"].get(c["path"], {})
+    w = tg.get("web") or {}
+    ws = (" | описание: %s; жанры: %s; %s" % (w.get("title", ""), ", ".join(w.get("genres", [])), (w.get("text") or "")[:220])) if w.get("src") else ""
     return "- %s | %.2f ГБ | файлов %d | создана %s, изм. %s | типы: %s | программа: %s | теги: %s | заметка: %s | коллекции: %s | внутри: %s" % (
         c["path"], c["size"] / 2**30, c["files"], fdate(c["t"][0]), fdate(c["t"][1]),
         ", ".join(k for k, _ in c["cats"]) or "?", c["prog"] or "нет", ", ".join(tg.get("tags", [])) or "нет",
         tg.get("note", "") or "нет", ", ".join(_PCOLL.get(c["path"], [])) or "нет",
-        "; ".join((c["subs"] + c["top"])[:8]) or "?")
+        "; ".join((c["subs"] + c["top"])[:8]) or "?") + ws
 
 
 STOP = set(toks("дубликаты дубли дубликат повторы повторяющиеся одинаковые файлы найди покажи мои у меня есть где"))
@@ -1037,7 +1058,7 @@ def ask(q, model):
     for c in search(q, 8):
         if c not in hits:
             hits.append(c)
-    hits = hits[:14]
+    hits = [c for c in hits if not any(h is not c and h["path"] in LIB["tags"] and under(c["path"], h["path"]) and c["path"] != h["path"] for h in hits)][:14]
     dp = None
     if re.search(r"дубл|повтор|одинаков", ql):
         words = [w for w in re.findall(r"[^\W_]+", ql) if len(w) >= 2 and toks(w)[0] not in STOP and not w.startswith(("дубл", "повтор"))]
@@ -1051,7 +1072,9 @@ def ask(q, model):
     if not model and not profile().get("model"):
         return {"answer": "Модель не выбрана (⚙ Модель). Вот найденные папки.", "sources": src, "dups": dp}
     prompt = ("Ты помощник по данным на компьютере пользователя. Ниже карточки папок (метаданные: размер, даты, типы, "
-              "программа, теги, заметки). Отвечай по-русски, коротко, ТОЛЬКО по этим карточкам, называй пути. "
+              "программа, теги, заметки, описание из интернета). Отвечай по-русски, коротко, ТОЛЬКО по этим карточкам, называй полные пути "
+              "и выбирай только те, что действительно подходят под вопрос (смотри описание и жанры, а не только названия); "
+              "если подходящих нет, так и скажи. Не показывай рассуждений. "
               "Не выдумывай: если данных не хватает, скажи. Про удаление советуй осторожно: сначала архив или корзина.\n\n"
               "Карточки:\n%s\n%s\nВопрос: %s\nОтвет:") % (
         "\n".join(card_line(c) for c in hits),
@@ -2094,9 +2117,10 @@ async function rLib(){await libLoad();const m=$("#main");
  say("Помощник","Я ищу по карточкам папок (названия, типы файлов, даты, программа, ваши теги и заметки) и отвечаю через локальную модель. Содержимое файлов не читается.");
  const go=async()=>{const q=$("#q").value.trim();if(!q)return;$("#q").value="";say("Вы",esc(q));const w=say("Помощник","думаю…");
   const r=await api("/api/ask",{q,model:$("#model").value});
-  w.lastChild.innerHTML=esc(r.answer).replace(/\n/g,"<br>")+(r.sources.length?`<div style="margin-top:6px;color:var(--mut)">Источники:</div>`+r.sources.map((c,i)=>`<div class="r" data-i="${i}" style="cursor:pointer;padding-left:8px">📁 ${esc(c.path)} · ${fmt(c.size)} ${(c.tags||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join("")}</div>`).join(""):"");
+  let ah=esc(r.answer);[...r.sources].sort((a,b)=>b.path.length-a.path.length).forEach(c=>{const e=esc(c.path);ah=ah.split(e).join(`<a href="#" class="pl" data-rvp="${e}" title="показать в Проводнике">${e}</a>`)});
+  w.lastChild.innerHTML=ah.replace(/\n/g,"<br>")+(r.sources.length?`<div style="margin-top:6px;color:var(--mut)">Источники:</div>`+r.sources.map((c,i)=>`<div class="r" data-i="${i}" style="cursor:pointer;padding-left:8px"><a href="#" data-rvp="${esc(c.path)}" title="показать в Проводнике">📂</a> ${esc(c.path)} · ${fmt(c.size)} ${(c.tags||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join("")}</div>`).join(""):"");
   if(r.dups){w.lastChild.innerHTML+=`<div style="margin-top:8px"><b>Дубликаты:</b> групп ${r.dups.count}, лишних ${fmt(r.dups.wasted)}<div style="color:var(--mut)">${esc(r.dups.note)}</div>`+r.dups.groups.slice(0,30).map(g=>`<div style="margin:6px 0"><b>${fmt(g.size)} × ${g.paths.length}</b>`+g.paths.map(p=>`<div class="r" data-dp="${esc(p)}" data-sz="${g.size}" style="cursor:pointer;padding-left:8px">📄 ${esc(p)}</div>`).join("")+`</div>`).join("")+`</div>`}
-  w.onclick=e=>{const dpe=e.target.closest("[data-dp]");if(dpe){pick({path:dpe.dataset.dp,name:dpe.dataset.dp,size:+dpe.dataset.sz,dir:false,risk:0,tags:[]});return}
+  w.onclick=async e=>{const rv=e.target.closest("[data-rvp]");if(rv){e.preventDefault();const x=await api("/api/reveal",{path:rv.dataset.rvp});if(!x.ok)alert("Не удалось открыть Проводник");return}const dpe=e.target.closest("[data-dp]");if(dpe){pick({path:dpe.dataset.dp,name:dpe.dataset.dp,size:+dpe.dataset.sz,dir:false,risk:0,tags:[]});return}
    const row=e.target.closest(".r");if(row&&row.dataset.i!==undefined){const c=r.sources[row.dataset.i];pick({path:c.path,name:c.name,size:c.size,dir:true,risk:0,tags:c.tags,note:c.note})}}};
  $("#askb").onclick=go;$("#q").onkeydown=e=>{if(e.key=="Enter")go()}}
 // ---- лаунчер: всё нужное из одного места
