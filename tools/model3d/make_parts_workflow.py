@@ -57,6 +57,13 @@ def main():
         inp = next(i for i in n["inputs"] if i["name"] == "prompt")
         inp["link"] = new_link(views, slot, ref, n["inputs"].index(inp), "STRING")
         node_views["outputs"][slot]["links"].append(inp["link"])
+    # the refined front is the second reference of the other views: one identity in all of them
+    front_ref = REFINE[1140]
+    for old in (1143, 1144, 1147):
+        ref = nodes[REFINE[old]]
+        inp = next(i for i in ref["inputs"] if i["name"] == "images.image_2")
+        inp["link"] = new_link(front_ref, 0, REFINE[old], ref["inputs"].index(inp), "IMAGE")
+        nodes[front_ref]["outputs"][0]["links"].append(inp["link"])
     # previews of the raw views of the part
     prev_ids = []
     for i, v in enumerate(("front", "left", "back", "right")):

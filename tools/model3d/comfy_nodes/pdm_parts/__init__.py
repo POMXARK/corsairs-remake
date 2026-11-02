@@ -19,15 +19,11 @@ PARTS = ("head", "torso", "arm_l", "arm_r", "sword", "legs")  # tools/pdm_model_
 # margin of the crop, faces, texture of the part: a face needs the most pixels, a sword the fewest
 CFG = {"head": (0.02, 15000, 2048), "torso": (0.04, 20000, 2048), "arm_l": (0.05, 8000, 1024),
        "arm_r": (0.05, 8000, 1024), "sword": (0.05, 4000, 1024), "legs": (0.04, 15000, 2048)}
-WHAT = {"head": "head of the character with the hat, hair and face",
-        "torso": "torso of the character with the coat, collar and belt",
-        "arm_l": "left arm of the character with the sleeve and the hand", 
-        "arm_r": "right arm of the character with the sleeve and the hand",
-        "sword": "thin sabre",
-        "legs": "legs of the character with the trousers and boots"}
-EXTRA = {"head": " Open eyes with white eyeballs, dark irises and round pupils, eyelids and eyebrows, a detailed face.",
-         "arm_l": " Clean hand with five separate fingers.", "arm_r": " Clean hand with five separate fingers.",
-         "legs": " Sharp leather boots.", "torso": " Gold embroidery, a lace collar.", "sword": ""}
+WHAT = {"head": "head", "torso": "torso", "arm_l": "left arm with the hand", "arm_r": "right arm with the hand",
+        "sword": "thin sabre", "legs": "legs with the boots"}
+EXTRA = {"head": " Keep the eyes exactly as in the picture: open, white eyeballs, dark irises, round pupils, eyelids.",
+         "arm_l": " A clean hand with five separate fingers.", "arm_r": " A clean hand with five separate fingers.",
+         "legs": "", "torso": "", "sword": ""}
 SIDE = {"front": "seen from the front", "left": "seen from the left side", "back": "seen from the back",
         "right": "seen from the right side"}
 VIEW_ORDER = ("front", "left", "back", "right")  # the order of the outputs
@@ -35,9 +31,13 @@ STATE = {"start": 0.0}
 
 
 def prompt_of(part, view):
-    return (f"The same {WHAT[part]} {SIDE[view]}, the same pose, the same costume, the same colours and the same "
-            f"gold embroidery. Realistic detailed fabric.{EXTRA[part]} Orthographic view, a flat grey background. "
-            "Keep exactly the same camera view and proportions.")
+    """Nothing is invented: only what the picture shows (the first version said "with the hat" and Qwen drew one)."""
+    ref = ("" if view == "front" else " <image2> is the same part seen from the front: take the identity, hair, "
+           "colours and details from it, so that all views show one and the same object.")
+    return (f"Redraw <image1>, the {WHAT[part]} {SIDE[view]}, as a clean high-detail realistic render. Keep exactly "
+            "the same camera view, pose, proportions, colours and every detail that <image1> shows. Do not add "
+            "anything that is not in <image1>: no hat, no clothes, no mask, no accessories. Smooth surfaces "
+            f"without polygon edges, realistic skin and fabric.{EXTRA[part]}{ref} A flat grey background.")
 
 
 def run(cmd, cwd, log):
@@ -186,8 +186,13 @@ class PDMPartSave:
         log.append(f"{src} -> {glb / (name + '.glb')} ({os.path.getsize(src) // 1024} KB)")
         _, f0, t0 = CFG[part]
         if optimize:
-            run([python, Path(repo) / "tools" / "pdm_glb_optimize.py", gamedir, name, "--faces", faces or f0,
-                 "--tex", tex or t0], repo, log)
+            try:
+                run([python, Path(repo) / "tools" / "pdm_glb_optimize.py", gamedir, name, "--faces", faces or f0,
+                     "--tex", tex or t0], repo, log)
+            except RuntimeError as e:
+                log.append(f"OPTIMIZE FAILED, the GLB is saved, the run goes on. If a module is missing: "
+                           f"{python} -m pip install --user numpy Pillow scipy trimesh rtree fast-simplification, "
+                           f"then: {python} tools\\pdm_glb_optimize.py {game} {name} --faces {faces or f0} --tex {tex or t0}")
         done = [p for p in PARTS if (glb / f"{model}_{p}.glb").exists()]
         log.append(f"parts ready: {', '.join(done)} ({len(done)}/{len(PARTS)})")
         if len(done) == len(PARTS):

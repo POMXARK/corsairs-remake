@@ -1,8 +1,8 @@
 {
- "id": "c937b464-a705-426b-a1d4-2c3ff5327577",
+ "id": "d075a85a-8ed3-46cf-a3b7-f81592b7444c",
  "revision": 0,
  "last_node_id": 2017,
- "last_link_id": 4823,
+ "last_link_id": 4826,
  "nodes": [
   {
    "id": 3,
@@ -3464,7 +3464,7 @@
      "name": "model_3d",
      "type": "FILE_3D",
      "links": [
-      4821
+      4824
      ]
     },
     {
@@ -3930,7 +3930,10 @@
      "type": "IMAGE",
      "links": [
       1385,
-      1387
+      1387,
+      4817,
+      4818,
+      4819
      ]
     }
    ],
@@ -4105,7 +4108,7 @@
      "name": "images.image_2",
      "shape": 7,
      "type": "IMAGE",
-     "link": null
+     "link": 4817
     },
     {
      "label": "image_3",
@@ -4345,7 +4348,7 @@
      "name": "images.image_2",
      "shape": 7,
      "type": "IMAGE",
-     "link": null
+     "link": 4818
     },
     {
      "label": "image_3",
@@ -4585,7 +4588,7 @@
      "name": "images.image_2",
      "shape": 7,
      "type": "IMAGE",
-     "link": null
+     "link": 4819
     },
     {
      "label": "image_3",
@@ -4737,7 +4740,7 @@
      "type": "IMAGE",
      "links": [
       4809,
-      4817
+      4820
      ]
     },
     {
@@ -4745,7 +4748,7 @@
      "type": "IMAGE",
      "links": [
       4810,
-      4818
+      4821
      ]
     },
     {
@@ -4753,7 +4756,7 @@
      "type": "IMAGE",
      "links": [
       4811,
-      4819
+      4822
      ]
     },
     {
@@ -4761,7 +4764,7 @@
      "type": "IMAGE",
      "links": [
       4812,
-      4820
+      4823
      ]
     },
     {
@@ -4796,14 +4799,14 @@
      "name": "part",
      "type": "STRING",
      "links": [
-      4822
+      4825
      ]
     },
     {
      "name": "model",
      "type": "STRING",
      "links": [
-      4823
+      4826
      ]
     },
     {
@@ -4846,7 +4849,7 @@
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 4817
+     "link": 4820
     }
    ],
    "outputs": [],
@@ -4874,7 +4877,7 @@
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 4818
+     "link": 4821
     }
    ],
    "outputs": [],
@@ -4902,7 +4905,7 @@
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 4819
+     "link": 4822
     }
    ],
    "outputs": [],
@@ -4930,7 +4933,7 @@
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 4820
+     "link": 4823
     }
    ],
    "outputs": [],
@@ -4958,17 +4961,17 @@
     {
      "name": "mesh",
      "type": "FILE_3D",
-     "link": 4821
+     "link": 4824
     },
     {
      "name": "part",
      "type": "STRING",
-     "link": 4822
+     "link": 4825
     },
     {
      "name": "model",
      "type": "STRING",
-     "link": 4823
+     "link": 4826
     }
    ],
    "outputs": [
@@ -5881,6 +5884,30 @@
   ],
   [
    4817,
+   2000,
+   0,
+   2001,
+   10,
+   "IMAGE"
+  ],
+  [
+   4818,
+   2000,
+   0,
+   2002,
+   10,
+   "IMAGE"
+  ],
+  [
+   4819,
+   2000,
+   0,
+   2003,
+   10,
+   "IMAGE"
+  ],
+  [
+   4820,
    2011,
    0,
    2012,
@@ -5888,7 +5915,7 @@
    "IMAGE"
   ],
   [
-   4818,
+   4821,
    2011,
    1,
    2013,
@@ -5896,7 +5923,7 @@
    "IMAGE"
   ],
   [
-   4819,
+   4822,
    2011,
    2,
    2014,
@@ -5904,7 +5931,7 @@
    "IMAGE"
   ],
   [
-   4820,
+   4823,
    2011,
    3,
    2015,
@@ -5912,7 +5939,7 @@
    "IMAGE"
   ],
   [
-   4821,
+   4824,
    701,
    0,
    2016,
@@ -5920,7 +5947,7 @@
    "FILE_3D"
   ],
   [
-   4822,
+   4825,
    2011,
    8,
    2016,
@@ -5928,7 +5955,7 @@
    "STRING"
   ],
   [
-   4823,
+   4826,
    2011,
    9,
    2016,
