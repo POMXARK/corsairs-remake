@@ -138,7 +138,7 @@ def align(name, view, zbuf, uvmap, atlas):
 
 
 def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
-    """Colours of the texels covered by the triangles, summed over the views: (sum of w*colour, sum of w)."""
+    """Colours of the texels covered by the triangles, per view: ({view: sum of w*colour}, {view: sum of w}, cover)."""
     size = atlas.shape[0]
     lo, hi = P.min(0), P.max(0)
     dirs = {"front": (0, 0, 1.), "back": (0, 0, -1.), "left": (side, 0, 0.), "right": (-side, 0, 0.)}
@@ -150,8 +150,8 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
         zbufs[n] = ZCACHE[(n, dv)][0]
         if do_align:
             views[n] = align(n, views[n], *ZCACHE[(n, dv)], atlas)
-    acc = np.zeros_like(atlas)
-    wsum = np.zeros(atlas.shape[:2], np.float32)
+    acc = {n: np.zeros_like(atlas) for n in dirs}  # per view: sum of w*colour and sum of w
+    wsum = {n: np.zeros(atlas.shape[:2], np.float32) for n in dirs}
     cover = np.zeros(atlas.shape[:2], np.float32)
     for f in tris[::step]:
         pp = P[f]
@@ -192,10 +192,32 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
             here = (l0[ok] * (pp[0] @ np.array(dv)) + l1[ok] * (pp[1] @ np.array(dv)) + l2[ok] * (pp[2] @ np.array(dv)))
             iy, ix = np.clip(sy.astype(int), 0, img.shape[0] - 1), np.clip(sx.astype(int), 0, img.shape[1] - 1)
             vis = (here >= seen - reach) & views[name][2][iy, ix]
-            acc[ay[vis], ax[vis]] += c[vis] * w ** SHARP
-            wsum[ay[vis], ax[vis]] += w ** SHARP
+            acc[name][ay[vis], ax[vis]] += c[vis] * w ** SHARP
+            wsum[name][ay[vis], ax[vis]] += w ** SHARP
             cover[ay[vis], ax[vis]] += w ** 2
     return acc, wsum, cover
+
+
+TONE_SIGMA = 24  # texels: the views differ in tone (lighting, colour grading) and the seams between them show; level the low frequencies
+
+
+def combine(atlas, acc, wsum):
+    """Blend the views; the low frequencies (tone) of every view are levelled to the weighted mean of all views around the
+    texel, so the seams between the views vanish, its own detail stays. The generated texture is not used: its colour is off."""
+    import cv2
+    tot = sum(wsum.values())
+    cols, lows, ws = {}, {}, {}
+    for n in acc:
+        m = (wsum[n] > 1e-6).astype(np.float32)
+        cols[n] = acc[n] / np.maximum(wsum[n], 1e-6)[..., None]
+        norm = np.maximum(cv2.GaussianBlur(m, (0, 0), TONE_SIGMA), 1e-4)[..., None]
+        lows[n] = cv2.GaussianBlur(cols[n] * m[..., None], (0, 0), TONE_SIGMA) / norm
+        ws[n] = cv2.GaussianBlur(np.minimum(wsum[n] * 50, 1), (0, 0), TONE_SIGMA)[..., None]
+    target = sum(lows[n] * ws[n] for n in acc) / np.maximum(sum(ws.values()), 1e-6)
+    out = np.zeros_like(atlas)
+    for n in acc:
+        out += (cols[n] + (target - lows[n]) * (wsum[n] > 1e-6)[..., None]) * wsum[n][..., None]
+    return out / np.maximum(tot, 1e-6)[..., None], tot
 
 
 def main():
@@ -214,15 +236,18 @@ def main():
     # which side of the mesh the "left" view looks at: the sign with the smaller difference to the generated colour
     best = None
     for side in (1., -1.):
-        acc, w, _ = paint(P, UV, tris, atlas, views, side, step=12)
+        acc, ws, _ = paint(P, UV, tris, atlas, views, side, step=12)
+        w = sum(ws.values())
+        acc = sum(acc.values())
         m = w > 1e-3
         err = np.abs(acc[m] / w[m][:, None] - atlas[m]).mean() if m.any() else 1e9
         print(f"left view sees {'+' if side > 0 else '-'}x: difference {err:.2f}")
         if best is None or err < best[0]:
             best = (err, side)
-    acc, w, cover = paint(P, UV, tris, atlas, views, best[1], do_align="--no-align" not in sys.argv)
+    acc, ws, cover = paint(P, UV, tris, atlas, views, best[1], do_align="--no-align" not in sys.argv)
+    painted, w = combine(atlas, acc, ws)
     a = np.clip(cover * 3, 0, 1)[..., None]  # follow the views: they win wherever one of them sees the texel
-    out = atlas * (1 - a) + acc / np.maximum(w, 1e-6)[..., None] * a
+    out = atlas * (1 - a) + painted * a
     buf = io.BytesIO()
     Image.fromarray(out.clip(0, 255).astype(np.uint8)).save(buf, format="PNG")
     b = b + b"\0" * (-len(b) % 4)
