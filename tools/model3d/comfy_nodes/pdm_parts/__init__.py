@@ -255,6 +255,10 @@ class PDMPartSave:
                 paths.append(pth)
             try:
                 run([python, Path(repo) / "tools" / "pdm_project_views.py", src, glb / f"{name}.glb", *paths], repo, log)
+                import shutil
+                painted = Path(src).with_name(Path(src).stem + "_painted.glb")  # the raw ComfyUI GLB has the smeared generated texture
+                shutil.copyfile(glb / f"{name}.glb", painted)
+                log.append(f"painted from the views: {painted}")
             except RuntimeError as e:
                 log.append("PROJECTION FAILED, the generated texture stays: " + str(e)[-300:])
         log.append(f"{src} -> {glb / (name + '.glb')} ({os.path.getsize(src) // 1024} KB)")
