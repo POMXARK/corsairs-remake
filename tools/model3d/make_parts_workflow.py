@@ -57,6 +57,9 @@ def main():
         inp = next(i for i in n["inputs"] if i["name"] == "prompt")
         inp["link"] = new_link(views, slot, ref, n["inputs"].index(inp), "STRING")
         node_views["outputs"][slot]["links"].append(inp["link"])
+    # refine_prompt (widget 2): the VLM of the subgraph (Qwen3.5 PE) looks at the view and rewrites our prompt by what it shows
+    for ref in REFINE.values():
+        nodes[ref]["widgets_values"][2] = True
     # the refined front is the second reference of the other views: one identity in all of them
     front_ref = REFINE[1140]
     for old in (1143, 1144, 1147):
