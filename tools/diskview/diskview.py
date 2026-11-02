@@ -1724,6 +1724,9 @@ def reveal(path):
     return True
 
 
+SRV = []
+
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -1789,6 +1792,10 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         u = urlparse(self.path)
         b = self.body()
+        if u.path == "/api/quit":
+            self.send({"ok": True})
+            threading.Thread(target=SRV[0].shutdown, daemon=True).start()
+            return
         if u.path == "/api/scan":
             if SC.state == "scanning":
                 return self.send({"error": "уже идёт"}, 409)
@@ -1882,7 +1889,7 @@ footer span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
  <button id="web" disabled title="Поиск в интернете: наружу уходит только имя файла/папки">🌐 В интернете</button><button id="cfg">⚙ Модель</button><span class="legend">свежее<i></i>старше 3 лет</span>
 </header>
 <div id="st">Выберите диск или папку и нажмите «Сканировать».</div>
-<nav><button data-v="tree" class="on">Папки</button><button data-v="map">Карта</button><button data-v="old">Мёртвые папки</button><button data-v="launch">Лаунчер</button><button data-v="lib">Библиотека</button></nav>
+<nav><button data-v="tree" class="on">Папки</button><button data-v="map">Карта</button><button data-v="old">Мёртвые папки</button><button data-v="launch">Лаунчер</button><button data-v="lib">Библиотека</button><button id="quit" title="Остановить сервер DiskView" style="margin-left:auto">⏻ Выход</button></nav>
 <main id="main"></main>
 <dialog id="dlg" style="border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);min-width:460px;max-width:90vw"><form method="dialog" id="cf" style="display:grid;gap:6px">
 <b>Модель для помощника</b><div style="color:var(--mut)">Любой сервер: Ollama или OpenAI-совместимый (LM Studio, llama.cpp, vLLM, OpenRouter, OpenAI…). В модель уходят только метаданные папок (названия, размеры, даты, типы, теги), не содержимое файлов.</div>
@@ -1925,6 +1932,7 @@ document.addEventListener("click",e=>{const a=e.target.closest(".shots a");if(!a
  kd=ev=>{if(ev.key=="Escape")close();else if(ev.key=="ArrowLeft")go(-1);else if(ev.key=="ArrowRight")go(1);else return;ev.stopPropagation();ev.preventDefault()};
  o.onclick=ev=>{if(ev.target.classList.contains("lp"))go(-1);else if(ev.target.classList.contains("ln"))go(1);else if(ev.target!==im)close()};
  document.addEventListener("keydown",kd,true);document.body.appendChild(o);show()},true);
+$("#quit").onclick=async()=>{if(!confirm("Остановить сервер DiskView и закрыть программу?"))return;try{await api("/api/quit",{})}catch(x){}document.body.innerHTML='<div style="padding:40px;font:16px sans-serif">Сервер остановлен. Эту вкладку можно закрыть.</div>';window.close()};
 document.querySelector("nav").onclick=e=>{if(!e.target.dataset.v)return;view=e.target.dataset.v;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b==e.target));render()};
 $("#field").onchange=render;
 function render(){if(!rootPath&&view!="lib"&&view!="launch")return;({tree:rTree,map:rMap,old:rOld,lib:rLib,launch:rLaunch})[view]()}
@@ -2201,6 +2209,7 @@ def main():
         print(SC.state, SC.files, SC.bytes, "%.1fs" % SC.elapsed, "errors", SC.errors)
         return
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), H)
+    SRV.append(srv)
     url = "http://127.0.0.1:%d/" % a.port
     print("DiskView:", url, "(Ctrl+C — выход)")
     if not a.no_browser:
