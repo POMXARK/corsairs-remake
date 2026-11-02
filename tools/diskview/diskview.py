@@ -618,29 +618,129 @@ def _toks(s):
     return set(re.findall(r"\w+", re.sub(r"['’]", "", s.lower())))
 
 
+def _steam_detail(it):
+    d = json.loads(web_get("https://store.steampowered.com/api/appdetails?l=russian&appids=%s" % it["id"]))
+    d = (d.get(str(it["id"])) or {}).get("data")
+    if not d:
+        return {}
+    return {"title": d.get("name", it["name"]), "text": _txt(d.get("short_description", "")), "image": d.get("header_image", ""),
+            "shots": [x.get("path_thumbnail") for x in d.get("screenshots", [])[:4] if x.get("path_thumbnail")],
+            "full": [x.get("path_full") for x in d.get("screenshots", [])[:4] if x.get("path_full")],
+            "genres": [g.get("description", "") for g in d.get("genres", [])][:4],
+            "url": "https://store.steampowered.com/app/%s" % it["id"], "src": "Steam"}
+
+
+def _steam_items(q):
+    from urllib.parse import quote
+    return json.loads(web_get("https://store.steampowered.com/api/storesearch/?l=russian&cc=ru&term=" + quote(q))).get("items", [])[:6]
+
+
 def steam_lookup(q):
     """Описание, обложка и скриншоты игры из магазина Steam (публичный API, без ключа). Наружу уходит только название."""
-    from urllib.parse import quote
     qt = _toks(q)
     if not qt:
         return {}
-    sr = json.loads(web_get("https://store.steampowered.com/api/storesearch/?l=russian&cc=ru&term=" + quote(q)))
-    for it in sr.get("items", [])[:5]:
+    for it in _steam_items(q)[:5]:
         nt = _toks(it.get("name", ""))
         jq, jn = "".join(sorted(qt)) if len(qt) == 1 else "", re.sub(r"\W", "", re.sub(r"['’]", "", it.get("name", "").lower()))
         slug = jq and len(jq) >= 8 and (jq in jn or jn.endswith(jq))
         if not slug and (not (qt <= nt or nt <= qt) or min(len(qt), len(nt)) < (1 if qt == nt else 2)):
             continue
-        d = json.loads(web_get("https://store.steampowered.com/api/appdetails?l=russian&appids=%s" % it["id"]))
-        d = (d.get(str(it["id"])) or {}).get("data")
-        if not d:
-            continue
-        return {"title": d.get("name", it["name"]), "text": _txt(d.get("short_description", "")), "image": d.get("header_image", ""),
-                "shots": [x.get("path_thumbnail") for x in d.get("screenshots", [])[:4] if x.get("path_thumbnail")],
-                "full": [x.get("path_full") for x in d.get("screenshots", [])[:4] if x.get("path_full")],
-                "genres": [g.get("description", "") for g in d.get("genres", [])][:4],
-                "url": "https://store.steampowered.com/app/%s" % it["id"], "src": "Steam"}
+        g = _steam_detail(it)
+        if g:
+            return g
     return {}
+
+
+def query_variants(q):
+    """Запасные формулировки, если полное название не нашлось: без последних слов, первые слова, без цифр и года."""
+    w = re.sub(r"\b(19|20)\d\d\b", " ", q).split()
+    out = []
+    for n in range(len(w), 1, -1):
+        v = " ".join(w[:n])
+        if v != q and v not in out:
+            out.append(v)
+    if len(w) > 2:
+        v = " ".join(w[-2:])
+        if v not in out:
+            out.append(v)
+    return out[:4]
+
+
+def steam_fuzzy(q):
+    """Похожее название в Steam: ищем по урезанным формулировкам и берём то, что достаточно близко к исходному запросу."""
+    import difflib
+    norm = lambda x: re.sub(r"\W+", " ", re.sub(r"['’]", "", x.lower())).strip()
+    nq = norm(q)
+    best, bs = None, 0.0
+    for v in [q] + query_variants(q):
+        try:
+            items = _steam_items(v)
+        except Exception:
+            continue
+        for it in items[:4]:
+            nn = norm(it.get("name", ""))
+            if re.search(r"soundtrack|\bost\b|upgrade|\bdlc\b|season pass|\bdemo\b|artbook|bundle", nn) and not re.search(r"soundtrack|\bost\b|upgrade|\bdlc\b|season pass|\bdemo\b|artbook|bundle", nq):
+                continue
+            sc = difflib.SequenceMatcher(None, nq, nn).ratio()
+            if nn and (nn in nq or nq in nn) and min(len(nn), len(nq)) >= 8:
+                sc = max(sc, 0.8)
+            if sc > bs:
+                best, bs = it, sc
+        if bs >= 0.8:
+            break
+    if best and bs >= 0.65:
+        g = _steam_detail(best)
+        if g:
+            g["fuzzy"] = round(bs, 2)
+            return g
+    return {}
+
+
+TITLE_CUT = re.compile(r"\s*(\[|\(|\||—|–| - |скачать|торрент|repack|repack|by\b|от\s|лицензия|пиратка|\bpc\b|v\s?\d)", re.I)
+
+
+def tracker_titles(q):
+    """Названия раздач с торрент-трекеров (поиск по открытому вебу): чистим от версий, годов и репакеров. Наружу уходит только запрос."""
+    from urllib.parse import quote, unquote
+    out = []
+    try:
+        h = web_get("https://html.duckduckgo.com/html/?q=" + quote(q + " скачать торрент rutracker rutor nnmclub"))
+    except Exception:
+        return out
+    qt = {t for t in _toks(q) if len(t) >= 4}
+    for m in re.finditer(r'class="result__a"[^>]*>(.*?)</a>', h, re.S):
+        for part in _txt(m.group(1)).split(" / "):
+            t = TITLE_CUT.split(part.strip())[0].strip(" -–—:|")
+            t = re.sub(r"\b(19|20)\d\d\b", "", t).strip()
+            if 3 <= len(t) <= 60 and (_toks(t) & qt) and t not in out:
+                out.append(t)
+        if len(out) >= 4:
+            break
+    return out[:4]
+
+
+_SMART = {}
+
+
+def smart_steam(q):
+    """Steam по полному названию → по похожим формулировкам → по названиям из раздач на трекерах. Результат кэшируется."""
+    if q in _SMART:
+        return _SMART[q]
+    g = {}
+    try:
+        g = steam_cached(q) or steam_fuzzy(q)
+        if not g.get("text"):
+            for t in tracker_titles(q):
+                g = steam_cached(t) or steam_fuzzy(t)
+                if g.get("text"):
+                    g = dict(g, via="трекер: " + t)
+                    break
+    except Exception as e:
+        log("smart %s: %s" % (q, e))
+        return {}
+    _SMART[q] = g if g.get("text") else {}
+    return _SMART[q]
 
 
 def web_get(url, timeout=12):
@@ -654,7 +754,7 @@ def web_lookup(q):
     from urllib.parse import quote
     out = {"query": q, "title": "", "text": "", "image": "", "url": "", "results": []}
     try:
-        g = steam_lookup(q)
+        g = smart_steam(q)
         if g.get("text"):
             out.update(g)
             return out
@@ -696,15 +796,20 @@ def web_lookup(q):
 def web_info(path, model="", save=True, q=""):
     """Неизвестный exe/папка: найти в интернете, при наличии модели — пересказать и дать подсказки по действиям;
     описание и картинка сохраняются в библиотеку (теги пути)."""
-    q = q or (game_query(path) if os.path.isdir(path) or not path.lower().endswith(".exe") else web_name(path))
-    if not q:
+    cands = [q] if q else (name_candidates(path) if os.path.isdir(path) or not path.lower().endswith(".exe") else []) or [web_name(path)]
+    cands = [c for c in cands if c]
+    if not cands:
         return {"error": "нет имени для поиска"}
+    w = None
     try:
-        w = web_lookup(q)
+        for q in cands[:3]:
+            w = web_lookup(q)
+            if w["text"] or w["results"]:
+                break
     except Exception as e:
         return {"error": "интернет недоступен: %s" % e}
     if not w["text"] and not w["results"]:
-        return {"error": "ничего не найдено по запросу «%s»" % q}
+        return {"error": "не нашли «%s» ни по полному названию, ни по похожим, ни по раздачам на трекерах" % " / ".join(cands[:3]), "retry": True}
     facts = (w["text"] + "\n" + "\n".join("- %s: %s" % (r["title"], r["snippet"]) for r in w["results"]))[:2500]
     tips = ""
     try:
@@ -716,7 +821,7 @@ def web_info(path, model="", save=True, q=""):
     w["tips"] = tips
     if save and path:
         t = LIB["tags"].setdefault(path, {"tags": [], "note": "", "size": 0, "dir": os.path.isdir(path)})
-        t["web"] = {k: w[k] for k in ("query", "title", "text", "image", "url", "tips", "shots", "full", "genres", "src") if k in w}
+        t["web"] = {k: w[k] for k in ("query", "title", "text", "image", "url", "tips", "shots", "full", "genres", "src", "via", "fuzzy") if k in w}
         if not t.get("note"):
             t["note"] = (tips or w["text"])[:300]
         lib_touch()
@@ -1028,7 +1133,7 @@ def web_card(path, q=""):
     if not isinstance(cache.get(k), dict):
         try:
             w = web_lookup(q)
-            cache[k] = {x: w[x] for x in ("title", "image", "url", "shots", "full", "genres", "src") if w.get(x)}
+            cache[k] = {x: w[x] for x in ("title", "image", "url", "shots", "full", "genres", "src", "via") if w.get(x)}
             cache[k]["text"] = w["text"][:400]
         except Exception:
             return {}
@@ -1055,8 +1160,13 @@ def enrich(limit=12):
 
     def one(p):
         try:
-            for q in name_candidates(p):
+            cands = name_candidates(p)
+            for q in cands:
                 g = steam_cached(q)
+                if g.get("text"):
+                    return p, g
+            for q in cands[:2]:
+                g = smart_steam(q)
                 if g.get("text"):
                     return p, g
             return p, {}
@@ -1710,7 +1820,7 @@ th{cursor:pointer;user-select:none;position:sticky}th .rz{position:absolute;righ
 tr.r:hover{background:var(--pan)}tr.sel{background:var(--sel)!important}
 td.nm{max-width:520px;overflow:hidden;text-overflow:ellipsis}.tg{display:inline-block;width:16px;color:var(--mut);cursor:pointer}
 .bar{display:inline-block;height:9px;background:var(--acc);opacity:.6;vertical-align:middle;border-radius:2px}
-.old{color:#d33}.new{color:#2a9d4a}.tile{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--pan);cursor:pointer;min-width:0}.tile:hover{border-color:var(--acc)}.card{padding:0;overflow:hidden;display:flex;flex-direction:column;background:var(--pan)}.card .art{position:relative;height:130px;background:linear-gradient(135deg,#1f2a44,#3b2a55);display:flex;align-items:center;justify-content:center;overflow:hidden}.card .art .cv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.card .art .ic{width:84px;height:84px;object-fit:contain;filter:drop-shadow(0 3px 6px #0008)}.card .art .fb{font-size:56px;line-height:84px;text-align:center}.card .sz{position:absolute;left:6px;bottom:6px;background:#000a;color:#fff;border-radius:10px;padding:1px 8px;font-size:12px}.card .rb{position:absolute;left:6px;top:6px;font-size:14px;background:#000a;border-radius:10px;padding:0 5px}.card .act{position:absolute;right:6px;top:6px;display:flex;gap:4px;opacity:0;transition:opacity .15s}.card:hover .act,.card:focus-within .act{opacity:1}.card .act button{padding:2px 7px;background:#000b;color:#fff;border:1px solid #fff4;border-radius:6px}.card .shots{display:flex;gap:2px;background:#000}.card .shots a{flex:1;min-width:0}.card .shots img{width:100%;height:50px;object-fit:cover;display:block}.card .meta{padding:8px 10px 10px;min-width:0}.card .sub{color:var(--mut);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.card .ds{margin:5px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;font-size:13px}.card .ctg{white-space:normal;line-height:1.9}.tile b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;padding:10px 12px}.chip{display:inline-block;white-space:nowrap;background:var(--sel);border-radius:9px;padding:0 7px;margin-right:3px;font-size:12px;cursor:pointer}.chip a{color:inherit;text-decoration:none;opacity:.55;margin-left:2px}.chip a:hover{opacity:1;color:#d33}.rk{font-weight:600}.rk0{color:#2a9d4a}.rk1{color:#c80}.rk2{color:#d33}td.wr{white-space:normal;max-width:280px;text-align:left}
+#lbx{position:fixed;inset:0;background:#000d;z-index:99;display:flex;align-items:center;justify-content:center}#lbx img{max-width:92vw;max-height:90vh;border-radius:6px;box-shadow:0 8px 40px #000}#lbx b{position:absolute;color:#fff;cursor:pointer;font-size:34px;padding:10px 16px;user-select:none;background:#0006;border-radius:8px}#lbx .lp{left:14px}#lbx .ln{right:14px}#lbx .lx{right:14px;top:10px;font-size:24px}#lbx .lc{position:absolute;bottom:12px;color:#fff;font-size:13px}.old{color:#d33}.new{color:#2a9d4a}.tile{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--pan);cursor:pointer;min-width:0}.tile:hover{border-color:var(--acc)}.card{padding:0;overflow:hidden;display:flex;flex-direction:column;background:var(--pan)}.card .art{position:relative;height:130px;background:linear-gradient(135deg,#1f2a44,#3b2a55);display:flex;align-items:center;justify-content:center;overflow:hidden}.card .art .cv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.card .art .ic{width:84px;height:84px;object-fit:contain;filter:drop-shadow(0 3px 6px #0008)}.card .art .fb{font-size:56px;line-height:84px;text-align:center}.card .sz{position:absolute;left:6px;bottom:6px;background:#000a;color:#fff;border-radius:10px;padding:1px 8px;font-size:12px}.card .rb{position:absolute;left:6px;top:6px;font-size:14px;background:#000a;border-radius:10px;padding:0 5px}.card .act{position:absolute;right:6px;top:6px;display:flex;gap:4px;opacity:0;transition:opacity .15s}.card:hover .act,.card:focus-within .act{opacity:1}.card .act button{padding:2px 7px;background:#000b;color:#fff;border:1px solid #fff4;border-radius:6px}.card .shots{display:flex;gap:2px;background:#000}.card .shots a{flex:1;min-width:0}.card .shots img{width:100%;height:50px;object-fit:cover;display:block}.card .grp{margin-top:6px;font-size:12px;color:var(--mut)}.card .grp summary{cursor:pointer;color:var(--acc)}.card .gi{display:flex;gap:6px;align-items:center;margin:2px 0}.card .gi span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.card .gi a{text-decoration:none}.card .meta{padding:8px 10px 10px;min-width:0}.card .sub{color:var(--mut);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.card .ds{margin:5px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;font-size:13px}.card .ctg{white-space:normal;line-height:1.9}.tile b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;padding:10px 12px}.chip{display:inline-block;white-space:nowrap;background:var(--sel);border-radius:9px;padding:0 7px;margin-right:3px;font-size:12px;cursor:pointer}.chip a{color:inherit;text-decoration:none;opacity:.55;margin-left:2px}.chip a:hover{opacity:1;color:#d33}.rk{font-weight:600}.rk0{color:#2a9d4a}.rk1{color:#c80}.rk2{color:#d33}td.wr{white-space:normal;max-width:280px;text-align:left}
 #tm{display:block;width:100%;height:100%}#crumb{position:absolute;left:8px;top:6px;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:2px 8px;z-index:2}
 #tip{position:fixed;pointer-events:none;background:#000d;color:#fff;padding:5px 8px;border-radius:5px;font-size:12px;display:none;z-index:9;white-space:pre}
 footer{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 12px;background:var(--pan);border-top:1px solid var(--line)}
@@ -1761,6 +1871,14 @@ async function tick(){const s=await api("/api/status");
  $("#st").textContent=s.state=="scanning"?`Сканирую… ${s.files.toLocaleString()} файлов, ${fmt(s.bytes)}, ${s.elapsed.toFixed(0)} с — ${s.cur}`:`${s.state}: ${s.files.toLocaleString()} файлов, ${fmt(s.bytes)}, ${s.elapsed.toFixed(1)} с, недоступных папок: ${s.errors}`;
  if(s.state!="scanning"){clearInterval(poll);$("#go").disabled=false;$("#stop").disabled=true;if(s.state=="done"||s.state=="cancelled")show(s)}}
 function show(s){rootPath=s.root;mapPath=s.root;$("#st").textContent=`${s.root}: ${s.files.toLocaleString()} файлов, ${fmt(s.bytes)}, ${s.elapsed.toFixed(1)} с, недоступных папок: ${s.errors}`;render()}
+document.addEventListener("click",e=>{const a=e.target.closest(".shots a");if(!a)return;e.preventDefault();e.stopPropagation();
+ const L=[...a.closest(".shots").querySelectorAll("a")].map(x=>x.getAttribute("href"));let k=L.indexOf(a.getAttribute("href"));
+ const o=document.createElement("div");o.id="lbx";o.innerHTML=`<img referrerpolicy="no-referrer"><b class="lp">‹</b><b class="ln">›</b><b class="lx">✕</b><span class="lc"></span>`;
+ const im=o.querySelector("img"),show=()=>{im.src=L[k];o.querySelector(".lc").textContent=(k+1)+" / "+L.length;o.querySelectorAll(".lp,.ln").forEach(x=>x.style.display=L.length>1?"":"none")},
+ go=d=>{k=(k+d+L.length)%L.length;show()},close=()=>{o.remove();document.removeEventListener("keydown",kd,true)},
+ kd=ev=>{if(ev.key=="Escape")close();else if(ev.key=="ArrowLeft")go(-1);else if(ev.key=="ArrowRight")go(1);else return;ev.stopPropagation();ev.preventDefault()};
+ o.onclick=ev=>{if(ev.target.classList.contains("lp"))go(-1);else if(ev.target.classList.contains("ln"))go(1);else if(ev.target!==im)close()};
+ document.addEventListener("keydown",kd,true);document.body.appendChild(o);show()},true);
 document.querySelector("nav").onclick=e=>{if(!e.target.dataset.v)return;view=e.target.dataset.v;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b==e.target));render()};
 $("#field").onchange=render;
 function render(){if(!rootPath&&view!="lib"&&view!="launch")return;({tree:rTree,map:rMap,old:rOld,lib:rLib,launch:rLaunch})[view]()}
@@ -1941,28 +2059,40 @@ function ask(title,val,multi){return new Promise(res=>{const d=document.createEl
  d.innerHTML=`<div style="background:var(--pan);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:14px;width:min(480px,92vw)"><div style="margin-bottom:8px">${esc(title)}</div>${multi?`<textarea rows="5" style="width:100%;box-sizing:border-box"></textarea>`:`<input style="width:100%;box-sizing:border-box">`}<div style="margin-top:10px;text-align:right"><button data-k="0">Отмена</button> <button class="p" data-k="1">OK</button></div></div>`;
  document.body.appendChild(d);const f=d.querySelector("textarea,input");f.value=val||"";f.focus();const end=v=>{d.remove();res(v)};
  d.onclick=e=>{const k=e.target.dataset.k;if(k==="1")end(f.value);else if(k==="0"||e.target===d)end(null)};f.onkeydown=e=>{if(e.key=="Escape")end(null);if(e.key=="Enter"&&!multi)end(f.value)}})}
-function itemCard(i,o={}){const w=i.web||{},isg=!!w.src,desc=isg?w.text:(i.note||w.text||""),fb=i.dir?"📁":"📄";
+let GRP={};
+function groupItems(list){
+ const low=p=>p.toLowerCase().replace(/[\\/]+$/,""),par=new Map();
+ const under=(b,a)=>b.startsWith(a+"\\")||b.startsWith(a+"/"),cnt=new Map(list.map(j=>[j,list.filter(x=>x!==j&&under(low(x.path),low(j.path))).length]));
+ list.forEach(i=>{let best=null,bl=0;const b=low(i.path);for(const j of list){if(j===i||cnt.get(j)>8)continue;const a=low(j.path);if(a.length>bl&&(b.startsWith(a+"\\")||b.startsWith(a+"/"))){best=j;bl=a.length}}par.set(i,best)});
+ const root=i=>{while(par.get(i))i=par.get(i);return i},G=new Map();
+ list.forEach(i=>{const r=root(i),w=r.web||{},k=w.title&&w.src?"t:"+w.title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu,""):"p:"+r.path;
+  if(!G.has(k))G.set(k,{roots:new Set(),all:[]});const g=G.get(k);g.roots.add(r);g.all.push(i)});
+ GRP={};const out=[];
+ G.forEach(g=>{const roots=[...g.roots].sort((a,b)=>b.size-a.size),head=roots[0],rest=g.all.filter(x=>x!==head);
+  if(rest.length)GRP[head.path]={n:rest.length,total:roots.reduce((a,x)=>a+x.size,0),list:rest.sort((a,b)=>b.size-a.size)};out.push(head)});
+ return out}
+function itemCard(i,o={}){const gp=o.rm?null:GRP[i.path];const w=i.web||{},isg=!!w.src,desc=isg?w.text:(i.note||w.text||""),fb=i.dir?"📁":"📄";
  const ico="/api/icon?path="+encodeURIComponent(i.path);
  const cover=isg&&w.image?`<img class="cv" src="${esc(w.image)}" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()">`:"";
  const icon=`<img class="ic" src="${esc(ico)}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ic fb',textContent:'${fb}'}))">`;
  const shots=(w.shots||[]).length?`<div class="shots">${w.shots.slice(0,3).map((s,k)=>`<a href="${esc((w.full||[])[k]||s)}" target="_blank"><img src="${esc(s)}" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()"></a>`).join("")}</div>`:"";
  const tg=(i.tags||[]),shown=tg.slice(0,4);
  return `<div class="tile card" data-p="${esc(i.path)}" data-rm="${esc(o.rm||"")}" style="${i.exists===false||i.gone?"opacity:.5":""}">
-  <div class="art">${cover}${cover?"":icon}<span class="sz">${fmt(i.size||0)}</span>${i.auto?`<span class="rb" title="разметил ИИ">🤖</span>`:""}
+  <div class="art">${cover}${cover?"":icon}<span class="sz">${gp?"Σ "+fmt(gp.total):fmt(i.size||0)}</span>${i.auto?`<span class="rb" title="разметил ИИ">🤖</span>`:""}
    <div class="act"><button data-act="note" title="изменить описание">✎</button><button data-act="web" title="найти описание и скриншоты в интернете">🌐</button><button data-act="rv" title="показать в Проводнике">📂</button>${o.rm?`<button data-act="rmc" data-c="${o.rm}" title="убрать из коллекции">✕</button>`:""}</div></div>
   ${shots}
   <div class="meta"><b title="${esc(i.path)}">${esc(isg&&w.title?w.title:(i.name||bn(i.path)))}</b>
    <div class="sub">${esc((i.colls||[]).join(", "))}${i.colls&&i.colls.length?" · ":""}${(w.genres||[]).length?esc(w.genres.join(" · ")):esc(bn(i.path))}</div>
    ${desc?`<div class="ds" title="${esc(i.note||"")}">${esc(desc)}</div>`:`<div class="ds" style="color:var(--mut)">нет описания</div>`}
    <div class="ctg">${shown.map(t=>`<span class="chip">${esc(t)} <a href="#" data-act="rmtag" data-t="${esc(t)}" title="убрать тег">✕</a></span>`).join("")}${tg.length>4?`<span class="chip" title="${esc(tg.slice(4).join(", "))}">+${tg.length-4}</span>`:""}<span class="chip" data-act="addtag" title="добавить тег">＋</span></div>
-   ${useLine(i)}</div></div>`}
+   ${useLine(i)}${gp?`<details class="grp"><summary>＋ ещё ${gp.n}: подпапки и копии</summary>${gp.list.map(x=>`<div class="gi"><a href="#" data-gp="${esc(x.path)}" title="показать в Проводнике">📂</a> <span title="${esc(x.path)}">${esc(x.path)}</span> <b>${fmt(x.size||0)}</b></div>`).join("")}</details>`:""}</div></div>`}
 async function cardAct(e,find,done){const b=e.target.closest("[data-act]");if(!b)return false;e.preventDefault();e.stopPropagation();const tile=b.closest(".tile"),p=tile.dataset.p,i=find(p),act=b.dataset.act;if(!i)return true;
  const rm=tile.dataset.rm||undefined,redraw=()=>{tile.outerHTML=itemCard(rm?{...i,colls:[]}:i,{rm})};
  const save=async(tags,note)=>{const r=await api("/api/lib",{action:"tag",path:p,tags,note,size:i.size||0,dir:i.dir!==false});if(r&&r.ok===false)return alert(r.error||"не сохранилось");i.tags=tags;i.note=note;i.auto=false;redraw()};
  if(act=="rmtag"){await save((i.tags||[]).filter(t=>t!=b.dataset.t),i.note||"")}
  else if(act=="addtag"){const t=await ask("Новый тег (можно несколько через запятую):","");if(!t)return true;await save([...new Set([...(i.tags||[]),...t.split(",").map(x=>x.trim().toLowerCase()).filter(Boolean)])],i.note||"")}
  else if(act=="note"){const n=await ask("Описание:",i.note||(i.web&&i.web.text)||"",true);if(n===null)return true;await save(i.tags||[],n)}
- else if(act=="web"){b.textContent="…";b.disabled=true;const r=await api("/api/web",{path:p,model:$("#model").value,q:""});if(r.error){b.textContent="🌐";b.disabled=false;alert(r.error)}else{i.web={title:r.title,text:r.text,image:r.image,url:r.url,tips:r.tips,shots:r.shots,full:r.full,genres:r.genres,src:r.src};if(!i.note)i.note=(r.tips||r.text||"").slice(0,300);redraw()}}
+ else if(act=="web"){b.textContent="…";b.disabled=true;let r=await api("/api/web",{path:p,model:$("#model").value,q:""});while(r.error&&r.retry){const q=await ask(r.error+". Введите название вручную (например, настоящее имя игры):","",false);if(!q)break;b.textContent="…";r=await api("/api/web",{path:p,model:$("#model").value,q:q.trim()})}if(r.error){b.textContent="🌐";b.disabled=false;if(!r.retry)alert(r.error)}else{i.web={title:r.title,text:r.text,image:r.image,url:r.url,tips:r.tips,shots:r.shots,full:r.full,genres:r.genres,src:r.src};if(!i.note)i.note=(r.tips||r.text||"").slice(0,300);redraw()}}
  else if(act=="rv"){const r=await api("/api/reveal",{path:p});if(!r.ok)alert("Не удалось открыть Проводник");else{i.n=(i.n||0)+1;i.n30=(i.n30||0)+1;i.last=nowS();redraw()}}
  else if(act=="rmc"){await api("/api/lib",{action:"remove",id:b.dataset.c,path:p});await done()}
  return true}
@@ -1972,10 +2102,10 @@ async function rLaunch(){await libLoad();const m=$("#main");
  const draw=()=>{const f=$("#lf").value.toLowerCase();const tags=[...new Set(items.flatMap(i=>i.tags))];
   $("#lt").innerHTML=tags.map(t=>`<span class="chip" data-t="${esc(t)}" style="${t==tf?"outline:2px solid var(--acc)":""}">${esc(t)}</span>`).join("");
   const sh=items.filter(i=>(!tf||i.tags.includes(tf))&&(!f||(i.name+" "+i.tags.join(" ")+" "+i.note+" "+i.colls.join(" ")).toLowerCase().includes(f)));
-  $("#lg").innerHTML=sh.map(i=>itemCard(i)).join("")||`<div style="padding:12px;color:var(--mut)">Пусто. Добавьте папки и файлы в коллекции («В коллекцию» внизу) или нажмите «Установленные программы…».</div>`};
+  $("#lg").innerHTML=groupItems(sh).map(i=>itemCard(i)).join("")||`<div style="padding:12px;color:var(--mut)">Пусто. Добавьте папки и файлы в коллекции («В коллекцию» внизу) или нажмите «Установленные программы…».</div>`};
  draw();$("#lf").oninput=draw;
  $("#lt").onclick=e=>{if(e.target.dataset.t!==undefined){tf=tf==e.target.dataset.t?"":e.target.dataset.t;draw()}};
- $("#lg").onclick=async e=>{if(await cardAct(e,p=>items.find(x=>x.path==p),async()=>{items=(await api("/api/launcher")).items;draw()}))return;
+ $("#lg").onclick=async e=>{const gl=e.target.closest("[data-gp]");if(gl){e.preventDefault();const r=await api("/api/reveal",{path:gl.dataset.gp});if(!r.ok)alert("Не удалось открыть Проводник");return}if(e.target.closest("details.grp"))return;if(await cardAct(e,p=>items.find(x=>x.path==p),async()=>{items=(await api("/api/launcher")).items;draw()}))return;
   const t=e.target.closest(".tile");if(!t)return;const it=items.find(x=>x.path==t.dataset.p);pick({...it,risk:0});const r=await api("/api/launch",{path:it.path});if(!r.ok)alert(r.error);else{it.n++;it.last=Date.now()/1000;draw()}};
  $("#rsl").onclick=async()=>{$("#rsl").disabled=true;const p=$("#rsp");while(true){const r=await api("/api/rescan",{});if(!r.running){p.textContent="Готово: изменилось "+r.changed+(r.missing?", пропало "+r.missing:"");break}p.textContent=r.done+" из "+r.total;await new Promise(z=>setTimeout(z,1200))}items=(await api("/api/launcher")).items;draw();$("#rsl").disabled=false};
  $("#pr").onclick=async()=>{const pp=$("#pp");pp.innerHTML="читаю реестр…";const ps=(await api("/api/programs")).programs;
