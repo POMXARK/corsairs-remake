@@ -43,6 +43,28 @@ def accessor(j, b, i):
     return np.frombuffer(b, dt, a["count"] * n, v.get("byteOffset", 0) + a.get("byteOffset", 0)).reshape(-1, n)
 
 
+SMOOTH = 12  # Taubin steps for the voxel mesh: jagged slivers and pits at the lip, the nostril and the chin look like holes
+
+
+def smooth_positions(P, tris, steps=SMOOTH):
+    """Taubin smoothing of the mesh as it is (vertices and UV stay), duplicated vertices of one place move together."""
+    from scipy.sparse import coo_matrix
+    key = np.round(P / max(float(np.ptp(P, axis=0).max()), 1e-9) * 1e6).astype(np.int64)
+    _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
+    inv = inv.reshape(-1)
+    W, pos = inv[tris], P[first].astype(np.float64)
+    n = len(pos)
+    a = np.concatenate([W[:, 0], W[:, 1], W[:, 2], W[:, 1], W[:, 2], W[:, 0]])
+    b = np.concatenate([W[:, 1], W[:, 2], W[:, 0], W[:, 0], W[:, 1], W[:, 2]])
+    adj = coo_matrix((np.ones(len(a)), (a, b)), shape=(n, n)).tocsr()
+    adj.data[:] = 1
+    deg = np.maximum(np.asarray(adj.sum(axis=1)).reshape(-1), 1)[:, None]
+    for _ in range(steps):
+        for k in (0.5, -0.53):
+            pos = pos + k * (adj @ pos / deg - pos)
+    return pos[inv].astype(np.float32)
+
+
 def load_view(path):
     f = np.asarray(Image.open(path).convert("RGB")).astype(np.float32)
     f[..., 1] = np.minimum(f[..., 1], np.maximum(f[..., 0], f[..., 2]))  # green background spill
@@ -153,6 +175,7 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
     acc = {n: np.zeros_like(atlas) for n in dirs}  # per view: sum of w*colour and sum of w
     wsum = {n: np.zeros(atlas.shape[:2], np.float32) for n in dirs}
     cover = np.zeros(atlas.shape[:2], np.float32)
+    used = np.zeros(atlas.shape[:2], bool)  # texels some triangle lies on
     for f in tris[::step]:
         pp = P[f]
         nrm = np.cross(pp[1] - pp[0], pp[2] - pp[0])
@@ -176,6 +199,7 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
         if not ok.any():
             continue
         ax, ay = X[ok], Y[ok]
+        used[ay, ax] = True
         for name, dv in dirs.items():
             lim = 0.05  # holes between the views stay with the smeared generated colour: let every view reach far, SHARP keeps the best one on top
             w = np.clip((nrm @ np.array(dv) - lim) / 0.5, 0, 1)
@@ -195,7 +219,7 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
             acc[name][ay[vis], ax[vis]] += c[vis] * w ** SHARP
             wsum[name][ay[vis], ax[vis]] += w ** SHARP
             cover[ay[vis], ax[vis]] += w ** 2
-    return acc, wsum, cover
+    return acc, wsum, cover, used
 
 
 TONE_SIGMA = 24  # texels: the views differ in tone (lighting, colour grading) and the seams between them show; level the low frequencies
@@ -220,6 +244,44 @@ def combine(atlas, acc, wsum):
     return out / np.maximum(tot, 1e-6)[..., None], tot
 
 
+def fill_faces(P, UV, tris, good, out):
+    """Faces whose texels no view paints well (a flap under the skin, a sliver edge-on to every view) take the mean colour of the
+    nearest well painted faces in space: the generated texture has the wrong tone there (orange spots), the UV neighbours are other charts."""
+    from scipy.spatial import cKDTree
+    size = out.shape[0]
+    cen, col, bad = [], [], []
+    for i, f in enumerate(tris):
+        uv = UV[f] * size
+        a = np.floor(uv.min(0)).astype(int)
+        e = np.ceil(uv.max(0)).astype(int)
+        if (e - a).max() > 200:
+            continue
+        d = (uv[1, 1] - uv[2, 1]) * (uv[0, 0] - uv[2, 0]) + (uv[2, 0] - uv[1, 0]) * (uv[0, 1] - uv[2, 1])
+        if abs(d) < 1e-9:
+            continue
+        X, Y = np.meshgrid(np.arange(a[0], e[0] + 1), np.arange(a[1], e[1] + 1))
+        l0 = ((uv[1, 1] - uv[2, 1]) * (X + .5 - uv[2, 0]) + (uv[2, 0] - uv[1, 0]) * (Y + .5 - uv[2, 1])) / d
+        l1 = ((uv[2, 1] - uv[0, 1]) * (X + .5 - uv[2, 0]) + (uv[0, 0] - uv[2, 0]) * (Y + .5 - uv[2, 1])) / d
+        ok = (l0 >= 0) & (l1 >= 0) & (l0 + l1 <= 1)
+        if not ok.any():
+            continue
+        ax, ay = np.clip(X[ok], 0, size - 1), np.clip(Y[ok], 0, size - 1)
+        share = good[ay, ax].mean()
+        if share >= 0.5:
+            cen.append(P[f].mean(0))
+            col.append(out[ay, ax][good[ay, ax]].mean(0))
+        elif share < 0.2:
+            bad.append((P[f].mean(0), ax, ay))
+    if not bad or not cen:
+        return 0
+    tree = cKDTree(np.array(cen))
+    col = np.array(col)
+    for c, ax, ay in bad:
+        _, k = tree.query(c, k=8)
+        out[ay, ax] = col[k].mean(0)
+    return len(bad)
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     src, dst = args[:2]
@@ -229,6 +291,14 @@ def main():
     P = accessor(j, b, prim["attributes"]["POSITION"])
     UV = accessor(j, b, prim["attributes"]["TEXCOORD_0"])
     tris = accessor(j, b, prim["indices"]).reshape(-1, 3)
+    if "--no-smooth" not in sys.argv:
+        P = smooth_positions(P, tris)
+        acc = j["accessors"][prim["attributes"]["POSITION"]]
+        off = j["bufferViews"][acc["bufferView"]].get("byteOffset", 0) + acc.get("byteOffset", 0)
+        b = bytearray(b)
+        b[off:off + P.nbytes] = P.tobytes()
+        b = bytes(b)
+        print(f"mesh smoothed, {SMOOTH} Taubin steps")
     mat = j["materials"][prim.get("material", 0)]
     tex = j["textures"][mat["pbrMetallicRoughness"]["baseColorTexture"]["index"]]
     bv = j["bufferViews"][j["images"][tex["source"]]["bufferView"]]
@@ -236,7 +306,7 @@ def main():
     # which side of the mesh the "left" view looks at: the sign with the smaller difference to the generated colour
     best = None
     for side in (1., -1.):
-        acc, ws, _ = paint(P, UV, tris, atlas, views, side, step=12)
+        acc, ws, _, _ = paint(P, UV, tris, atlas, views, side, step=12)
         w = sum(ws.values())
         acc = sum(acc.values())
         m = w > 1e-3
@@ -244,10 +314,25 @@ def main():
         print(f"left view sees {'+' if side > 0 else '-'}x: difference {err:.2f}")
         if best is None or err < best[0]:
             best = (err, side)
-    acc, ws, cover = paint(P, UV, tris, atlas, views, best[1], do_align="--no-align" not in sys.argv)
+    acc, ws, cover, used = paint(P, UV, tris, atlas, views, best[1], do_align="--no-align" not in sys.argv)
     painted, w = combine(atlas, acc, ws)
-    a = np.clip(cover * 3, 0, 1)[..., None]  # follow the views: they win wherever one of them sees the texel
-    out = atlas * (1 - a) + painted * a
+    # texels no view sees well (folded slivers, faces edge-on to every view) keep the generated pattern, but in the tone of the
+    # painted texels around: the generated texture is off in colour and shows there as orange spots
+    import cv2
+    good = cover > 0.05
+    g = good[..., None].astype(np.float32)
+    norm = np.maximum(cv2.GaussianBlur(good.astype(np.float32), (0, 0), 10), 1e-4)[..., None]
+    lowp = cv2.GaussianBlur(painted * g, (0, 0), 10) / norm
+    lowa = cv2.GaussianBlur(atlas * g, (0, 0), 10) / norm
+    near = cv2.GaussianBlur(good.astype(np.float32), (0, 0), 10)[..., None] > 0.01
+    fill = np.where(near, atlas + lowp - lowa, atlas)
+    out = np.where(good[..., None], painted, np.where(used[..., None], fill, atlas))
+    # padding: faces smaller than a texel have no texel centre of their own and sample the neighbours / the generated colour
+    from scipy.ndimage import distance_transform_edt
+    dist, (py_, px_) = distance_transform_edt(~used, return_indices=True)
+    pad = (~used) & (dist <= 6)
+    out[pad] = out[py_[pad], px_[pad]]
+    print(f"{fill_faces(P, UV, tris, good, out)} faces without a view filled from their neighbours in space")
     buf = io.BytesIO()
     Image.fromarray(out.clip(0, 255).astype(np.uint8)).save(buf, format="PNG")
     b = b + b"\0" * (-len(b) % 4)
