@@ -24,6 +24,8 @@ WHAT = {"head": "head", "torso": "torso", "arm_l": "left arm with the hand", "ar
 EXTRA = {"head": " Keep the eyes exactly as in the picture: open, white eyeballs, dark irises, round pupils, eyelids.",
          "arm_l": " A clean hand with five separate fingers.", "arm_r": " A clean hand with five separate fingers.",
          "legs": "", "torso": "", "sword": ""}
+OUTLINE = {"head": "The outline must be smooth and organic like a real person: a round skull, a natural jaw and chin, natural hair, a round neck, no angular polygon silhouette."}
+OUTLINE = {p: OUTLINE.get(p, "The outline must be smooth and natural, no angular polygon silhouette.") for p in PARTS}
 BACK = " This is the view from behind: the face is NOT visible, draw only the back of the head, the hair and the ears."
 CUT = {"head": " The neck is cut off flat at the bottom: keep that cut in the skin colour, never grey and never the colour of the background.",
        "torso": "", "arm_l": "", "arm_r": "", "legs": "", "sword": ""}
@@ -40,7 +42,7 @@ def prompt_of(part, view):
     return (f"Redraw <image1>, the {WHAT[part]} {SIDE[view]}, as a clean high-detail realistic render. Keep exactly "
             "the same camera view, pose, proportions, colours and every detail that <image1> shows. Do not add "
             "anything that is not in <image1>: no hat, no clothes, no mask, no accessories. Smooth surfaces "
-            f"without polygon edges, realistic skin and fabric.{'' if view == 'back' else EXTRA[part]}{ref}{BACK if view == 'back' else ''}{CUT[part]} "
+            f"without polygon edges, realistic skin and fabric. {OUTLINE[part]}{'' if view == 'back' else EXTRA[part]}{ref}{BACK if view == 'back' else ''}{CUT[part]} "
             "A flat bright green background.")
 
 
