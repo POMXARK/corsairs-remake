@@ -89,7 +89,8 @@ def main():
     # refine_prompt (widget 2): the VLM of the subgraph (Qwen3.5 PE) looks at the view and rewrites our prompt by what it shows
     # pdm_parts patches flash_attention_decode_gqa (contiguous q/k/v, torch fallback), so the VLM can run again
     for ref in [REFINE[1140]]:
-        nodes[ref]["widgets_values"][2] = True
+        nodes[ref]["widgets_values"][2] = False  # ComfyUI_00012/13: with the VLM description the sheet came out as a collage of low-poly heads; it also took 9 of 22 minutes
+        nodes[ref]["widgets_values"][5] = 20  # steps 25 -> 20, 13.6 s/it at 2048x2048
     # TextGenerate wrote up to 16256 tokens (9 minutes at 5 tokens/s in ComfyUI_00009); the description took 2916 tokens, cut at 400 the sheet came out as a collage of tiny heads
     for sg in g["definitions"]["subgraphs"]:
         for n in sg["nodes"]:

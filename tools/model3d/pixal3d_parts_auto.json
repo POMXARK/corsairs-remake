@@ -1,5 +1,5 @@
 {
- "id": "d8b1c00d-28e0-4ce7-bc14-0493460b1d82",
+ "id": "31c07106-1c78-459a-8f3d-33c9e32abd58",
  "revision": 0,
  "last_node_id": 2023,
  "last_link_id": 4834,
@@ -3961,10 +3961,10 @@
    "widgets_values": [
     0,
     "Redraw the character in <image1> as a high-detail realistic render, seen from the front. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. Orthographic full-body view, solid flat grey background, no text.",
-    true,
+    false,
     "",
     1,
-    25,
+    20,
     true,
     2048,
     2048,
