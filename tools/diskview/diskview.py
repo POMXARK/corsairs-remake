@@ -2055,8 +2055,9 @@ async function rLib(){await libLoad();const m=$("#main");
   <div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input id="lq" placeholder="Поиск: название, тег, описание" value="${esc(LQ)}" style="width:240px"><select id="lcs"><option value="">все коллекции</option>${LB.collections.map(c=>`<option value="${c.id}" ${c.id==LCOL?"selected":""}>${esc(c.name)} (${c.items.length})</option>`).join("")}</select><label><input type="checkbox" id="lau" ${LAUTO?"checked":""}> только 🤖</label><select id="lso" title="Порядок карточек"><option value="">порядок: как добавлены</option><option value="size">по размеру</option><option value="freq">чаще используются</option><option value="last">недавно использованы</option><option value="idle">давно не используются</option></select><label title="Нет запусков за 30 дней и ничего не менялось больше 90 дней"><input type="checkbox" id="lid" ${LIDLE?"checked":""}> 💤 забытые</label></div>
   <div style="margin:8px 0">Теги (клик — фильтр): ${tags}</div><div id="lbody"></div>`;
  lb.innerHTML=bar;
- const body=()=>{GRP={};const q=LQ.toLowerCase();$("#lbody").innerHTML=LB.collections.filter(c=>!LCOL||c.id==LCOL).map(c=>{
-   const its=c.items.filter(i=>(!tagFilter||i.tags.includes(tagFilter))&&(!LAUTO||i.auto)&&(!LIDLE||(!i.n30&&(idle(i)===null||idle(i)>90)))&&(!q||(i.name+" "+i.path+" "+i.tags.join(" ")+" "+i.note+" "+((i.web&&i.web.text)||"")).toLowerCase().includes(q)));
+ const body=()=>{GRP={};const q=LQ.toLowerCase();const FL=i=>(!tagFilter||i.tags.includes(tagFilter))&&(!LAUTO||i.auto)&&(!LIDLE||(!i.n30&&(idle(i)===null||idle(i)>90)))&&(!q||(i.name+" "+i.path+" "+i.tags.join(" ")+" "+i.note+" "+((i.web&&i.web.text)||"")).toLowerCase().includes(q)),SETS=LB.collections.filter(c=>!LCOL||c.id==LCOL).map(c=>({c,its:c.items.filter(FL)})),FIRST=new Map();
+   SETS.forEach(S=>{S.its=S.its.filter(i=>{const k=dkey(i),f=FIRST.get(k);if(f&&f!==S&&f.c.id!=S.c.id){f.its.push({...i,xcoll:S.c.name});return false}if(!f)FIRST.set(k,S);return true})});
+   $("#lbody").innerHTML=SETS.map(({c,its})=>{
    const SORT={size:(a,b)=>b.size-a.size,freq:(a,b)=>(b.n30||0)-(a.n30||0)||(b.n||0)-(a.n||0),last:(a,b)=>(b.last||0)-(a.last||0),idle:(a,b)=>(idle(b)??-1)-(idle(a)??-1)};if(SORT[LSORT])its.sort(SORT[LSORT]);const tot=its.reduce((a,i)=>a+i.size,0);if(!its.length&&(tagFilter||LAUTO||LIDLE||q))return"";
    return `<div style="margin:12px 0"><b>${c.auto?"🤖 ":""}${esc(c.name)}</b> — ${its.length} шт., ${fmt(tot)} <button data-ren="${c.id}">переименовать</button> <button data-del="${c.id}">удалить коллекцию</button></div><div class="grid" style="padding:0;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">`+groupItems(its,c.id).map(i=>itemCard({...i,colls:[]},{rm:c.id})).join("")+`</div>`}).join("")||"<i>Ничего не найдено. Добавьте папки в коллекции или запустите авторазметку.</i>"};
  body();
@@ -2106,12 +2107,16 @@ function ask(title,val,multi){return new Promise(res=>{const d=document.createEl
  document.body.appendChild(d);const f=d.querySelector("textarea,input");f.value=val||"";f.focus();const end=v=>{d.remove();res(v)};
  d.onclick=e=>{const k=e.target.dataset.k;if(k==="1")end(f.value);else if(k==="0"||e.target===d)end(null)};f.onkeydown=e=>{if(e.key=="Escape")end(null);if(e.key=="Enter"&&!multi)end(f.value)}})}
 let GRP={};
+const GEN=new Set(["models","model","blobs","data","client","movie","moviesd","target","debug","release","src","bin","lib","cache","temp","tmp","logs","saves","mods","assets","resources","build","dist"]);
+function dkey(i){const w=i.web||{};if(w.title&&w.src)return w.title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu,"");
+ const p=i.path.replace(/[\\/]+$/,"").split(/[\\/]/),nm=x=>(x||"").toLowerCase().replace(/[^\p{L}\p{N}]+/gu,""),b=nm(p[p.length-1]);
+ return(GEN.has(b)?nm(p[p.length-2])+"/":"")+b}
 function groupItems(list,rm=""){
  const low=p=>p.toLowerCase().replace(/[\\/]+$/,""),par=new Map();
  const under=(b,a)=>b.startsWith(a+"\\")||b.startsWith(a+"/"),cnt=new Map(list.map(j=>[j,list.filter(x=>x!==j&&under(low(x.path),low(j.path))).length]));
  list.forEach(i=>{let best=null,bl=0;const b=low(i.path);for(const j of list){if(j===i||cnt.get(j)>8)continue;const a=low(j.path);if(a.length>bl&&(b.startsWith(a+"\\")||b.startsWith(a+"/"))){best=j;bl=a.length}}par.set(i,best)});
  const root=i=>{while(par.get(i))i=par.get(i);return i},G=new Map();
- list.forEach(i=>{const r=root(i),w=r.web||{},k=w.title&&w.src?"t:"+w.title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu,""):"p:"+r.path;
+ list.forEach(i=>{const r=root(i),w=r.web||{},k=dkey(r);
   if(!G.has(k))G.set(k,{roots:new Set(),all:[]});const g=G.get(k);g.roots.add(r);g.all.push(i)});
  const out=[];
  G.forEach(g=>{const roots=[...g.roots].sort((a,b)=>b.size-a.size),head=roots[0],rest=g.all.filter(x=>x!==head);
@@ -2150,7 +2155,7 @@ function itemCard(i,o={}){const gp=GRP[(o.rm||"")+"\0"+i.path];const w=i.web||{}
    <div class="sub">${esc((i.colls||[]).join(", "))}${i.colls&&i.colls.length?" · ":""}${(w.genres||[]).length?esc(w.genres.join(" · ")):esc(bn(i.path))}</div>
    ${desc?`<div class="ds" title="${esc(i.note||"")}">${esc(desc)}</div>`:`<div class="ds" style="color:var(--mut)">нет описания</div>`}
    <div class="ctg">${shown.map(t=>`<span class="chip">${esc(t)} <a href="#" data-act="rmtag" data-t="${esc(t)}" title="убрать тег">✕</a></span>`).join("")}${tg.length>4?`<span class="chip" title="${esc(tg.slice(4).join(", "))}">+${tg.length-4}</span>`:""}<span class="chip" data-act="addtag" title="добавить тег">＋</span></div>
-   ${useLine(i)}${gp?`<details class="grp"><summary>＋ ещё ${gp.n}: подпапки и копии</summary>${gp.list.map(x=>`<div class="gi"><a href="#" data-gp="${esc(x.path)}" title="показать в Проводнике">📂</a> <span title="${esc(x.path)}">${esc(x.path)}</span> <b>${fmt(x.size||0)}</b></div>`).join("")}</details>`:""}</div></div>`}
+   ${useLine(i)}${gp?`<details class="grp"><summary>＋ ещё ${gp.n}: подпапки и копии</summary>${gp.list.map(x=>`<div class="gi"><a href="#" data-gp="${esc(x.path)}" title="показать в Проводнике">📂</a> <span title="${esc(x.path)}">${esc(x.path)}</span> <b>${fmt(x.size||0)}</b>${x.xcoll?` <i style="color:var(--mut)">· ${esc(x.xcoll)}</i>`:""}</div>`).join("")}</details>`:""}</div></div>`}
 async function cardAct(e,find,done){const b=e.target.closest("[data-act]");if(!b)return false;e.preventDefault();e.stopPropagation();const tile=b.closest(".tile"),p=tile.dataset.p,i=find(p),act=b.dataset.act;if(!i)return true;
  const rm=tile.dataset.rm||undefined,redraw=()=>{tile.outerHTML=itemCard(rm?{...i,colls:[]}:i,{rm})};
  const save=async(tags,note)=>{const r=await api("/api/lib",{action:"tag",path:p,tags,note,size:i.size||0,dir:i.dir!==false});if(r&&r.ok===false)return alert(r.error||"не сохранилось");i.tags=tags;i.note=note;i.auto=false;redraw()};
