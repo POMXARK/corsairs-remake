@@ -578,6 +578,40 @@ def game_query(path):
     return re.sub(r"\s+", " ", base).strip()
 
 
+def name_candidates(path, depth=4):
+    """Имя папки и её родителей (без общих вроде Content/Paks и корней дисков): подпапка игры ищется по имени игры."""
+    out = []
+    p = path.rstrip("/\\")
+    for _ in range(depth):
+        base = re.split(r"[\\/]", p)[-1]
+        par = os.path.dirname(p.replace("\\", "/")) if "/" in p.replace("\\", "/") else ""
+        if not base or re.fullmatch(r"[A-Za-z]:", base):
+            break
+        if base.lower() not in GENERIC and len(base) >= 3:
+            q = EDITION.sub(" ", re.sub(r"[._]+", " ", re.sub(r"\[.*?\]|\(.*?\)", " ", base))).strip()
+            q = re.sub(r"\s+", " ", q)
+            if len(q.split()) == 1:
+                q = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", q)  # MidnightSuns → Midnight Suns
+            if len(q.split()) > 1:
+                q = re.sub(r"\s*-\s*[A-Za-z0-9]+$", "", q)  # хвост-релизер «-InsaneRamZes»
+            if (len(q.split()) > 1 or len(q) >= 5) and q not in out:
+                out.append(q)
+        np_ = re.sub(r"[\\/][^\\/]*$", "", p)
+        if np_ == p:
+            break
+        p = np_
+    return out
+
+
+_STEAM = {}
+
+
+def steam_cached(q):
+    if q not in _STEAM:
+        _STEAM[q] = steam_lookup(q) or {}
+    return _STEAM[q]
+
+
 def _toks(s):
     return set(re.findall(r"\w+", re.sub(r"['’]", "", s.lower())))
 
@@ -591,7 +625,9 @@ def steam_lookup(q):
     sr = json.loads(web_get("https://store.steampowered.com/api/storesearch/?l=russian&cc=ru&term=" + quote(q)))
     for it in sr.get("items", [])[:5]:
         nt = _toks(it.get("name", ""))
-        if not (qt <= nt or nt <= qt) or min(len(qt), len(nt)) < (1 if qt == nt else 2):
+        jq, jn = "".join(sorted(qt)) if len(qt) == 1 else "", re.sub(r"\W", "", re.sub(r"['’]", "", it.get("name", "").lower()))
+        slug = jq and len(jq) >= 8 and (jq in jn or jn.endswith(jq))
+        if not slug and (not (qt <= nt or nt <= qt) or min(len(qt), len(nt)) < (1 if qt == nt else 2)):
             continue
         d = json.loads(web_get("https://store.steampowered.com/api/appdetails?l=russian&appids=%s" % it["id"]))
         d = (d.get(str(it["id"])) or {}).get("data")
@@ -1006,13 +1042,14 @@ def enrich(limit=12):
     batch = todo[:limit]
 
     def one(p):
-        q = game_query(p)
-        if len(q) < 3:
-            return p, {}
         try:
-            return p, steam_lookup(q) or {}
+            for q in name_candidates(p):
+                g = steam_cached(q)
+                if g.get("text"):
+                    return p, g
+            return p, {}
         except Exception as e:
-            log("enrich %s: %s" % (q, e))
+            log("enrich %s: %s" % (p, e))
             return p, None
     got = 0
     with ThreadPoolExecutor(4) as ex:
@@ -1275,18 +1312,78 @@ def in_library(path):
     return path in LIB["tags"] or any(it["path"] == path for c in LIB["collections"] for it in c["items"]) or any(p["path"] == path for p in program_list())
 
 
+BADEXE = re.compile(r"unins|setup|install|crash|redist|vc_?redist|dxsetup|dotnet|helper|report|update|patch|cef|ue4prereq|eac|easyanticheat|battleye|benchmark|config|server|cleanup|uninst", re.I)
+
+
+def main_exe(path):
+    """Главный exe папки с игрой/программой: самый крупный не служебный exe в корне и на два уровня вглубь."""
+    if os.path.isfile(path):
+        return path if path.lower().endswith(".exe") else None
+    p = path.rstrip("/\\")
+    for _ in range(4):
+        e = _scan_exe(p)
+        if e or re.fullmatch(r"[A-Za-z]:?", re.split(r"[\\/]", p)[-1] or "x") or os.path.dirname(p) == p:
+            return e
+        p = os.path.dirname(p)
+    return None
+
+
+def _scan_exe(path):
+    best, bs, seen = None, 0, 0
+    stack = [(path, 0)]
+    while stack and seen < 400:
+        d, lv = stack.pop(0)
+        try:
+            with os.scandir(d) as it:
+                for e in it:
+                    seen += 1
+                    try:
+                        if e.is_dir(follow_symlinks=False) and lv < 2:
+                            stack.append((e.path, lv + 1))
+                        elif e.name.lower().endswith(".exe") and not BADEXE.search(e.name):
+                            sz = e.stat().st_size
+                            if sz > bs:
+                                best, bs = e.path, sz
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+    return best
+
+
+ICON_PS = r"""
+Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
+using System;using System.Drawing;using System.Runtime.InteropServices;
+public static class DvIcon{
+[DllImport("user32.dll",CharSet=CharSet.Unicode)]static extern uint PrivateExtractIcons(string f,int i,int cx,int cy,IntPtr[] h,uint[] id,uint n,uint fl);
+[DllImport("user32.dll")]static extern bool DestroyIcon(IntPtr h);
+public static bool Save(string f,string o){
+ foreach(int s in new int[]{256,128,64}){IntPtr[] h=new IntPtr[1];uint[] id=new uint[1];
+  if(PrivateExtractIcons(f,0,s,s,h,id,1,0)>0&&h[0]!=IntPtr.Zero){using(Icon ic=Icon.FromHandle(h[0]))using(Bitmap b=ic.ToBitmap()){b.Save(o,System.Drawing.Imaging.ImageFormat.Png);}DestroyIcon(h[0]);return true;}}
+ using(Icon ic=Icon.ExtractAssociatedIcon(f))using(Bitmap b=ic.ToBitmap()){b.Save(o,System.Drawing.Imaging.ImageFormat.Png);}return true;}
+}
+'@
+[DvIcon]::Save($env:DV_P,$env:DV_O) | Out-Null
+"""
+
+
 def icon_png(path):
-    """Иконка exe (Windows): извлекается один раз через PowerShell и кэшируется; только для путей из библиотеки/списка программ."""
-    if os.name != "nt" or not path.lower().endswith(".exe") or not in_library(path) or not os.path.isfile(path):
+    """Иконка игры/программы (Windows): у папки — из её главного exe, до 256 px; кэшируется; только для путей из библиотеки/программ."""
+    if os.name != "nt" or not in_library(path):
         return None
-    out = os.path.join(DATA, "icons", hashlib.sha1(path.lower().encode()).hexdigest()[:16] + ".png")
+    exe = main_exe(path)
+    if not exe:
+        return None
+    out = os.path.join(DATA, "icons", hashlib.sha1(exe.lower().encode()).hexdigest()[:16] + "_l.png")
     if not os.path.exists(out):
         os.makedirs(os.path.dirname(out), exist_ok=True)
-        ps = "Add-Type -AssemblyName System.Drawing;$i=[System.Drawing.Icon]::ExtractAssociatedIcon($env:DV_P);$i.ToBitmap().Save($env:DV_O,[System.Drawing.Imaging.ImageFormat]::Png)"
         try:
-            subprocess.run(["powershell", "-NoProfile", "-Command", ps], env=dict(os.environ, DV_P=path, DV_O=out), timeout=20,
-                           creationflags=0x08000000, capture_output=True)
-        except Exception:
+            r = subprocess.run(["powershell", "-NoProfile", "-Command", ICON_PS], env=dict(os.environ, DV_P=exe, DV_O=out), timeout=30,
+                               creationflags=0x08000000, capture_output=True)
+            if r.returncode or not os.path.exists(out):
+                log("icon %s: %s" % (exe, (r.stderr or b"")[:300]))
+        except Exception as e:
+            log("icon %s: %s" % (exe, e))
             return None
     try:
         with open(out, "rb") as f:
@@ -1523,7 +1620,7 @@ th{cursor:pointer;user-select:none;position:sticky}th .rz{position:absolute;righ
 tr.r:hover{background:var(--pan)}tr.sel{background:var(--sel)!important}
 td.nm{max-width:520px;overflow:hidden;text-overflow:ellipsis}.tg{display:inline-block;width:16px;color:var(--mut);cursor:pointer}
 .bar{display:inline-block;height:9px;background:var(--acc);opacity:.6;vertical-align:middle;border-radius:2px}
-.old{color:#d33}.new{color:#2a9d4a}.tile{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--pan);cursor:pointer;min-width:0}.tile:hover{border-color:var(--acc)}.tile b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;padding:10px 12px}.chip{background:var(--sel);border-radius:9px;padding:0 7px;margin-right:3px;font-size:12px;cursor:pointer}.rk{font-weight:600}.rk0{color:#2a9d4a}.rk1{color:#c80}.rk2{color:#d33}td.wr{white-space:normal;max-width:280px;text-align:left}
+.old{color:#d33}.new{color:#2a9d4a}.tile{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--pan);cursor:pointer;min-width:0}.tile:hover{border-color:var(--acc)}.card{padding:0;overflow:hidden;display:flex;flex-direction:column;background:var(--pan)}.card .art{position:relative;height:130px;background:linear-gradient(135deg,#1f2a44,#3b2a55);display:flex;align-items:center;justify-content:center;overflow:hidden}.card .art .cv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.card .art .ic{width:84px;height:84px;object-fit:contain;filter:drop-shadow(0 3px 6px #0008)}.card .art .fb{font-size:56px;line-height:84px;text-align:center}.card .sz{position:absolute;left:6px;bottom:6px;background:#000a;color:#fff;border-radius:10px;padding:1px 8px;font-size:12px}.card .rb{position:absolute;left:6px;top:6px;font-size:14px;background:#000a;border-radius:10px;padding:0 5px}.card .act{position:absolute;right:6px;top:6px;display:flex;gap:4px;opacity:0;transition:opacity .15s}.card:hover .act,.card:focus-within .act{opacity:1}.card .act button{padding:2px 7px;background:#000b;color:#fff;border:1px solid #fff4;border-radius:6px}.card .shots{display:flex;gap:2px;background:#000}.card .shots a{flex:1;min-width:0}.card .shots img{width:100%;height:50px;object-fit:cover;display:block}.card .meta{padding:8px 10px 10px;min-width:0}.card .sub{color:var(--mut);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.card .ds{margin:5px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;font-size:13px}.card .ctg{white-space:normal;line-height:1.9}.tile b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;padding:10px 12px}.chip{display:inline-block;white-space:nowrap;background:var(--sel);border-radius:9px;padding:0 7px;margin-right:3px;font-size:12px;cursor:pointer}.chip a{color:inherit;text-decoration:none;opacity:.55;margin-left:2px}.chip a:hover{opacity:1;color:#d33}.rk{font-weight:600}.rk0{color:#2a9d4a}.rk1{color:#c80}.rk2{color:#d33}td.wr{white-space:normal;max-width:280px;text-align:left}
 #tm{display:block;width:100%;height:100%}#crumb{position:absolute;left:8px;top:6px;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:2px 8px;z-index:2}
 #tip{position:fixed;pointer-events:none;background:#000d;color:#fff;padding:5px 8px;border-radius:5px;font-size:12px;display:none;z-index:9;white-space:pre}
 footer{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 12px;background:var(--pan);border-top:1px solid var(--line)}
@@ -1707,11 +1804,12 @@ async function rLib(){await libLoad();const m=$("#main");
  const body=()=>{const q=LQ.toLowerCase();$("#lbody").innerHTML=LB.collections.filter(c=>!LCOL||c.id==LCOL).map(c=>{
    const its=c.items.filter(i=>(!tagFilter||i.tags.includes(tagFilter))&&(!LAUTO||i.auto)&&(!LIDLE||(!i.n30&&(idle(i)===null||idle(i)>90)))&&(!q||(i.name+" "+i.path+" "+i.tags.join(" ")+" "+i.note+" "+((i.web&&i.web.text)||"")).toLowerCase().includes(q)));
    const SORT={size:(a,b)=>b.size-a.size,freq:(a,b)=>(b.n30||0)-(a.n30||0)||(b.n||0)-(a.n||0),last:(a,b)=>(b.last||0)-(a.last||0),idle:(a,b)=>(idle(b)??-1)-(idle(a)??-1)};if(SORT[LSORT])its.sort(SORT[LSORT]);const tot=its.reduce((a,i)=>a+i.size,0);if(!its.length&&(tagFilter||LAUTO||LIDLE||q))return"";
-   return `<div style="margin:12px 0"><b>${c.auto?"🤖 ":""}${esc(c.name)}</b> — ${its.length} шт., ${fmt(tot)} <button data-ren="${c.id}">переименовать</button> <button data-del="${c.id}">удалить коллекцию</button></div><div class="grid" style="padding:0;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">`+its.map(i=>itemCard({...i,colls:[]},{rm:c.id})).join("")+`</div>`}).join("")||"<i>Ничего не найдено. Добавьте папки в коллекции или запустите авторазметку.</i>"};
+   return `<div style="margin:12px 0"><b>${c.auto?"🤖 ":""}${esc(c.name)}</b> — ${its.length} шт., ${fmt(tot)} <button data-ren="${c.id}">переименовать</button> <button data-del="${c.id}">удалить коллекцию</button></div><div class="grid" style="padding:0;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">`+its.map(i=>itemCard({...i,colls:[]},{rm:c.id})).join("")+`</div>`}).join("")||"<i>Ничего не найдено. Добавьте папки в коллекции или запустите авторазметку.</i>"};
  body();
  $("#lq").oninput=e=>{LQ=e.target.value;body()};$("#lcs").onchange=e=>{LCOL=e.target.value;body()};$("#lau").onchange=e=>{LAUTO=e.target.checked;body()};$("#lid").onchange=e=>{LIDLE=e.target.checked;body()};$("#lso").value=LSORT;$("#lso").onchange=e=>{LSORT=e.target.value;body()};
  const lay=$("#lay"),sp=$("#spl");sp.onmousedown=ev=>{ev.preventDefault();const mv=e=>{const r=lay.getBoundingClientRect();LW=Math.max(320,Math.min(r.width-240,e.clientX-r.left));lb.style.width=LW+"px";lb.style.flex="none"},up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);lsset("dv.lw",LW)};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up)};
  $("#aitg").onclick=()=>{LAIS=!LAIS;lsset("dv.ai",LAIS);rLib()};
+ if(!window.__enr){window.__enr=true;(async()=>{let f=0;while(true){const r=await api("/api/enrich",{});if(!r.ok||!r.tried)break;f+=r.found;const p=$("#atp");if(p&&view=="lib")p.textContent="Ищу обложки и описания в Steam… найдено "+f+(r.left?", осталось "+r.left:"");await libLoad();if(view=="lib"&&!document.querySelector("#cadd:disabled")&&!document.querySelector("[data-k]"))body();if(!r.left)break}window.__enr=false;const p=$("#atp");if(p&&view=="lib"&&f)p.textContent="Обложки и описания добавлены: "+f}) ()}
  lb.onclick=async e=>{const t=e.target;
   if(await cardAct(e,p=>{for(const c of LB.collections){const i=c.items.find(x=>x.path==p);if(i)return i}},async()=>{await libLoad();rLib()}))return;
   if(t.id=="cadd"){const r=await api("/api/lib",{action:"create",name:$("#cn").value});if(!r.ok)return alert(r.error);return rLib()}
@@ -1740,7 +1838,6 @@ async function rLib(){await libLoad();const m=$("#main");
 // ---- лаунчер: всё нужное из одного места
 // ---- карточка элемента (лаунчер и библиотека): иконка/картинка, описание, теги, правка
 const bn=p=>p.replace(/[\\/]+$/,"").split(/[\\/]/).pop()||p;
-const iconUrl=i=>/\.exe$/i.test(i.path)?"/api/icon?path="+encodeURIComponent(i.path):(i.web&&i.web.image||"");
 const DAY=86400,nowS=()=>Date.now()/1000;
 const idle=i=>{const t=Math.max(i.last||0,i.mtime||0,i.atime||0);return t?Math.floor((nowS()-t)/DAY):null};
 function useLine(i){if(i.n===undefined)return"";const p=[];
@@ -1754,16 +1851,21 @@ function ask(title,val,multi){return new Promise(res=>{const d=document.createEl
  d.innerHTML=`<div style="background:var(--pan);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:14px;width:min(480px,92vw)"><div style="margin-bottom:8px">${esc(title)}</div>${multi?`<textarea rows="5" style="width:100%;box-sizing:border-box"></textarea>`:`<input style="width:100%;box-sizing:border-box">`}<div style="margin-top:10px;text-align:right"><button data-k="0">Отмена</button> <button class="p" data-k="1">OK</button></div></div>`;
  document.body.appendChild(d);const f=d.querySelector("textarea,input");f.value=val||"";f.focus();const end=v=>{d.remove();res(v)};
  d.onclick=e=>{const k=e.target.dataset.k;if(k==="1")end(f.value);else if(k==="0"||e.target===d)end(null)};f.onkeydown=e=>{if(e.key=="Escape")end(null);if(e.key=="Enter"&&!multi)end(f.value)}})}
-function itemCard(i,o={}){const ic=iconUrl(i),fb=i.dir?"📁":"📄",w=i.web||{},desc=w.src?w.text:(i.note||w.text||"");
- const banner=w.src&&w.image?`<a href="${esc(w.url)}" target="_blank" title="${esc(w.title)} — ${esc(w.src)}"><img src="${esc(w.image)}" referrerpolicy="no-referrer" loading="lazy" style="width:100%;height:96px;object-fit:cover;border-radius:6px;display:block" onerror="this.remove()"></a>`:"";
- const shots=(w.shots||[]).length?`<div style="display:flex;gap:4px;margin:6px 0">${w.shots.slice(0,3).map((s,k)=>`<a href="${esc((w.full||[])[k]||s)}" target="_blank" style="flex:1;min-width:0"><img src="${esc(s)}" referrerpolicy="no-referrer" loading="lazy" style="width:100%;height:54px;object-fit:cover;border-radius:4px;display:block" onerror="this.remove()"></a>`).join("")}</div>`:"";
- return `<div class="tile" data-p="${esc(i.path)}" data-rm="${esc(o.rm||"")}" style="${i.exists===false||i.gone?"opacity:.5":""}">${banner}${shots}<div style="display:flex;gap:8px;align-items:center;margin-top:${banner?6:0}px">
-  <div style="width:44px;height:44px;flex:none;display:${banner?"none":"flex"};align-items:center;justify-content:center;font-size:28px">${ic?`<img src="${esc(ic)}" referrerpolicy="no-referrer" loading="lazy" style="max-width:44px;max-height:44px;border-radius:6px" onerror="this.replaceWith(document.createTextNode('${fb}'))">`:fb}</div>
-  <div style="min-width:0;flex:1"><b title="${esc(i.path)}">${i.auto?"🤖 ":""}${esc(i.name||bn(i.path))}</b><div style="color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((i.colls||[]).join(", "))}${i.colls&&i.colls.length?" · ":""}${fmt(i.size||0)}</div></div></div>
-  ${(w.genres||[]).length?`<div style="color:var(--mut)">${esc(w.genres.join(" · "))}</div>`:""}${desc?`<div title="${esc(i.note||"")}" style="margin:6px 0;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;white-space:normal">${esc(desc)}</div>`:`<div style="margin:6px 0;color:var(--mut)">нет описания</div>`}
-  <div style="white-space:normal">${(i.tags||[]).map(t=>`<span class="chip">${esc(t)} <a href="#" data-act="rmtag" data-t="${esc(t)}" title="убрать тег">✕</a></span>`).join("")}<span class="chip" data-act="addtag" title="добавить тег">＋ тег</span></div>
-  <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap"><button data-act="note" title="изменить описание">✎ описание</button><button data-act="web" title="найти в интернете: описание и картинка">🌐</button><button data-act="rv" title="показать в Проводнике">📂</button>${o.rm?`<button data-act="rmc" data-c="${o.rm}" title="убрать из коллекции">✕ из коллекции</button>`:""}</div>
-  ${useLine(i)}</div>`}
+function itemCard(i,o={}){const w=i.web||{},isg=!!w.src,desc=isg?w.text:(i.note||w.text||""),fb=i.dir?"📁":"📄";
+ const ico="/api/icon?path="+encodeURIComponent(i.path);
+ const cover=isg&&w.image?`<img class="cv" src="${esc(w.image)}" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()">`:"";
+ const icon=`<img class="ic" src="${esc(ico)}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'ic fb',textContent:'${fb}'}))">`;
+ const shots=(w.shots||[]).length?`<div class="shots">${w.shots.slice(0,3).map((s,k)=>`<a href="${esc((w.full||[])[k]||s)}" target="_blank"><img src="${esc(s)}" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()"></a>`).join("")}</div>`:"";
+ const tg=(i.tags||[]),shown=tg.slice(0,4);
+ return `<div class="tile card" data-p="${esc(i.path)}" data-rm="${esc(o.rm||"")}" style="${i.exists===false||i.gone?"opacity:.5":""}">
+  <div class="art">${cover}${cover?"":icon}<span class="sz">${fmt(i.size||0)}</span>${i.auto?`<span class="rb" title="разметил ИИ">🤖</span>`:""}
+   <div class="act"><button data-act="note" title="изменить описание">✎</button><button data-act="web" title="найти описание и скриншоты в интернете">🌐</button><button data-act="rv" title="показать в Проводнике">📂</button>${o.rm?`<button data-act="rmc" data-c="${o.rm}" title="убрать из коллекции">✕</button>`:""}</div></div>
+  ${shots}
+  <div class="meta"><b title="${esc(i.path)}">${esc(isg&&w.title?w.title:(i.name||bn(i.path)))}</b>
+   <div class="sub">${esc((i.colls||[]).join(", "))}${i.colls&&i.colls.length?" · ":""}${(w.genres||[]).length?esc(w.genres.join(" · ")):esc(bn(i.path))}</div>
+   ${desc?`<div class="ds" title="${esc(i.note||"")}">${esc(desc)}</div>`:`<div class="ds" style="color:var(--mut)">нет описания</div>`}
+   <div class="ctg">${shown.map(t=>`<span class="chip">${esc(t)} <a href="#" data-act="rmtag" data-t="${esc(t)}" title="убрать тег">✕</a></span>`).join("")}${tg.length>4?`<span class="chip" title="${esc(tg.slice(4).join(", "))}">+${tg.length-4}</span>`:""}<span class="chip" data-act="addtag" title="добавить тег">＋</span></div>
+   ${useLine(i)}</div></div>`}
 async function cardAct(e,find,done){const b=e.target.closest("[data-act]");if(!b)return false;e.preventDefault();e.stopPropagation();const tile=b.closest(".tile"),p=tile.dataset.p,i=find(p),act=b.dataset.act;if(!i)return true;
  const rm=tile.dataset.rm||undefined,redraw=()=>{tile.outerHTML=itemCard(rm?{...i,colls:[]}:i,{rm})};
  const save=async(tags,note)=>{const r=await api("/api/lib",{action:"tag",path:p,tags,note,size:i.size||0,dir:i.dir!==false});if(r&&r.ok===false)return alert(r.error||"не сохранилось");i.tags=tags;i.note=note;i.auto=false;redraw()};
