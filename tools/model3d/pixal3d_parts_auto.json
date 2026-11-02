@@ -1,8 +1,8 @@
 {
- "id": "0b886298-8442-4f99-8c8d-8e594159d2cf",
+ "id": "ef1aa910-ab20-4880-8cb0-0cb54d3805aa",
  "revision": 0,
- "last_node_id": 2018,
- "last_link_id": 4826,
+ "last_node_id": 2023,
+ "last_link_id": 4834,
  "nodes": [
   {
    "id": 3,
@@ -2836,7 +2836,7 @@
      "type": "IMAGE",
      "links": [
       1399,
-      4825
+      4829
      ]
     }
    ],
@@ -2890,7 +2890,7 @@
      "type": "IMAGE",
      "links": [
       1435,
-      4824
+      4826
      ]
     }
    ],
@@ -2944,7 +2944,7 @@
      "type": "IMAGE",
      "links": [
       1436,
-      4826
+      4832
      ]
     }
    ],
@@ -4320,22 +4320,22 @@
     {
      "name": "front",
      "type": "IMAGE",
-     "link": 4823
+     "link": 4825
     },
     {
      "name": "left",
      "type": "IMAGE",
-     "link": 4824
+     "link": 4828
     },
     {
      "name": "back",
      "type": "IMAGE",
-     "link": 4825
+     "link": 4831
     },
     {
      "name": "right",
      "type": "IMAGE",
-     "link": 4826
+     "link": 4834
     }
    ],
    "outputs": [
@@ -4360,6 +4360,205 @@
   },
   {
    "id": 2018,
+   "type": "UpscaleModelLoader",
+   "pos": [
+    4000,
+    1500
+   ],
+   "size": [
+    270,
+    60
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "UPSCALE_MODEL",
+     "type": "UPSCALE_MODEL",
+     "links": [
+      4824,
+      4827,
+      4830,
+      4833
+     ]
+    }
+   ],
+   "title": "upscale model",
+   "properties": {
+    "Node name for S&R": "UpscaleModelLoader"
+   },
+   "widgets_values": [
+    "4x-UltraSharp.pth"
+   ]
+  },
+  {
+   "id": 2019,
+   "type": "ImageUpscaleWithModel",
+   "pos": [
+    4300,
+    1300
+   ],
+   "size": [
+    250,
+    50
+   ],
+   "flags": {},
+   "order": 98,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "upscale_model",
+     "type": "UPSCALE_MODEL",
+     "link": 4824
+    },
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 4823
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      4825
+     ]
+    }
+   ],
+   "title": "4x front for the texture",
+   "properties": {
+    "Node name for S&R": "ImageUpscaleWithModel"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 2020,
+   "type": "ImageUpscaleWithModel",
+   "pos": [
+    4300,
+    1420
+   ],
+   "size": [
+    250,
+    50
+   ],
+   "flags": {},
+   "order": 98,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "upscale_model",
+     "type": "UPSCALE_MODEL",
+     "link": 4827
+    },
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 4826
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      4828
+     ]
+    }
+   ],
+   "title": "4x left for the texture",
+   "properties": {
+    "Node name for S&R": "ImageUpscaleWithModel"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 2021,
+   "type": "ImageUpscaleWithModel",
+   "pos": [
+    4300,
+    1540
+   ],
+   "size": [
+    250,
+    50
+   ],
+   "flags": {},
+   "order": 98,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "upscale_model",
+     "type": "UPSCALE_MODEL",
+     "link": 4830
+    },
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 4829
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      4831
+     ]
+    }
+   ],
+   "title": "4x back for the texture",
+   "properties": {
+    "Node name for S&R": "ImageUpscaleWithModel"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 2022,
+   "type": "ImageUpscaleWithModel",
+   "pos": [
+    4300,
+    1660
+   ],
+   "size": [
+    250,
+    50
+   ],
+   "flags": {},
+   "order": 98,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "upscale_model",
+     "type": "UPSCALE_MODEL",
+     "link": 4833
+    },
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 4832
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      4834
+     ]
+    }
+   ],
+   "title": "4x right for the texture",
+   "properties": {
+    "Node name for S&R": "ImageUpscaleWithModel"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 2023,
    "type": "Note",
    "pos": [
     -3900,
@@ -5266,29 +5465,93 @@
    4823,
    340,
    0,
+   2019,
+   1,
+   "IMAGE"
+  ],
+  [
+   4824,
+   2018,
+   0,
+   2019,
+   0,
+   "UPSCALE_MODEL"
+  ],
+  [
+   4825,
+   2019,
+   0,
    2017,
    3,
    "IMAGE"
   ],
   [
-   4824,
+   4826,
    344,
+   0,
+   2020,
+   1,
+   "IMAGE"
+  ],
+  [
+   4827,
+   2018,
+   0,
+   2020,
+   0,
+   "UPSCALE_MODEL"
+  ],
+  [
+   4828,
+   2020,
    0,
    2017,
    4,
    "IMAGE"
   ],
   [
-   4825,
+   4829,
    343,
+   0,
+   2021,
+   1,
+   "IMAGE"
+  ],
+  [
+   4830,
+   2018,
+   0,
+   2021,
+   0,
+   "UPSCALE_MODEL"
+  ],
+  [
+   4831,
+   2021,
    0,
    2017,
    5,
    "IMAGE"
   ],
   [
-   4826,
+   4832,
    346,
+   0,
+   2022,
+   1,
+   "IMAGE"
+  ],
+  [
+   4833,
+   2018,
+   0,
+   2022,
+   0,
+   "UPSCALE_MODEL"
+  ],
+  [
+   4834,
+   2022,
    0,
    2017,
    6,

@@ -125,11 +125,29 @@ def main():
     node_views["outputs"][9]["links"].append(lm)
     # the four views that go into Pixal3D (cropped, background removed) also go to the save node: it paints the texture
     save_inputs = []
+    upl = new_node()
+    nodes[upl] = {"id": upl, "type": "UpscaleModelLoader", "pos": [4000, 1500], "size": [270, 60], "flags": {}, "order": 0,
+                  "mode": 0, "inputs": [], "outputs": [{"name": "UPSCALE_MODEL", "type": "UPSCALE_MODEL", "links": []}],
+                  "title": "upscale model", "properties": {"Node name for S&R": "UpscaleModelLoader"},
+                  "widgets_values": ["4x-UltraSharp.pth"]}
     for inp in nodes[324]["inputs"]:
         if inp["name"] in ("front", "left", "back", "right"):
             src_link = links[inp["link"]]
-            lk = new_link(src_link[1], src_link[2], save, 3 + len(save_inputs), "IMAGE")
-            nodes[src_link[1]]["outputs"][src_link[2]]["links"].append(lk)
+            # 4x-UltraSharp: the views are 1024 px, a pore is about one pixel; the texture is painted from the 4096 px versions
+            up = new_node()
+            l_in = new_link(src_link[1], src_link[2], up, 1, "IMAGE")
+            nodes[src_link[1]]["outputs"][src_link[2]]["links"].append(l_in)
+            l_mod = new_link(upl, 0, up, 0, "UPSCALE_MODEL")
+            nodes[upl]["outputs"][0]["links"].append(l_mod)
+            nodes[up] = {"id": up, "type": "ImageUpscaleWithModel", "pos": [4300, 1300 + 120 * len(save_inputs)], "size": [250, 50],
+                         "flags": {}, "order": 98, "mode": 0,
+                         "inputs": [{"name": "upscale_model", "type": "UPSCALE_MODEL", "link": l_mod},
+                                    {"name": "image", "type": "IMAGE", "link": l_in}],
+                         "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": []}],
+                         "title": f"4x {inp['name']} for the texture", "properties": {"Node name for S&R": "ImageUpscaleWithModel"},
+                         "widgets_values": []}
+            lk = new_link(up, 0, save, 3 + len(save_inputs), "IMAGE")
+            nodes[up]["outputs"][0]["links"].append(lk)
             save_inputs.append({"name": inp["name"], "type": "IMAGE", "link": lk})
     nodes[save] = {"id": save, "type": "PDMPartSave", "pos": [4900, 1287], "size": [470, 420], "flags": {},
                    "order": 99, "mode": 0,

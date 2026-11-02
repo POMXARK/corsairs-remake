@@ -91,7 +91,7 @@ def paint(P, UV, tris, atlas, views, side, step=1):
             continue
         ax, ay = X[ok], Y[ok]
         for name, dv in dirs.items():
-            lim = 0.25 if name in ("front", "back") else 0.5  # the side views smear the nose, give them less
+            lim = 0.1 if name in ("front", "back") else 0.35  # the side views smear the nose, give them less
             w = np.clip((nrm @ np.array(dv) - lim) / 0.5, 0, 1) ** 2
             if w <= 0:
                 continue
@@ -127,7 +127,7 @@ def main():
         if best is None or err < best[0]:
             best = (err, side)
     acc, w = paint(P, UV, tris, atlas, views, best[1])
-    a = np.clip(w, 0, 1)[..., None]
+    a = np.clip(w * 3, 0, 1)[..., None]  # follow the views: they win wherever one of them sees the texel
     out = atlas * (1 - a) + acc / np.maximum(w, 1e-6)[..., None] * a
     buf = io.BytesIO()
     Image.fromarray(out.clip(0, 255).astype(np.uint8)).save(buf, format="PNG")
