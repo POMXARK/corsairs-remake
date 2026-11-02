@@ -315,22 +315,32 @@ _patch_flash_decode()
 
 
 class PDMPromptJoin:
-    """The prompt of the sheet + the tags that a VLM (QwenVL) read from the picture: nothing is typed by hand."""
+    """The prompt of the sheet + the tags that a VLM (QwenVL) read from each raw view: every cell gets its own list,
+    then they are joined into one prompt. Nothing is typed by hand."""
+
+    CELLS = (("front", "Top left (from the front)"), ("left", "Top right (from the left side)"),
+             ("back", "Bottom left (from the back)"), ("right", "Bottom right (from the right side)"))
 
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"prompt": ("STRING", {"forceInput": True}), "tags": ("STRING", {"forceInput": True})}}
+        return {"required": {"prompt": ("STRING", {"forceInput": True})},
+                "optional": {k: ("STRING", {"forceInput": True}) for k, _ in cls.CELLS}}
 
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("prompt",)
     FUNCTION = "join"
     CATEGORY = "pdm"
 
-    def join(self, prompt, tags):
-        tags = " ".join(str(tags).replace("\n", " ").split()).strip(" ,.")
-        if not tags:
+    def join(self, prompt, front="", left="", back="", right=""):
+        got = {"front": front, "left": left, "back": back, "right": right}
+        cells = []
+        for key, title in self.CELLS:
+            tags = " ".join(str(got[key] or "").replace("\n", " ").split()).strip(" ,.")
+            if tags:
+                cells.append(f"{title}: {tags}.")
+        if not cells:
             return (prompt,)
-        return (f"{prompt} Details that are in <image1> and must stay in every view: {tags}.",)
+        return (f"{prompt} What each cell of <image1> shows and must keep: {' '.join(cells)}",)
 
 
 NODE_CLASS_MAPPINGS = {"PDMPartViews": PDMPartViews, "PDMPartSave": PDMPartSave, "PDMSheetSplit": PDMSheetSplit, "PDMPromptJoin": PDMPromptJoin}

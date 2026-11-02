@@ -1,8 +1,8 @@
 {
- "id": "bdba81d4-e221-450f-82d4-91a956efceb3",
+ "id": "ca148b81-2701-4876-88a3-83a252c40e24",
  "revision": 0,
- "last_node_id": 2026,
- "last_link_id": 4838,
+ "last_node_id": 2029,
+ "last_link_id": 4844,
  "nodes": [
   {
    "id": 3,
@@ -2782,7 +2782,7 @@
      "type": "IMAGE",
      "links": [
       1389,
-      4827
+      4833
      ]
     }
    ],
@@ -2836,7 +2836,7 @@
      "type": "IMAGE",
      "links": [
       1399,
-      4833
+      4839
      ]
     }
    ],
@@ -2890,7 +2890,7 @@
      "type": "IMAGE",
      "links": [
       1435,
-      4830
+      4836
      ]
     }
    ],
@@ -2944,7 +2944,7 @@
      "type": "IMAGE",
      "links": [
       1436,
-      4836
+      4842
      ]
     }
    ],
@@ -3468,7 +3468,7 @@
      "name": "model_3d",
      "type": "FILE_3D",
      "links": [
-      4824
+      4830
      ]
     },
     {
@@ -3784,7 +3784,7 @@
      "widget": {
       "name": "prompt"
      },
-     "link": 4816
+     "link": 4822
     },
     {
      "label": "refine_prompt",
@@ -3862,7 +3862,7 @@
      "label": "image_1",
      "name": "images.image_1",
      "type": "IMAGE",
-     "link": 4817
+     "link": 4823
     },
     {
      "label": "image_2",
@@ -3933,7 +3933,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      4818
+      4824
      ]
     }
    ],
@@ -4019,28 +4019,32 @@
      "name": "front",
      "type": "IMAGE",
      "links": [
-      4819
+      4814,
+      4825
      ]
     },
     {
      "name": "left",
      "type": "IMAGE",
      "links": [
-      4820
+      4816,
+      4826
      ]
     },
     {
      "name": "back",
      "type": "IMAGE",
      "links": [
-      4821
+      4818,
+      4827
      ]
     },
     {
      "name": "right",
      "type": "IMAGE",
      "links": [
-      4822
+      4820,
+      4828
      ]
     },
     {
@@ -4067,14 +4071,14 @@
      "name": "part",
      "type": "STRING",
      "links": [
-      4825
+      4831
      ]
     },
     {
      "name": "model",
      "type": "STRING",
      "links": [
-      4826
+      4832
      ]
     },
     {
@@ -4086,15 +4090,14 @@
      "name": "sheet",
      "type": "IMAGE",
      "links": [
-      4813,
-      4817
+      4823
      ]
     },
     {
      "name": "prompt_sheet",
      "type": "STRING",
      "links": [
-      4814
+      4813
      ]
     }
    ],
@@ -4117,6 +4120,63 @@
   },
   {
    "id": 2012,
+   "type": "PDMPromptJoin",
+   "pos": [
+    -2900,
+    300
+   ],
+   "size": [
+    260,
+    140
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": 4813
+    },
+    {
+     "name": "front",
+     "type": "STRING",
+     "link": 4815
+    },
+    {
+     "name": "left",
+     "type": "STRING",
+     "link": 4817
+    },
+    {
+     "name": "back",
+     "type": "STRING",
+     "link": 4819
+    },
+    {
+     "name": "right",
+     "type": "STRING",
+     "link": 4821
+    }
+   ],
+   "outputs": [
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "links": [
+      4822,
+      4829
+     ]
+    }
+   ],
+   "title": "Prompt + tags of every view",
+   "properties": {
+    "Node name for S&R": "PDMPromptJoin"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 2013,
    "type": "AILab_QwenVL",
    "pos": [
     -3350,
@@ -4133,7 +4193,7 @@
     {
      "name": "image",
      "type": "IMAGE",
-     "link": 4813
+     "link": 4814
     }
    ],
    "outputs": [
@@ -4145,7 +4205,7 @@
      ]
     }
    ],
-   "title": "QwenVL: tags of the sheet",
+   "title": "QwenVL: tags of the front view",
    "properties": {
     "Node name for S&R": "AILab_QwenVL"
    },
@@ -4154,7 +4214,7 @@
     "8-bit (Balanced)",
     "auto",
     "Tags",
-    "List the key visible details of the subject in this picture as comma-separated tags, at most 25, most important first: hair (colour, length, style, anything hanging at the back such as a ponytail or braid), face shape, skin marks, eyebrows, eyes, nose, mouth, beard or stubble, ears, neck, headwear, jewellery, clothing, colours, materials. Only what really is in the picture. Ignore the background and the grid. No filler, no sentences.",
+    "List the key visible details of the subject in this one view as comma-separated tags, at most 25, most important first: hair (colour, length, style, anything hanging at the back such as a ponytail or braid), face shape, skin marks, eyebrows, eyes, nose, mouth, beard or stubble, ears, neck, headwear, jewellery, clothing, colours, materials. Only what really is in the picture. Ignore the background and the grid. No filler, no sentences.",
     250,
     false,
     1,
@@ -4162,49 +4222,145 @@
    ]
   },
   {
-   "id": 2013,
-   "type": "PDMPromptJoin",
+   "id": 2014,
+   "type": "AILab_QwenVL",
    "pos": [
-    -2900,
-    300
+    -3350,
+    660
    ],
    "size": [
-    260,
-    80
+    400,
+    330
    ],
    "flags": {},
-   "order": 2,
+   "order": 1,
    "mode": 0,
    "inputs": [
     {
-     "name": "prompt",
-     "type": "STRING",
-     "link": 4814
-    },
-    {
-     "name": "tags",
-     "type": "STRING",
-     "link": 4815
+     "name": "image",
+     "type": "IMAGE",
+     "link": 4816
     }
    ],
    "outputs": [
     {
-     "name": "prompt",
+     "name": "RESPONSE",
      "type": "STRING",
      "links": [
-      4816,
-      4823
+      4817
      ]
     }
    ],
-   "title": "Prompt + tags",
+   "title": "QwenVL: tags of the left view",
    "properties": {
-    "Node name for S&R": "PDMPromptJoin"
+    "Node name for S&R": "AILab_QwenVL"
    },
-   "widgets_values": []
+   "widgets_values": [
+    "Qwen3-VL-4B-Instruct",
+    "8-bit (Balanced)",
+    "auto",
+    "Tags",
+    "List the key visible details of the subject in this one view as comma-separated tags, at most 25, most important first: hair (colour, length, style, anything hanging at the back such as a ponytail or braid), face shape, skin marks, eyebrows, eyes, nose, mouth, beard or stubble, ears, neck, headwear, jewellery, clothing, colours, materials. Only what really is in the picture. Ignore the background and the grid. No filler, no sentences.",
+    250,
+    false,
+    1,
+    "fixed"
+   ]
   },
   {
-   "id": 2014,
+   "id": 2015,
+   "type": "AILab_QwenVL",
+   "pos": [
+    -3350,
+    1020
+   ],
+   "size": [
+    400,
+    330
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 4818
+    }
+   ],
+   "outputs": [
+    {
+     "name": "RESPONSE",
+     "type": "STRING",
+     "links": [
+      4819
+     ]
+    }
+   ],
+   "title": "QwenVL: tags of the back view",
+   "properties": {
+    "Node name for S&R": "AILab_QwenVL"
+   },
+   "widgets_values": [
+    "Qwen3-VL-4B-Instruct",
+    "8-bit (Balanced)",
+    "auto",
+    "Tags",
+    "List the key visible details of the subject in this one view as comma-separated tags, at most 25, most important first: hair (colour, length, style, anything hanging at the back such as a ponytail or braid), face shape, skin marks, eyebrows, eyes, nose, mouth, beard or stubble, ears, neck, headwear, jewellery, clothing, colours, materials. Only what really is in the picture. Ignore the background and the grid. No filler, no sentences.",
+    250,
+    false,
+    1,
+    "fixed"
+   ]
+  },
+  {
+   "id": 2016,
+   "type": "AILab_QwenVL",
+   "pos": [
+    -3350,
+    1380
+   ],
+   "size": [
+    400,
+    330
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 4820
+    }
+   ],
+   "outputs": [
+    {
+     "name": "RESPONSE",
+     "type": "STRING",
+     "links": [
+      4821
+     ]
+    }
+   ],
+   "title": "QwenVL: tags of the right view",
+   "properties": {
+    "Node name for S&R": "AILab_QwenVL"
+   },
+   "widgets_values": [
+    "Qwen3-VL-4B-Instruct",
+    "8-bit (Balanced)",
+    "auto",
+    "Tags",
+    "List the key visible details of the subject in this one view as comma-separated tags, at most 25, most important first: hair (colour, length, style, anything hanging at the back such as a ponytail or braid), face shape, skin marks, eyebrows, eyes, nose, mouth, beard or stubble, ears, neck, headwear, jewellery, clothing, colours, materials. Only what really is in the picture. Ignore the background and the grid. No filler, no sentences.",
+    250,
+    false,
+    1,
+    "fixed"
+   ]
+  },
+  {
+   "id": 2017,
    "type": "PDMSheetSplit",
    "pos": [
     -2960,
@@ -4221,7 +4377,7 @@
     {
      "name": "sheet",
      "type": "IMAGE",
-     "link": 4818
+     "link": 4824
     }
    ],
    "outputs": [
@@ -4265,7 +4421,7 @@
    "widgets_values": []
   },
   {
-   "id": 2015,
+   "id": 2018,
    "type": "PreviewImage",
    "pos": [
     -5000,
@@ -4282,7 +4438,7 @@
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 4819
+     "link": 4825
     }
    ],
    "outputs": [],
@@ -4293,7 +4449,7 @@
    "widgets_values": []
   },
   {
-   "id": 2016,
+   "id": 2019,
    "type": "PreviewImage",
    "pos": [
     -4750,
@@ -4310,7 +4466,7 @@
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 4820
+     "link": 4826
     }
    ],
    "outputs": [],
@@ -4321,7 +4477,7 @@
    "widgets_values": []
   },
   {
-   "id": 2017,
+   "id": 2020,
    "type": "PreviewImage",
    "pos": [
     -4500,
@@ -4338,7 +4494,7 @@
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 4821
+     "link": 4827
     }
    ],
    "outputs": [],
@@ -4349,7 +4505,7 @@
    "widgets_values": []
   },
   {
-   "id": 2018,
+   "id": 2021,
    "type": "PreviewImage",
    "pos": [
     -4250,
@@ -4366,7 +4522,7 @@
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 4822
+     "link": 4828
     }
    ],
    "outputs": [],
@@ -4377,7 +4533,7 @@
    "widgets_values": []
   },
   {
-   "id": 2019,
+   "id": 2022,
    "type": "PreviewAny",
    "pos": [
     -3900,
@@ -4394,7 +4550,7 @@
     {
      "name": "source",
      "type": "*",
-     "link": 4823
+     "link": 4829
     }
    ],
    "outputs": [],
@@ -4405,7 +4561,7 @@
    "widgets_values": []
   },
   {
-   "id": 2020,
+   "id": 2023,
    "type": "PDMPartSave",
    "pos": [
     4900,
@@ -4422,37 +4578,37 @@
     {
      "name": "mesh",
      "type": "FILE_3D",
-     "link": 4824
+     "link": 4830
     },
     {
      "name": "part",
      "type": "STRING",
-     "link": 4825
+     "link": 4831
     },
     {
      "name": "model",
      "type": "STRING",
-     "link": 4826
+     "link": 4832
     },
     {
      "name": "front",
      "type": "IMAGE",
-     "link": 4829
+     "link": 4835
     },
     {
      "name": "left",
      "type": "IMAGE",
-     "link": 4832
+     "link": 4838
     },
     {
      "name": "back",
      "type": "IMAGE",
-     "link": 4835
+     "link": 4841
     },
     {
      "name": "right",
      "type": "IMAGE",
-     "link": 4838
+     "link": 4844
     }
    ],
    "outputs": [
@@ -4476,7 +4632,7 @@
    ]
   },
   {
-   "id": 2021,
+   "id": 2024,
    "type": "UpscaleModelLoader",
    "pos": [
     4000,
@@ -4495,10 +4651,10 @@
      "name": "UPSCALE_MODEL",
      "type": "UPSCALE_MODEL",
      "links": [
-      4828,
-      4831,
       4834,
-      4837
+      4837,
+      4840,
+      4843
      ]
     }
    ],
@@ -4511,93 +4667,11 @@
    ]
   },
   {
-   "id": 2022,
+   "id": 2025,
    "type": "ImageUpscaleWithModel",
    "pos": [
     4300,
     1300
-   ],
-   "size": [
-    250,
-    50
-   ],
-   "flags": {},
-   "order": 98,
-   "mode": 0,
-   "inputs": [
-    {
-     "name": "upscale_model",
-     "type": "UPSCALE_MODEL",
-     "link": 4828
-    },
-    {
-     "name": "image",
-     "type": "IMAGE",
-     "link": 4827
-    }
-   ],
-   "outputs": [
-    {
-     "name": "IMAGE",
-     "type": "IMAGE",
-     "links": [
-      4829
-     ]
-    }
-   ],
-   "title": "4x front for the texture",
-   "properties": {
-    "Node name for S&R": "ImageUpscaleWithModel"
-   },
-   "widgets_values": []
-  },
-  {
-   "id": 2023,
-   "type": "ImageUpscaleWithModel",
-   "pos": [
-    4300,
-    1420
-   ],
-   "size": [
-    250,
-    50
-   ],
-   "flags": {},
-   "order": 98,
-   "mode": 0,
-   "inputs": [
-    {
-     "name": "upscale_model",
-     "type": "UPSCALE_MODEL",
-     "link": 4831
-    },
-    {
-     "name": "image",
-     "type": "IMAGE",
-     "link": 4830
-    }
-   ],
-   "outputs": [
-    {
-     "name": "IMAGE",
-     "type": "IMAGE",
-     "links": [
-      4832
-     ]
-    }
-   ],
-   "title": "4x left for the texture",
-   "properties": {
-    "Node name for S&R": "ImageUpscaleWithModel"
-   },
-   "widgets_values": []
-  },
-  {
-   "id": 2024,
-   "type": "ImageUpscaleWithModel",
-   "pos": [
-    4300,
-    1540
    ],
    "size": [
     250,
@@ -4627,18 +4701,18 @@
      ]
     }
    ],
-   "title": "4x back for the texture",
+   "title": "4x front for the texture",
    "properties": {
     "Node name for S&R": "ImageUpscaleWithModel"
    },
    "widgets_values": []
   },
   {
-   "id": 2025,
+   "id": 2026,
    "type": "ImageUpscaleWithModel",
    "pos": [
     4300,
-    1660
+    1420
    ],
    "size": [
     250,
@@ -4668,6 +4742,88 @@
      ]
     }
    ],
+   "title": "4x left for the texture",
+   "properties": {
+    "Node name for S&R": "ImageUpscaleWithModel"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 2027,
+   "type": "ImageUpscaleWithModel",
+   "pos": [
+    4300,
+    1540
+   ],
+   "size": [
+    250,
+    50
+   ],
+   "flags": {},
+   "order": 98,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "upscale_model",
+     "type": "UPSCALE_MODEL",
+     "link": 4840
+    },
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 4839
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      4841
+     ]
+    }
+   ],
+   "title": "4x back for the texture",
+   "properties": {
+    "Node name for S&R": "ImageUpscaleWithModel"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 2028,
+   "type": "ImageUpscaleWithModel",
+   "pos": [
+    4300,
+    1660
+   ],
+   "size": [
+    250,
+    50
+   ],
+   "flags": {},
+   "order": 98,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "upscale_model",
+     "type": "UPSCALE_MODEL",
+     "link": 4843
+    },
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 4842
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      4844
+     ]
+    }
+   ],
    "title": "4x right for the texture",
    "properties": {
     "Node name for S&R": "ImageUpscaleWithModel"
@@ -4675,7 +4831,7 @@
    "widgets_values": []
   },
   {
-   "id": 2026,
+   "id": 2029,
    "type": "Note",
    "pos": [
     -3900,
@@ -5356,7 +5512,7 @@
   ],
   [
    1385,
-   2014,
+   2017,
    0,
    192,
    1,
@@ -5364,7 +5520,7 @@
   ],
   [
    1387,
-   2014,
+   2017,
    0,
    312,
    0,
@@ -5388,7 +5544,7 @@
   ],
   [
    1391,
-   2014,
+   2017,
    1,
    348,
    1,
@@ -5396,7 +5552,7 @@
   ],
   [
    1392,
-   2014,
+   2017,
    1,
    349,
    0,
@@ -5412,7 +5568,7 @@
   ],
   [
    1396,
-   2014,
+   2017,
    2,
    351,
    1,
@@ -5428,7 +5584,7 @@
   ],
   [
    1398,
-   2014,
+   2017,
    2,
    350,
    0,
@@ -5444,7 +5600,7 @@
   ],
   [
    1400,
-   2014,
+   2017,
    3,
    353,
    1,
@@ -5460,7 +5616,7 @@
   ],
   [
    1402,
-   2014,
+   2017,
    3,
    352,
    0,
@@ -5501,208 +5657,256 @@
   [
    4813,
    2011,
-   11,
-   2012,
-   0,
-   "IMAGE"
-  ],
-  [
-   4814,
-   2011,
    12,
-   2013,
+   2012,
    0,
    "STRING"
   ],
   [
-   4815,
-   2012,
+   4814,
+   2011,
    0,
    2013,
+   0,
+   "IMAGE"
+  ],
+  [
+   4815,
+   2013,
+   0,
+   2012,
    1,
    "STRING"
   ],
   [
    4816,
-   2013,
-   0,
-   2000,
-   0,
-   "STRING"
-  ],
-  [
-   4817,
    2011,
-   11,
-   2000,
-   9,
-   "IMAGE"
-  ],
-  [
-   4818,
-   2000,
-   0,
+   1,
    2014,
    0,
    "IMAGE"
   ],
   [
-   4819,
-   2011,
+   4817,
+   2014,
    0,
+   2012,
+   2,
+   "STRING"
+  ],
+  [
+   4818,
+   2011,
+   2,
    2015,
    0,
    "IMAGE"
   ],
   [
+   4819,
+   2015,
+   0,
+   2012,
+   3,
+   "STRING"
+  ],
+  [
    4820,
    2011,
-   1,
+   3,
    2016,
    0,
    "IMAGE"
   ],
   [
    4821,
+   2016,
+   0,
+   2012,
+   4,
+   "STRING"
+  ],
+  [
+   4822,
+   2012,
+   0,
+   2000,
+   0,
+   "STRING"
+  ],
+  [
+   4823,
    2011,
-   2,
+   11,
+   2000,
+   9,
+   "IMAGE"
+  ],
+  [
+   4824,
+   2000,
+   0,
    2017,
    0,
    "IMAGE"
   ],
   [
-   4822,
+   4825,
    2011,
-   3,
+   0,
    2018,
    0,
    "IMAGE"
   ],
   [
-   4823,
-   2013,
-   0,
-   2019,
-   0,
-   "STRING"
-  ],
-  [
-   4824,
-   701,
-   0,
-   2020,
-   0,
-   "FILE_3D"
-  ],
-  [
-   4825,
-   2011,
-   8,
-   2020,
-   1,
-   "STRING"
-  ],
-  [
    4826,
    2011,
-   9,
-   2020,
-   2,
-   "STRING"
+   1,
+   2019,
+   0,
+   "IMAGE"
   ],
   [
    4827,
-   340,
+   2011,
+   2,
+   2020,
    0,
-   2022,
-   1,
    "IMAGE"
   ],
   [
    4828,
+   2011,
+   3,
    2021,
    0,
-   2022,
-   0,
-   "UPSCALE_MODEL"
+   "IMAGE"
   ],
   [
    4829,
+   2012,
+   0,
    2022,
    0,
-   2020,
-   3,
-   "IMAGE"
+   "STRING"
   ],
   [
    4830,
-   344,
+   701,
    0,
    2023,
-   1,
-   "IMAGE"
+   0,
+   "FILE_3D"
   ],
   [
    4831,
-   2021,
-   0,
+   2011,
+   8,
    2023,
-   0,
-   "UPSCALE_MODEL"
+   1,
+   "STRING"
   ],
   [
    4832,
+   2011,
+   9,
    2023,
-   0,
-   2020,
-   4,
-   "IMAGE"
+   2,
+   "STRING"
   ],
   [
    4833,
-   343,
+   340,
    0,
-   2024,
+   2025,
    1,
    "IMAGE"
   ],
   [
    4834,
-   2021,
-   0,
    2024,
+   0,
+   2025,
    0,
    "UPSCALE_MODEL"
   ],
   [
    4835,
-   2024,
+   2025,
    0,
-   2020,
-   5,
+   2023,
+   3,
    "IMAGE"
   ],
   [
    4836,
-   346,
+   344,
    0,
-   2025,
+   2026,
    1,
    "IMAGE"
   ],
   [
    4837,
-   2021,
+   2024,
    0,
-   2025,
+   2026,
    0,
    "UPSCALE_MODEL"
   ],
   [
    4838,
-   2025,
+   2026,
    0,
-   2020,
+   2023,
+   4,
+   "IMAGE"
+  ],
+  [
+   4839,
+   343,
+   0,
+   2027,
+   1,
+   "IMAGE"
+  ],
+  [
+   4840,
+   2024,
+   0,
+   2027,
+   0,
+   "UPSCALE_MODEL"
+  ],
+  [
+   4841,
+   2027,
+   0,
+   2023,
+   5,
+   "IMAGE"
+  ],
+  [
+   4842,
+   346,
+   0,
+   2028,
+   1,
+   "IMAGE"
+  ],
+  [
+   4843,
+   2024,
+   0,
+   2028,
+   0,
+   "UPSCALE_MODEL"
+  ],
+  [
+   4844,
+   2028,
+   0,
+   2023,
    6,
    "IMAGE"
   ]

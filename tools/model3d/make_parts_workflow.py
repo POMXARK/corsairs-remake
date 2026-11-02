@@ -16,7 +16,7 @@ LOADERS = {1140: 0, 1143: 1, 1144: 2, 1147: 3}  # LoadImage -> output of PDMPart
 REFINE = {1140: 2000, 1143: 2001, 1144: 2002, 1147: 2003}  # LoadImage -> its Refine subgraph node
 
 
-TAGS_PROMPT = ("List the key visible details of the subject in this picture as comma-separated tags, at most 25, most important first: "
+TAGS_PROMPT = ("List the key visible details of the subject in this one view as comma-separated tags, at most 25, most important first: "
                "hair (colour, length, style, anything hanging at the back such as a ponytail or braid), face shape, skin marks, "
                "eyebrows, eyes, nose, mouth, beard or stubble, ears, neck, headwear, jewellery, clothing, colours, materials. "
                "Only what really is in the picture. Ignore the background and the grid. No filler, no sentences.")
@@ -65,21 +65,24 @@ def main():
     i_img = next(i for i in n["inputs"] if i["name"] == "images.image_1")
     links.pop(i_prompt["link"], None)
     links.pop(i_img["link"], None)
-    # the VLM (QwenVL, Qwen3-VL-4B) reads the tags of the raw sheet itself: hair, tail, beard, marks - nothing is typed by hand
-    vlm, join = new_node(), new_node()
-    nodes[vlm] = {"id": vlm, "type": "AILab_QwenVL", "pos": [-3350, 300], "size": [400, 330], "flags": {}, "order": 1, "mode": 0,
-                  "inputs": [{"name": "image", "type": "IMAGE", "link": new_link(views, 11, vlm, 0, "IMAGE")}],
-                  "outputs": [{"name": "RESPONSE", "type": "STRING", "links": []}],
-                  "title": "QwenVL: tags of the sheet", "properties": {"Node name for S&R": "AILab_QwenVL"},
-                  "widgets_values": ["Qwen3-VL-4B-Instruct", "8-bit (Balanced)", "auto", "Tags", TAGS_PROMPT, 250, False, 1, "fixed"]}
-    node_views["outputs"][11]["links"].append(lid)
-    nodes[join] = {"id": join, "type": "PDMPromptJoin", "pos": [-2900, 300], "size": [260, 80], "flags": {}, "order": 2, "mode": 0,
-                   "inputs": [{"name": "prompt", "type": "STRING", "link": new_link(views, 12, join, 0, "STRING")},
-                              {"name": "tags", "type": "STRING", "link": new_link(vlm, 0, join, 1, "STRING")}],
+    # the VLM (QwenVL, Qwen3-VL-4B) reads the tags of every raw view by itself (the tail is seen only from the side/back),
+    # PDMPromptJoin joins the four lists into the prompt of the sheet - nothing is typed by hand
+    join = new_node()
+    nodes[join] = {"id": join, "type": "PDMPromptJoin", "pos": [-2900, 300], "size": [260, 140], "flags": {}, "order": 2, "mode": 0,
+                   "inputs": [{"name": "prompt", "type": "STRING", "link": new_link(views, 12, join, 0, "STRING")}],
                    "outputs": [{"name": "prompt", "type": "STRING", "links": []}],
-                   "title": "Prompt + tags", "properties": {"Node name for S&R": "PDMPromptJoin"}, "widgets_values": []}
-    node_views["outputs"][12]["links"].append(lid - 1)
-    nodes[vlm]["outputs"][0]["links"].append(lid)
+                   "title": "Prompt + tags of every view", "properties": {"Node name for S&R": "PDMPromptJoin"}, "widgets_values": []}
+    node_views["outputs"][12]["links"].append(lid)
+    for i, v in enumerate(("front", "left", "back", "right")):
+        vlm = new_node()
+        nodes[vlm] = {"id": vlm, "type": "AILab_QwenVL", "pos": [-3350, 300 + i * 360], "size": [400, 330], "flags": {}, "order": 1, "mode": 0,
+                      "inputs": [{"name": "image", "type": "IMAGE", "link": new_link(views, i, vlm, 0, "IMAGE")}],
+                      "outputs": [{"name": "RESPONSE", "type": "STRING", "links": []}],
+                      "title": f"QwenVL: tags of the {v} view", "properties": {"Node name for S&R": "AILab_QwenVL"},
+                      "widgets_values": ["Qwen3-VL-4B-Instruct", "8-bit (Balanced)", "auto", "Tags", TAGS_PROMPT, 250, False, 1, "fixed"]}
+        node_views["outputs"][i]["links"].append(lid)
+        nodes[join]["inputs"].append({"name": v, "type": "STRING", "link": new_link(vlm, 0, join, i + 1, "STRING")})
+        nodes[vlm]["outputs"][0]["links"].append(lid)
     i_prompt["link"] = new_link(join, 0, main, n["inputs"].index(i_prompt), "STRING")
     nodes[join]["outputs"][0]["links"].append(lid)
     i_img["link"] = new_link(views, 11, main, n["inputs"].index(i_img), "IMAGE")
