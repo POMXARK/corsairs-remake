@@ -1,5 +1,5 @@
 {
- "id": "92a2cf08-c6d3-4863-b683-bcab9132e293",
+ "id": "4e4a215f-4f4d-4c20-8f43-e819fb7b0e6a",
  "revision": 0,
  "last_node_id": 2017,
  "last_link_id": 4825,
@@ -1228,6 +1228,107 @@
     "target_face_count": 700000,
     "placement_mode": "midpoint"
    }
+  },
+  {
+   "id": 192,
+   "type": "RemoveBackground",
+   "pos": [
+    -2580,
+    370
+   ],
+   "size": [
+    230,
+    80
+   ],
+   "flags": {
+    "collapsed": false
+   },
+   "order": 28,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "bg_removal_model",
+     "type": "BACKGROUND_REMOVAL",
+     "link": 887
+    },
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 1385
+    }
+   ],
+   "outputs": [
+    {
+     "name": "mask",
+     "type": "MASK",
+     "links": [
+      1369
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.33.0",
+    "Node name for S&R": "RemoveBackground",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "version": "7.7",
+     "input_ue_unconnectable": {}
+    }
+   }
+  },
+  {
+   "id": 193,
+   "type": "LoadBackgroundRemovalModel",
+   "pos": [
+    -2870,
+    180
+   ],
+   "size": [
+    330,
+    90
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "bg_model",
+     "type": "BACKGROUND_REMOVAL",
+     "links": [
+      887,
+      1372,
+      1376,
+      1384
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.33.0",
+    "Node name for S&R": "LoadBackgroundRemovalModel",
+    "models": [
+     {
+      "name": "birefnet.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors",
+      "directory": "background_removal"
+     }
+    ],
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "version": "7.7",
+     "input_ue_unconnectable": {}
+    }
+   },
+   "widgets_values": [
+    "birefnet.safetensors"
+   ],
+   "widgets_values_named": {
+    "bg_removal_name": "birefnet.safetensors"
+   },
+   "color": "#322",
+   "bgcolor": "#533"
   },
   {
    "id": 196,
@@ -2867,6 +2968,54 @@
    }
   },
   {
+   "id": 348,
+   "type": "RemoveBackground",
+   "pos": [
+    -2600,
+    800
+   ],
+   "size": [
+    230,
+    80
+   ],
+   "flags": {
+    "collapsed": false
+   },
+   "order": 29,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "bg_removal_model",
+     "type": "BACKGROUND_REMOVAL",
+     "link": 1372
+    },
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 1391
+    }
+   ],
+   "outputs": [
+    {
+     "name": "mask",
+     "type": "MASK",
+     "links": [
+      1370
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.33.0",
+    "Node name for S&R": "RemoveBackground",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "version": "7.7",
+     "input_ue_unconnectable": {}
+    }
+   }
+  },
+  {
    "id": 349,
    "type": "ImageCropToMask",
    "pos": [
@@ -2989,6 +3138,54 @@
    }
   },
   {
+   "id": 351,
+   "type": "RemoveBackground",
+   "pos": [
+    -2600,
+    1240
+   ],
+   "size": [
+    230,
+    80
+   ],
+   "flags": {
+    "collapsed": false
+   },
+   "order": 30,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "bg_removal_model",
+     "type": "BACKGROUND_REMOVAL",
+     "link": 1376
+    },
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 1396
+    }
+   ],
+   "outputs": [
+    {
+     "name": "mask",
+     "type": "MASK",
+     "links": [
+      1374
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.33.0",
+    "Node name for S&R": "RemoveBackground",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "version": "7.7",
+     "input_ue_unconnectable": {}
+    }
+   }
+  },
+  {
    "id": 352,
    "type": "ImageCropToMask",
    "pos": [
@@ -3047,6 +3244,54 @@
     "pad_factor": 1.1,
     "grow_mask": 0,
     "background": "#000000"
+   }
+  },
+  {
+   "id": 353,
+   "type": "RemoveBackground",
+   "pos": [
+    -2600,
+    1680
+   ],
+   "size": [
+    230,
+    80
+   ],
+   "flags": {
+    "collapsed": false
+   },
+   "order": 31,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "bg_removal_model",
+     "type": "BACKGROUND_REMOVAL",
+     "link": 1384
+    },
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 1400
+    }
+   ],
+   "outputs": [
+    {
+     "name": "mask",
+     "type": "MASK",
+     "links": [
+      1378
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.33.0",
+    "Node name for S&R": "RemoveBackground",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "version": "7.7",
+     "input_ue_unconnectable": {}
+    }
    }
   },
   {
@@ -3684,6 +3929,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
+      1385,
       1387,
       4817,
       4818
@@ -3925,6 +4171,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
+      1391,
       1392
      ]
     }
@@ -4164,6 +4411,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
+      1396,
       1398
      ]
     }
@@ -4403,6 +4651,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
+      1400,
       1402
      ]
     }
@@ -4563,34 +4812,6 @@
      "name": "info",
      "type": "STRING",
      "links": []
-    },
-    {
-     "name": "mask_front",
-     "type": "MASK",
-     "links": [
-      1369
-     ]
-    },
-    {
-     "name": "mask_left",
-     "type": "MASK",
-     "links": [
-      1370
-     ]
-    },
-    {
-     "name": "mask_back",
-     "type": "MASK",
-     "links": [
-      1374
-     ]
-    },
-    {
-     "name": "mask_right",
-     "type": "MASK",
-     "links": [
-      1378
-     ]
     }
    ],
    "title": "PDM Part Views: the part comes by itself (Batch count 6)",
@@ -4987,6 +5208,14 @@
    147,
    1,
    "VOXEL"
+  ],
+  [
+   887,
+   193,
+   0,
+   192,
+   0,
+   "BACKGROUND_REMOVAL"
   ],
   [
    900,
@@ -5390,35 +5619,67 @@
   ],
   [
    1369,
-   2011,
-   11,
+   192,
+   0,
    312,
    1,
    "MASK"
   ],
   [
    1370,
-   2011,
-   12,
+   348,
+   0,
    349,
    1,
    "MASK"
   ],
   [
+   1372,
+   193,
+   0,
+   348,
+   0,
+   "BACKGROUND_REMOVAL"
+  ],
+  [
    1374,
-   2011,
-   13,
+   351,
+   0,
    350,
    1,
    "MASK"
   ],
   [
+   1376,
+   193,
+   0,
+   351,
+   0,
+   "BACKGROUND_REMOVAL"
+  ],
+  [
    1378,
-   2011,
-   14,
+   353,
+   0,
    352,
    1,
    "MASK"
+  ],
+  [
+   1384,
+   193,
+   0,
+   353,
+   0,
+   "BACKGROUND_REMOVAL"
+  ],
+  [
+   1385,
+   2000,
+   0,
+   192,
+   1,
+   "IMAGE"
   ],
   [
    1387,
@@ -5445,6 +5706,14 @@
    "IMAGE"
   ],
   [
+   1391,
+   2001,
+   0,
+   348,
+   1,
+   "IMAGE"
+  ],
+  [
    1392,
    2001,
    0,
@@ -5458,6 +5727,14 @@
    0,
    344,
    0,
+   "IMAGE"
+  ],
+  [
+   1396,
+   2002,
+   0,
+   351,
+   1,
    "IMAGE"
   ],
   [
@@ -5482,6 +5759,14 @@
    0,
    324,
    3,
+   "IMAGE"
+  ],
+  [
+   1400,
+   2003,
+   0,
+   353,
+   1,
    "IMAGE"
   ],
   [

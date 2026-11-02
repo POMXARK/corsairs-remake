@@ -36,8 +36,7 @@ def main():
     views = new_node()
     outs = [("front", "IMAGE"), ("left", "IMAGE"), ("back", "IMAGE"), ("right", "IMAGE"),
             ("prompt_front", "STRING"), ("prompt_left", "STRING"), ("prompt_back", "STRING"), ("prompt_right", "STRING"),
-            ("part", "STRING"), ("model", "STRING"), ("info", "STRING"),
-            ("mask_front", "MASK"), ("mask_left", "MASK"), ("mask_back", "MASK"), ("mask_right", "MASK")]
+            ("part", "STRING"), ("model", "STRING"), ("info", "STRING")]
     node_views = {"id": views, "type": "PDMPartViews", "pos": [-3900, 300], "size": [470, 520], "flags": {},
                   "order": 0, "mode": 0, "inputs": [],
                   "outputs": [{"name": n, "type": t, "links": []} for n, t in outs],
@@ -51,26 +50,6 @@ def main():
                 l[1], l[2] = views, slot
                 node_views["outputs"][slot]["links"].append(l[0])
         del nodes[old]
-    # the silhouette of the part is known from the render: it replaces the background removal (BiRefNet), so what Qwen
-    # draws outside of it (a grey neck, shoulders) is cut away at once
-    by_refine = {ref: LOADERS[old] for old, ref in REFINE.items()}
-    for rb in [n for n in nodes.values() if n["type"] == "RemoveBackground"]:
-        src = links[next(i for i in rb["inputs"] if i["name"] == "image")["link"]][1]
-        slot = 11 + by_refine[src]
-        for l in list(links.values()):
-            if l[1] == rb["id"]:
-                l[1], l[2] = views, slot
-                node_views["outputs"][slot]["links"].append(l[0])
-        for i in rb["inputs"]:
-            if i["link"] is not None:
-                links.pop(i["link"], None)
-        del nodes[rb["id"]]
-    for n in list(nodes.values()):  # the loader of the removed nodes and the links that went away with them
-        for o in n.get("outputs", []):
-            if o.get("links"):
-                o["links"] = [x for x in o["links"] if x in links]
-        if n["type"] == "LoadBackgroundRemovalModel" and not n["outputs"][0]["links"]:
-            del nodes[n["id"]]
     # prompts of the refine nodes come from the part
     for old, ref in REFINE.items():
         slot = 4 + LOADERS[old]
