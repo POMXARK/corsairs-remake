@@ -1051,14 +1051,21 @@ def ask(q, model):
     index()
     ql = q.lower()
     hits = []
+    cards, tf, _, df, _ = index()
+    ctok = {t for col in LIB["collections"] for t in toks(col["name"])}
+    strong = [t for t in query_toks(q) if t not in STOP and t not in ctok and df.get(t, 0) and df[t] <= max(2, 0.2 * len(cards))]
     for col in LIB["collections"]:
-        if col["name"].lower() in ql:
+        if not strong and col["name"].lower() in ql:
             have = {c["path"]: c for c in all_cards()}
             hits += [have[it["path"]] for it in col["items"] if it["path"] in have]
-    for c in search(q, 8):
+    pool = search(q, 40 if strong else 8)
+    if strong:
+        pos = {id(c): i for i, c in enumerate(cards)}
+        pool = [c for c in pool if any(tf[pos[id(c)]].get(t) for t in strong)]
+    for c in pool:
         if c not in hits:
             hits.append(c)
-    hits = [c for c in hits if not any(h is not c and h["path"] in LIB["tags"] and under(c["path"], h["path"]) and c["path"] != h["path"] for h in hits)][:14]
+    hits = [c for c in hits if not any(h is not c and h["path"] in LIB["tags"] and under(c["path"], h["path"]) and c["path"] != h["path"] for h in hits)][:10]
     dp = None
     if re.search(r"дубл|повтор|одинаков", ql):
         words = [w for w in re.findall(r"[^\W_]+", ql) if len(w) >= 2 and toks(w)[0] not in STOP and not w.startswith(("дубл", "повтор"))]
@@ -1074,7 +1081,8 @@ def ask(q, model):
     prompt = ("Ты помощник по данным на компьютере пользователя. Ниже карточки папок (метаданные: размер, даты, типы, "
               "программа, теги, заметки, описание из интернета). Отвечай по-русски, коротко, ТОЛЬКО по этим карточкам, называй полные пути "
               "и выбирай только те, что действительно подходят под вопрос (смотри описание и жанры, а не только названия); "
-              "если подходящих нет, так и скажи. Не показывай рассуждений. "
+              "если подходящих нет, так и скажи. Не показывай рассуждений и не перечисляй неподходящие. "
+              "Формат: список «путь — почему подходит» одной короткой фразой, без вступления. "
               "Не выдумывай: если данных не хватает, скажи. Про удаление советуй осторожно: сначала архив или корзина.\n\n"
               "Карточки:\n%s\n%s\nВопрос: %s\nОтвет:") % (
         "\n".join(card_line(c) for c in hits),
@@ -2117,7 +2125,8 @@ async function rLib(){await libLoad();const m=$("#main");
  say("Помощник","Я ищу по карточкам папок (названия, типы файлов, даты, программа, ваши теги и заметки) и отвечаю через локальную модель. Содержимое файлов не читается.");
  const go=async()=>{const q=$("#q").value.trim();if(!q)return;$("#q").value="";say("Вы",esc(q));const w=say("Помощник","думаю…");
   const r=await api("/api/ask",{q,model:$("#model").value});
-  let ah=esc(r.answer);[...r.sources].sort((a,b)=>b.path.length-a.path.length).forEach(c=>{const e=esc(c.path);ah=ah.split(e).join(`<a href="#" class="pl" data-rvp="${e}" title="показать в Проводнике">${e}</a>`)});
+  const ps=[...r.sources].map(c=>esc(c.path)).sort((x,y)=>y.length-x.length),rx=ps.length?new RegExp(ps.map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|"),"g"):null;
+  let ah=esc(r.answer);if(rx)ah=ah.replace(rx,m=>`<a href="#" class="pl" data-rvp="${m}" title="показать в Проводнике">${m}</a>`);
   w.lastChild.innerHTML=ah.replace(/\n/g,"<br>")+(r.sources.length?`<div style="margin-top:6px;color:var(--mut)">Источники:</div>`+r.sources.map((c,i)=>`<div class="r" data-i="${i}" style="cursor:pointer;padding-left:8px"><a href="#" data-rvp="${esc(c.path)}" title="показать в Проводнике">📂</a> ${esc(c.path)} · ${fmt(c.size)} ${(c.tags||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join("")}</div>`).join(""):"");
   if(r.dups){w.lastChild.innerHTML+=`<div style="margin-top:8px"><b>Дубликаты:</b> групп ${r.dups.count}, лишних ${fmt(r.dups.wasted)}<div style="color:var(--mut)">${esc(r.dups.note)}</div>`+r.dups.groups.slice(0,30).map(g=>`<div style="margin:6px 0"><b>${fmt(g.size)} × ${g.paths.length}</b>`+g.paths.map(p=>`<div class="r" data-dp="${esc(p)}" data-sz="${g.size}" style="cursor:pointer;padding-left:8px">📄 ${esc(p)}</div>`).join("")+`</div>`).join("")+`</div>`}
   w.onclick=async e=>{const rv=e.target.closest("[data-rvp]");if(rv){e.preventDefault();const x=await api("/api/reveal",{path:rv.dataset.rvp});if(!x.ok)alert("Не удалось открыть Проводник");return}const dpe=e.target.closest("[data-dp]");if(dpe){pick({path:dpe.dataset.dp,name:dpe.dataset.dp,size:+dpe.dataset.sz,dir:false,risk:0,tags:[]});return}
