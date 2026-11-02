@@ -1071,6 +1071,7 @@ nav{display:flex;gap:2px;padding:6px 12px 0}nav button{border-bottom:none;border
 main{flex:1;overflow:auto;position:relative;border-top:1px solid var(--line)}
 table{border-collapse:collapse;width:100%}th,td{padding:2px 8px;white-space:nowrap;text-align:right}th:first-child,td:first-child{text-align:left}
 th{position:sticky;top:0;background:var(--pan);border-bottom:1px solid var(--line);font-weight:600}
+th{cursor:pointer;user-select:none;position:sticky}th .rz{position:absolute;right:0;top:0;bottom:0;width:6px;cursor:col-resize}th .rz:hover,th .rz.on{background:var(--acc);opacity:.5}table.fx{table-layout:fixed;width:auto}table.fx td,table.fx th{overflow:hidden;text-overflow:ellipsis}table.fx td.nm{max-width:none}
 tr.r:hover{background:var(--pan)}tr.sel{background:var(--sel)!important}
 td.nm{max-width:520px;overflow:hidden;text-overflow:ellipsis}.tg{display:inline-block;width:16px;color:var(--mut);cursor:pointer}
 .bar{display:inline-block;height:9px;background:var(--acc);opacity:.6;vertical-align:middle;border-radius:2px}
@@ -1177,8 +1178,26 @@ $("#rm").onclick=async()=>{if(!sel)return;const nm=sel.path.split(sep).filter(Bo
 $("#rev").onclick=()=>sel&&api("/api/reveal",{path:sel.path});
 $("#cp").onclick=()=>sel&&navigator.clipboard.writeText(sel.path);
 $("#tomap").onclick=()=>{if(sel&&sel.dir){mapPath=sel.path;document.querySelector('nav [data-v=map]').click()}};
+// ---- сортировка по колонке и ширина колонок мышью
+const UNIT={"B":1,"Б":1,"KB":1024,"КБ":1024,"MB":1048576,"МБ":1048576,"GB":1073741824,"ГБ":1073741824,"TB":1099511627776,"ТБ":1099511627776};
+function pv(t){t=t.replace(/^[^\p{L}\p{N}]+/u,"").trim();let m=t.match(/^([\d.]+)\s*(B|KB|MB|GB|TB|Б|КБ|МБ|ГБ|ТБ)$/);if(m)return parseFloat(m[1])*UNIT[m[2]];
+ if(/^[\d\s\u00a0,]+$/.test(t))return parseInt(t.replace(/[\s\u00a0,]/g,""),10);if(/^[\d.]+\s*%$/.test(t))return parseFloat(t);return t.toLowerCase()}
+const cmpv=(a,b)=>typeof a=="number"&&typeof b=="number"?a-b:typeof a=="number"?-1:typeof b=="number"?1:a<b?-1:a>b?1:0;
+function resort(tb){const T=tb.closest("table"),st=T._s;if(!st)return;const rows=[...tb.rows],get=r=>pv(r.cells[st.c]?r.cells[st.c].textContent:"");
+ const cmp=(a,b)=>((a.r.n&&a.r.n.misc?1:0)-(b.r.n&&b.r.n.misc?1:0))||st.d*cmpv(get(a.r),get(b.r));
+ if(rows.length&&rows[0].lvl!==undefined){const root=[],stk=[{l:-1,k:root}];for(const r of rows){while(stk[stk.length-1].l>=r.lvl)stk.pop();const o={r,k:[]};stk[stk.length-1].k.push(o);stk.push({l:r.lvl,k:o.k})}
+  const out=[],walk=ns=>{ns.sort(cmp);for(const o of ns){out.push(o.r);walk(o.k)}};walk(root);out.forEach(r=>tb.appendChild(r))}
+ else rows.map(r=>({r})).sort(cmp).forEach(o=>tb.appendChild(o.r))}
+function enhance(T){const tb=T.tBodies[0],ths=[...T.tHead.rows[0].cells];
+ ths.forEach((th,i)=>{th.insertAdjacentHTML("beforeend",'<span class="ar"></span><span class="rz"></span>');
+  th.onclick=e=>{if(e.target.classList.contains("rz"))return;const st=T._s;T._s={c:i,d:st&&st.c==i?-st.d:(i==0?1:-1)};ths.forEach(x=>x.querySelector(".ar").textContent="");th.querySelector(".ar").textContent=T._s.d>0?" ▲":" ▼";resort(tb)};
+  th.querySelector(".rz").onmousedown=e=>{e.preventDefault();e.stopPropagation();if(!T.classList.contains("fx")){const w=ths.map(x=>x.offsetWidth);T.classList.add("fx");ths.forEach((x,j)=>x.style.width=w[j]+"px");T.style.width=w.reduce((a,b)=>a+b,0)+"px"}
+   const x0=e.clientX,w0=th.offsetWidth,t0=parseFloat(T.style.width),h=th.querySelector(".rz");h.classList.add("on");
+   const mv=ev=>{const w=Math.max(30,w0+ev.clientX-x0);T.style.width=t0+w-w0+"px";th.style.width=w+"px"};
+   const up=()=>{h.classList.remove("on");document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up)};
+   document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up)}})}
 // ---- дерево
-async function rTree(){const m=$("#main");m.innerHTML=`<table><thead><tr><th>Имя<th>Размер<th>% от родителя<th>Файлов<th>Создан<th>Изменён<th>Доступ<th>Теги</thead><tbody id="tb"></tbody></table>`;
+async function rTree(){const m=$("#main");m.innerHTML=`<table><thead><tr><th>Имя<th>Размер<th>% от родителя<th>Файлов<th>Создан<th>Изменён<th>Доступ<th>Теги</thead><tbody id="tb"></tbody></table>`;enhance(m.querySelector("table"));
  const d=await api("/api/children?path="+encodeURIComponent(rootPath));addRows($("#tb"),d.children,0,d.node.size,null)}
 function addRows(tb,items,lvl,psize,after){let prev=after;for(const n of items){const tr=document.createElement("tr");tr.className="r";tr.n=n;tr.lvl=lvl;
  const pct=psize?n.size/psize*100:0,f=fi();
@@ -1188,7 +1207,7 @@ function addRows(tb,items,lvl,psize,after){let prev=after;for(const n of items){
  if(prev)prev.after(tr);else tb.appendChild(tr);prev=tr}}
 async function toggle(tr){const n=tr.n;if(!n.dir||!n.files)return;const tg=tr.querySelector(".tg");
  if(tr.open){let nx=tr.nextSibling;while(nx&&nx.lvl>tr.lvl){const x=nx;nx=nx.nextSibling;x.remove()}tr.open=false;tg.textContent="▸";return}
- const d=await api("/api/children?path="+encodeURIComponent(n.path)+"&limit=200");addRows(tr.parentNode,d.children,tr.lvl+1,n.size,tr);tr.open=true;tg.textContent="▾"}
+ const d=await api("/api/children?path="+encodeURIComponent(n.path)+"&limit=200");addRows(tr.parentNode,d.children,tr.lvl+1,n.size,tr);resort(tr.parentNode);tr.open=true;tg.textContent="▾"}
 // ---- карта
 async function rMap(){const m=$("#main");m.innerHTML=`<div id="crumb"></div><canvas id="tm"></canvas>`;const cv=$("#tm");cv.width=m.clientWidth;cv.height=m.clientHeight;
  const d=await api("/api/children?path="+encodeURIComponent(mapPath)+"&limit=300");const ctx=cv.getContext("2d");
@@ -1216,7 +1235,7 @@ async function rOld(){const m=$("#main");m.innerHTML=`<div style="padding:8px 12
  let items=[];const run=async()=>{const d=await api(`/api/stale?field=${$("#field").value}&years=${$("#yrs").value}&min=${$("#mn").value}`);items=d.items;
   $("#sum").textContent=`найдено ${d.count}, всего ${fmt(d.total)}`;
   $("#ot").innerHTML=`<table><thead><tr><th>Путь<th>Размер<th>Что внутри<th>Программа<th>Совет<th>Создан<th>Изменён<th>Доступ<th>Теги</thead><tbody>`+items.map((n,i)=>`<tr class="r" data-i="${i}"><td class="nm" title="${esc(n.path)}">${n.dir?"📁":"📄"} ${esc(n.path)}<td>${fmt(n.size)}<td class="wr">${n.cats.map(c=>c[0]+" "+fmt(c[1])).join(", ")}<td class="wr">${esc(n.prog)}<td class="rk rk${n.risk}">${RK[n.risk]}<td>${dt(n.t[0])}<td>${dt(n.t[1])}<td>${dt(n.t[2])}<td class="wr">${tg(n)}`).join("")+`</tbody></table>`;
-  $("#ot").onclick=e=>{const tr=e.target.closest("tr.r");if(!tr)return;document.querySelectorAll("tr.sel").forEach(x=>x.classList.remove("sel"));tr.classList.add("sel");pick(items[tr.dataset.i])}};
+  enhance($("#ot").querySelector("table"));$("#ot").onclick=e=>{const tr=e.target.closest("tr.r");if(!tr)return;document.querySelectorAll("tr.sel").forEach(x=>x.classList.remove("sel"));tr.classList.add("sel");pick(items[tr.dataset.i])}};
  $("#csv").onclick=()=>{const q=v=>`"${String(v).replace(/"/g,'""')}"`;const t="путь;размер_байт;что_внутри;программа;совет;создан;изменён;доступ\n"+items.map(n=>[q(n.path),n.size,q(n.cats.map(c=>c[0]).join(", ")),q(n.prog),RK[n.risk],dt(n.t[0]),dt(n.t[1]),dt(n.t[2])].join(";")).join("\n");
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+t],{type:"text/csv"}));a.download="dead-folders.csv";a.click()};
  $("#ap").onclick=run;run()}
