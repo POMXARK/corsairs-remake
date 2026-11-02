@@ -506,8 +506,38 @@ def models():
     return list_models(profile())
 
 
+PRIV_DEF = {"offline": False, "auto_words": True, "tags": ["видео", "18+", "личное", "приватное", "private", "adult", "nsfw"], "paths": []}
+ADULT = ("porn", "xxx", "hentai", "nsfw", "onlyfans", "erotic", "nude", "adult", "порно", "хентай", "эрот", "секс", "голы", "18")
+
+
+def priv():
+    p = CFG.setdefault("privacy", {})
+    return {k: p.get(k, v) for k, v in PRIV_DEF.items()}
+
+
+def web_blocked(path, q=""):
+    """Причина, по которой в интернет по этому пути ходить нельзя, или пустая строка."""
+    p = priv()
+    if p["offline"]:
+        return "включён режим «без интернета» (⚙ Приватность)"
+    if not path:
+        return ""
+    if any(path.lower().rstrip("\\/").startswith(x.lower().rstrip("\\/")) for x in p["paths"] if x.strip()):
+        return "папка в списке исключений (⚙ Приватность)"
+    tg = LIB["tags"].get(path, {})
+    names = [t.lower() for t in tg.get("tags", [])] + [n.lower() for n in _PCOLL.get(path, [])]
+    bad = {x.strip().lower() for x in p["tags"] if x.strip()}
+    if any(n in bad for n in names):
+        return "у папки тег/коллекция из списка исключений (⚙ Приватность)"
+    if p["auto_words"]:
+        for w in re.findall(r"[^\W_]+", (os.path.basename(path.rstrip("\\/")) + " " + (q or "")).lower()):
+            if any(w == a or (len(a) > 3 and w.startswith(a)) for a in ADULT):
+                return "в названии есть слово из автофильтра (⚙ Приватность)"
+    return ""
+
+
 def cfg_public():
-    return {"active": CFG["active"], "profiles": [dict(p, key="***" if p.get("key") else "") for p in CFG["profiles"]]}
+    return {"active": CFG["active"], "profiles": [dict(p, key="***" if p.get("key") else "") for p in CFG["profiles"]], "privacy": priv()}
 
 
 def cfg_action(b):
@@ -531,6 +561,12 @@ def cfg_action(b):
             CFG["profiles"] = [p for p in CFG["profiles"] if p["id"] != b.get("id")]
             if CFG["active"] == b.get("id"):
                 CFG["active"] = CFG["profiles"][0]["id"]
+        res = {"ok": True}
+    elif a == "privacy":
+        n = b.get("privacy", {})
+        CFG["privacy"] = {"offline": bool(n.get("offline")), "auto_words": bool(n.get("auto_words")),
+                          "tags": [x.strip() for x in n.get("tags", []) if str(x).strip()][:200],
+                          "paths": [x.strip() for x in n.get("paths", []) if str(x).strip()][:200]}
         res = {"ok": True}
     elif a == "activate":
         if any(p["id"] == b.get("id") for p in CFG["profiles"]):
@@ -747,6 +783,8 @@ def smart_steam(q):
 
 
 def web_get(url, timeout=12):
+    if priv()["offline"]:
+        raise OSError("режим «без интернета»")
     req = urllib.request.Request(url, headers={"User-Agent": "diskview/1.0 (local tool)"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read().decode("utf-8", "replace")
@@ -799,6 +837,9 @@ def web_lookup(q):
 def web_info(path, model="", save=True, q=""):
     """Неизвестный exe/папка: найти в интернете, при наличии модели — пересказать и дать подсказки по действиям;
     описание и картинка сохраняются в библиотеку (теги пути)."""
+    why = web_blocked(path, q) if path else (web_blocked("") if priv()["offline"] else "")
+    if why:
+        return {"error": "Поиск в интернете не выполнен: " + why}
     cands = [q] if q else (name_candidates(path) if os.path.isdir(path) or not path.lower().endswith(".exe") else []) or [web_name(path)]
     cands = [c for c in cands if c]
     if not cands:
@@ -1275,7 +1316,7 @@ def enrich(limit=12):
             t = LIB["tags"].get(it["path"], {})
             if t.get("web", {}).get("checked") or t.get("web", {}).get("shots") or t.get("web", {}).get("src"):
                 continue
-            if WANT.search(c["name"] + " " + " ".join(t.get("tags", []))) and it["path"] not in [x[0] for x in todo]:
+            if WANT.search(c["name"] + " " + " ".join(t.get("tags", []))) and it["path"] not in [x[0] for x in todo] and not web_blocked(it["path"]):
                 todo.append((it["path"], t.get("web", {}).get("image")))
     left = len(todo)
     batch = todo[:limit]
@@ -2024,6 +2065,12 @@ footer span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 <main id="main"></main>
 <dialog id="dlg" style="border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);min-width:460px;max-width:90vw"><form method="dialog" id="cf" style="display:grid;gap:6px">
 <b>Модель для помощника</b><div style="color:var(--mut)">Любой сервер: Ollama или OpenAI-совместимый (LM Studio, llama.cpp, vLLM, OpenRouter, OpenAI…). В модель уходят только метаданные папок (названия, размеры, даты, типы, теги), не содержимое файлов.</div>
+<details id="pvd" style="margin:6px 0"><summary><b>Приватность поиска в интернете</b></summary>
+<label><input type="checkbox" id="pv_off"> Не обращаться в интернет (автопоиск и 🔍 отключены)</label>
+<label><input type="checkbox" id="pv_aw"> Автофильтр: не искать папки со взрослыми словами в названии</label>
+<label>Теги и коллекции, для которых поиск запрещён (через запятую)<input id="pv_tg" style="width:100%"></label>
+<label>Папки-исключения (по одной в строке; вложенные тоже)<textarea id="pv_ph" rows="3" style="width:100%"></textarea></label>
+<button type="button" id="pv_sv" class="p">Сохранить приватность</button> <span id="pv_res"></span></details>
 <label>Профиль <select id="cp"></select> <button type="button" id="cnew">Новый</button></label>
 <label>Название <input id="cnm" style="width:100%"></label>
 <label>Тип <select id="cty"><option value="ollama">Ollama</option><option value="openai">OpenAI-совместимый</option></select>
@@ -2086,8 +2133,9 @@ let CF={profiles:[],active:""},cur=null;
 const cfill=p=>{cur=p;$("#cnm").value=p.name||"";$("#cty").value=p.type||"ollama";$("#cur").value=p.url||"";$("#cky").value=p.key||"";$("#cmd").value=p.model||"";$("#cres").textContent="";cwarn()};
 const cwarn=()=>{const u=$("#cur").value;$("#cwarn").textContent=u&&!/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])/.test(u)?"⚠ Внешний сервис: метаданные папок (названия, размеры, даты, теги) будут отправлены наружу.":""};
 const cform=()=>({id:cur&&cur.id||"",name:$("#cnm").value,type:$("#cty").value,url:$("#cur").value,key:$("#cky").value,model:$("#cmd").value});
-async function cload(sel){CF=await api("/api/config");$("#cp").innerHTML=CF.profiles.map(p=>`<option value="${p.id}">${esc(p.name)}${p.id==CF.active?" ✓":""}</option>`).join("");
+async function cload(sel){CF=await api("/api/config");const pv=CF.privacy||{};$("#pv_off").checked=!!pv.offline;$("#pv_aw").checked=pv.auto_words!==false;$("#pv_tg").value=(pv.tags||[]).join(", ");$("#pv_ph").value=(pv.paths||[]).join("\n");$("#cp").innerHTML=CF.profiles.map(p=>`<option value="${p.id}">${esc(p.name)}${p.id==CF.active?" ✓":""}</option>`).join("");
  const p=CF.profiles.find(x=>x.id==(sel||CF.active))||CF.profiles[0];$("#cp").value=p.id;cfill(p)}
+$("#pv_sv").onclick=async()=>{const r=await api("/api/config",{action:"privacy",privacy:{offline:$("#pv_off").checked,auto_words:$("#pv_aw").checked,tags:$("#pv_tg").value.split(","),paths:$("#pv_ph").value.split("\n")}});$("#pv_res").textContent=r.ok?"Сохранено":"Ошибка"};
 $("#cfg").onclick=async()=>{await cload();$("#dlg").showModal()};
 $("#cp").onchange=()=>cfill(CF.profiles.find(x=>x.id==$("#cp").value));
 $("#cnew").onclick=()=>{cfill({name:"Новый профиль",type:"openai",url:"",key:"",model:""})};
