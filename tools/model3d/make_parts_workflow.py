@@ -155,6 +155,14 @@ def main():
                    "title": "Prompt of the sheet (what Qwen gets)", "properties": {"Node name for S&R": "PreviewAny"},
                    "widgets_values": []}
     nodes[join]["outputs"][0]["links"].append(lid)
+    # the sheet before the cut: what goes into Qwen and what comes out of it
+    for title, src, slot, x in (("sheet INTO Qwen (raw)", views, 11, -3350), ("sheet FROM Qwen, before the cut", main, 0, -2900)):
+        pv = new_node()
+        l = new_link(src, slot, pv, 0, "IMAGE")
+        (node_views if src == views else nodes[main])["outputs"][slot]["links"].append(l)
+        nodes[pv] = {"id": pv, "type": "PreviewImage", "pos": [x, 880], "size": [420, 440], "flags": {}, "order": 3, "mode": 0,
+                     "inputs": [{"name": "images", "type": "IMAGE", "link": l}], "outputs": [], "title": title,
+                     "properties": {"Node name for S&R": "PreviewImage"}, "widgets_values": []}
     nodes[views] = node_views
     # after Save 3D: GLB of the part into the game
     save = new_node()

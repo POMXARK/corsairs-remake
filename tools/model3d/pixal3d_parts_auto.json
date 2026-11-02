@@ -1,8 +1,8 @@
 {
- "id": "ca148b81-2701-4876-88a3-83a252c40e24",
+ "id": "4a522c26-e091-4935-ad54-44dc4634d17b",
  "revision": 0,
- "last_node_id": 2029,
- "last_link_id": 4844,
+ "last_node_id": 2031,
+ "last_link_id": 4846,
  "nodes": [
   {
    "id": 3,
@@ -2782,7 +2782,7 @@
      "type": "IMAGE",
      "links": [
       1389,
-      4833
+      4835
      ]
     }
    ],
@@ -2836,7 +2836,7 @@
      "type": "IMAGE",
      "links": [
       1399,
-      4839
+      4841
      ]
     }
    ],
@@ -2890,7 +2890,7 @@
      "type": "IMAGE",
      "links": [
       1435,
-      4836
+      4838
      ]
     }
    ],
@@ -2944,7 +2944,7 @@
      "type": "IMAGE",
      "links": [
       1436,
-      4842
+      4844
      ]
     }
    ],
@@ -3468,7 +3468,7 @@
      "name": "model_3d",
      "type": "FILE_3D",
      "links": [
-      4830
+      4832
      ]
     },
     {
@@ -3933,7 +3933,8 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      4824
+      4824,
+      4831
      ]
     }
    ],
@@ -4071,14 +4072,14 @@
      "name": "part",
      "type": "STRING",
      "links": [
-      4831
+      4833
      ]
     },
     {
      "name": "model",
      "type": "STRING",
      "links": [
-      4832
+      4834
      ]
     },
     {
@@ -4090,7 +4091,8 @@
      "name": "sheet",
      "type": "IMAGE",
      "links": [
-      4823
+      4823,
+      4830
      ]
     },
     {
@@ -4562,6 +4564,62 @@
   },
   {
    "id": 2023,
+   "type": "PreviewImage",
+   "pos": [
+    -3350,
+    880
+   ],
+   "size": [
+    420,
+    440
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 4830
+    }
+   ],
+   "outputs": [],
+   "title": "sheet INTO Qwen (raw)",
+   "properties": {
+    "Node name for S&R": "PreviewImage"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 2024,
+   "type": "PreviewImage",
+   "pos": [
+    -2900,
+    880
+   ],
+   "size": [
+    420,
+    440
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 4831
+    }
+   ],
+   "outputs": [],
+   "title": "sheet FROM Qwen, before the cut",
+   "properties": {
+    "Node name for S&R": "PreviewImage"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 2025,
    "type": "PDMPartSave",
    "pos": [
     4900,
@@ -4578,37 +4636,37 @@
     {
      "name": "mesh",
      "type": "FILE_3D",
-     "link": 4830
+     "link": 4832
     },
     {
      "name": "part",
      "type": "STRING",
-     "link": 4831
+     "link": 4833
     },
     {
      "name": "model",
      "type": "STRING",
-     "link": 4832
+     "link": 4834
     },
     {
      "name": "front",
      "type": "IMAGE",
-     "link": 4835
+     "link": 4837
     },
     {
      "name": "left",
      "type": "IMAGE",
-     "link": 4838
+     "link": 4840
     },
     {
      "name": "back",
      "type": "IMAGE",
-     "link": 4841
+     "link": 4843
     },
     {
      "name": "right",
      "type": "IMAGE",
-     "link": 4844
+     "link": 4846
     }
    ],
    "outputs": [
@@ -4632,7 +4690,7 @@
    ]
   },
   {
-   "id": 2024,
+   "id": 2026,
    "type": "UpscaleModelLoader",
    "pos": [
     4000,
@@ -4651,10 +4709,10 @@
      "name": "UPSCALE_MODEL",
      "type": "UPSCALE_MODEL",
      "links": [
-      4834,
-      4837,
-      4840,
-      4843
+      4836,
+      4839,
+      4842,
+      4845
      ]
     }
    ],
@@ -4667,7 +4725,7 @@
    ]
   },
   {
-   "id": 2025,
+   "id": 2027,
    "type": "ImageUpscaleWithModel",
    "pos": [
     4300,
@@ -4684,12 +4742,12 @@
     {
      "name": "upscale_model",
      "type": "UPSCALE_MODEL",
-     "link": 4834
+     "link": 4836
     },
     {
      "name": "image",
      "type": "IMAGE",
-     "link": 4833
+     "link": 4835
     }
    ],
    "outputs": [
@@ -4697,7 +4755,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      4835
+      4837
      ]
     }
    ],
@@ -4708,7 +4766,7 @@
    "widgets_values": []
   },
   {
-   "id": 2026,
+   "id": 2028,
    "type": "ImageUpscaleWithModel",
    "pos": [
     4300,
@@ -4725,12 +4783,12 @@
     {
      "name": "upscale_model",
      "type": "UPSCALE_MODEL",
-     "link": 4837
+     "link": 4839
     },
     {
      "name": "image",
      "type": "IMAGE",
-     "link": 4836
+     "link": 4838
     }
    ],
    "outputs": [
@@ -4738,7 +4796,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      4838
+      4840
      ]
     }
    ],
@@ -4749,7 +4807,7 @@
    "widgets_values": []
   },
   {
-   "id": 2027,
+   "id": 2029,
    "type": "ImageUpscaleWithModel",
    "pos": [
     4300,
@@ -4766,12 +4824,12 @@
     {
      "name": "upscale_model",
      "type": "UPSCALE_MODEL",
-     "link": 4840
+     "link": 4842
     },
     {
      "name": "image",
      "type": "IMAGE",
-     "link": 4839
+     "link": 4841
     }
    ],
    "outputs": [
@@ -4779,7 +4837,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      4841
+      4843
      ]
     }
    ],
@@ -4790,7 +4848,7 @@
    "widgets_values": []
   },
   {
-   "id": 2028,
+   "id": 2030,
    "type": "ImageUpscaleWithModel",
    "pos": [
     4300,
@@ -4807,12 +4865,12 @@
     {
      "name": "upscale_model",
      "type": "UPSCALE_MODEL",
-     "link": 4843
+     "link": 4845
     },
     {
      "name": "image",
      "type": "IMAGE",
-     "link": 4842
+     "link": 4844
     }
    ],
    "outputs": [
@@ -4820,7 +4878,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      4844
+      4846
      ]
     }
    ],
@@ -4831,7 +4889,7 @@
    "widgets_values": []
   },
   {
-   "id": 2029,
+   "id": 2031,
    "type": "Note",
    "pos": [
     -3900,
@@ -5792,121 +5850,137 @@
   ],
   [
    4830,
+   2011,
+   11,
+   2023,
+   0,
+   "IMAGE"
+  ],
+  [
+   4831,
+   2000,
+   0,
+   2024,
+   0,
+   "IMAGE"
+  ],
+  [
+   4832,
    701,
    0,
-   2023,
+   2025,
    0,
    "FILE_3D"
   ],
   [
-   4831,
+   4833,
    2011,
    8,
-   2023,
+   2025,
    1,
    "STRING"
   ],
   [
-   4832,
+   4834,
    2011,
    9,
-   2023,
+   2025,
    2,
    "STRING"
   ],
   [
-   4833,
+   4835,
    340,
    0,
-   2025,
+   2027,
    1,
-   "IMAGE"
-  ],
-  [
-   4834,
-   2024,
-   0,
-   2025,
-   0,
-   "UPSCALE_MODEL"
-  ],
-  [
-   4835,
-   2025,
-   0,
-   2023,
-   3,
    "IMAGE"
   ],
   [
    4836,
-   344,
-   0,
    2026,
-   1,
-   "IMAGE"
-  ],
-  [
-   4837,
-   2024,
    0,
-   2026,
+   2027,
    0,
    "UPSCALE_MODEL"
   ],
   [
-   4838,
-   2026,
+   4837,
+   2027,
    0,
-   2023,
-   4,
+   2025,
+   3,
+   "IMAGE"
+  ],
+  [
+   4838,
+   344,
+   0,
+   2028,
+   1,
    "IMAGE"
   ],
   [
    4839,
-   343,
+   2026,
    0,
-   2027,
-   1,
-   "IMAGE"
-  ],
-  [
-   4840,
-   2024,
-   0,
-   2027,
+   2028,
    0,
    "UPSCALE_MODEL"
   ],
   [
-   4841,
-   2027,
+   4840,
+   2028,
    0,
-   2023,
-   5,
+   2025,
+   4,
+   "IMAGE"
+  ],
+  [
+   4841,
+   343,
+   0,
+   2029,
+   1,
    "IMAGE"
   ],
   [
    4842,
-   346,
+   2026,
    0,
-   2028,
-   1,
-   "IMAGE"
-  ],
-  [
-   4843,
-   2024,
-   0,
-   2028,
+   2029,
    0,
    "UPSCALE_MODEL"
   ],
   [
-   4844,
-   2028,
+   4843,
+   2029,
    0,
-   2023,
+   2025,
+   5,
+   "IMAGE"
+  ],
+  [
+   4844,
+   346,
+   0,
+   2030,
+   1,
+   "IMAGE"
+  ],
+  [
+   4845,
+   2026,
+   0,
+   2030,
+   0,
+   "UPSCALE_MODEL"
+  ],
+  [
+   4846,
+   2030,
+   0,
+   2025,
    6,
    "IMAGE"
   ]
