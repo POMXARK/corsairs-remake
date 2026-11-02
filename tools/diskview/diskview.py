@@ -1756,6 +1756,7 @@ def reveal(path):
 
 
 SRV = []
+RESTART = []
 
 
 class H(BaseHTTPRequestHandler):
@@ -1823,6 +1824,11 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         u = urlparse(self.path)
         b = self.body()
+        if u.path == "/api/restart":
+            RESTART.append(1)
+            self.send({"ok": True})
+            threading.Thread(target=SRV[0].shutdown, daemon=True).start()
+            return
         if u.path == "/api/quit":
             self.send({"ok": True})
             threading.Thread(target=SRV[0].shutdown, daemon=True).start()
@@ -1920,7 +1926,7 @@ footer span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
  <button id="web" disabled title="Поиск в интернете: наружу уходит только имя файла/папки">🌐 В интернете</button><button id="cfg">⚙ Модель</button><span class="legend">свежее<i></i>старше 3 лет</span>
 </header>
 <div id="st">Выберите диск или папку и нажмите «Сканировать».</div>
-<nav><button data-v="tree" class="on">Папки</button><button data-v="map">Карта</button><button data-v="old">Мёртвые папки</button><button data-v="launch">Лаунчер</button><button data-v="lib">Библиотека</button><button id="quit" title="Остановить сервер DiskView" style="margin-left:auto">⏻ Выход</button></nav>
+<nav><button data-v="tree" class="on">Папки</button><button data-v="map">Карта</button><button data-v="old">Мёртвые папки</button><button data-v="launch">Лаунчер</button><button data-v="lib">Библиотека</button><button id="rld" title="Перезагрузить страницу" style="margin-left:auto">⟳ Страница</button><button id="rsv" title="Перезапустить сервер DiskView (подхватит обновлённый diskview.py) и обновить страницу">↻ Сервер</button><button id="quit" title="Остановить сервер DiskView">⏻ Выход</button></nav>
 <main id="main"></main>
 <dialog id="dlg" style="border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);min-width:460px;max-width:90vw"><form method="dialog" id="cf" style="display:grid;gap:6px">
 <b>Модель для помощника</b><div style="color:var(--mut)">Любой сервер: Ollama или OpenAI-совместимый (LM Studio, llama.cpp, vLLM, OpenRouter, OpenAI…). В модель уходят только метаданные папок (названия, размеры, даты, типы, теги), не содержимое файлов.</div>
@@ -1963,6 +1969,10 @@ document.addEventListener("click",e=>{const a=e.target.closest(".shots a");if(!a
  kd=ev=>{if(ev.key=="Escape")close();else if(ev.key=="ArrowLeft")go(-1);else if(ev.key=="ArrowRight")go(1);else return;ev.stopPropagation();ev.preventDefault()};
  o.onclick=ev=>{if(ev.target.classList.contains("lp"))go(-1);else if(ev.target.classList.contains("ln"))go(1);else if(ev.target!==im)close()};
  document.addEventListener("keydown",kd,true);document.body.appendChild(o);show()},true);
+$("#rld").onclick=()=>location.reload();
+$("#rsv").onclick=async()=>{const b=$("#rsv");b.disabled=true;b.textContent="↻ перезапуск…";try{await api("/api/restart",{})}catch(x){}
+ for(let k=0;k<60;k++){await new Promise(z=>setTimeout(z,500));try{const r=await fetch("/api/lib");if(r.ok){location.reload();return}}catch(x){}}
+ b.disabled=false;b.textContent="↻ Сервер";alert("Сервер не поднялся. Запустите run.bat вручную.")};
 $("#quit").onclick=async()=>{if(!confirm("Остановить сервер DiskView и закрыть программу?"))return;try{await api("/api/quit",{})}catch(x){}document.body.innerHTML='<div style="padding:40px;font:16px sans-serif">Сервер остановлен. Эту вкладку можно закрыть.</div>';window.close()};
 document.querySelector("nav").onclick=e=>{if(!e.target.dataset.v)return;view=e.target.dataset.v;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b==e.target));render()};
 $("#field").onchange=render;
@@ -2252,6 +2262,12 @@ def main():
         srv.serve_forever()
     except KeyboardInterrupt:
         pass
+    srv.server_close()
+    if RESTART:
+        args = [x for x in sys.argv[1:] if x != "--no-browser"] + ["--no-browser"]
+        kw = {"creationflags": 0x08 | 0x200} if os.name == "nt" else {"start_new_session": True}
+        subprocess.Popen([sys.executable, os.path.abspath(__file__)] + args, stdin=subprocess.DEVNULL,
+                         stdout=open(os.path.join(DATA, "diskview.out"), "ab"), stderr=subprocess.STDOUT, **kw)
 
 
 if __name__ == "__main__":
