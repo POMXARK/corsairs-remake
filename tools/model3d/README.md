@@ -11,3 +11,7 @@
 2. Скопировать `hero1_{front,left,back,right}.png` из `pdm-game\data\ai_models\views_tpose\` в `ComfyUI\input\`.
 3. Перетащить `pixal3d_4views.json` в ComfyUI, в четырёх узлах `LoadImage` выбрать файлы, Run.
 4. Меш скрученный/раздвоенный — поменять местами входы `left` и `right` в `Pixal3DMultiViewConditioning` (у `pdm_model_views` порядок front/right/back/left).
+
+### pixal3d_4views_refine.json — то же, но сначала Qwen-Image 2.1 Edit перерисовывает каждый вид
+
+Между `LoadImage` и `RemoveBackground` стоят четыре свёрнутых узла `Refine <вид>` (подграф шага 2 PixelArtistry, 1024×1024, один seed на все виды, `refine_prompt` выключен). Они убирают грани полигонов и размытую текстуру оригинала — иначе Pixal3D точно повторяет «лоу-поли» вид. Промпт каждого узла: тот же ракурс, та же T-поза и костюм, гладкая поверхность, реалистичная ткань; правится в развёрнутом узле. Перерисованные виды сохраняются в `output/PixelArtistry/03_views/`. Старая версия `pixal3d_4views.json` осталась. Нужна модель `qwen3.5_9b_…_pe_i2i` (у вас есть) — подграф её загружает, хотя `refine_prompt` выключен.
