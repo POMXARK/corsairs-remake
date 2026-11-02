@@ -4107,7 +4107,7 @@
    },
    "widgets_values": [
     0,
-    "Redraw the character in <image1> as a high-detail realistic render, seen from the front. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Orthographic full-body view, solid flat grey background, no text.",
+    "Redraw the character in <image1> as a high-detail realistic render, seen from the front. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. Orthographic full-body view, solid flat grey background, no text.",
     false,
     "",
     1,
@@ -4127,7 +4127,7 @@
    ],
    "widgets_values_named": {
     "resolution": 0,
-    "prompt": "Redraw the character in <image1> as a high-detail realistic render, seen from the front. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Orthographic full-body view, solid flat grey background, no text.",
+    "prompt": "Redraw the character in <image1> as a high-detail realistic render, seen from the front. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. Orthographic full-body view, solid flat grey background, no text.",
     "switch_1": false,
     "negative_prompt": "",
     "cfg": 1,
@@ -4347,7 +4347,7 @@
    },
    "widgets_values": [
     0,
-    "Redraw the character in <image1> as a high-detail realistic render, seen from the left side, an exact 90 degree profile. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Orthographic full-body view, solid flat grey background, no text.",
+    "Redraw the character in <image1> as a high-detail realistic render, seen from the left side, an exact 90 degree profile. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. Orthographic full-body view, solid flat grey background, no text.",
     false,
     "",
     1,
@@ -4367,7 +4367,7 @@
    ],
    "widgets_values_named": {
     "resolution": 0,
-    "prompt": "Redraw the character in <image1> as a high-detail realistic render, seen from the left side, an exact 90 degree profile. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Orthographic full-body view, solid flat grey background, no text.",
+    "prompt": "Redraw the character in <image1> as a high-detail realistic render, seen from the left side, an exact 90 degree profile. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. Orthographic full-body view, solid flat grey background, no text.",
     "switch_1": false,
     "negative_prompt": "",
     "cfg": 1,
@@ -4587,7 +4587,7 @@
    },
    "widgets_values": [
     0,
-    "Redraw the character in <image1> as a high-detail realistic render, seen from the back. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Orthographic full-body view, solid flat grey background, no text.",
+    "Redraw the character in <image1> as a high-detail realistic render, seen from the back. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. Orthographic full-body view, solid flat grey background, no text.",
     false,
     "",
     1,
@@ -4607,7 +4607,7 @@
    ],
    "widgets_values_named": {
     "resolution": 0,
-    "prompt": "Redraw the character in <image1> as a high-detail realistic render, seen from the back. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Orthographic full-body view, solid flat grey background, no text.",
+    "prompt": "Redraw the character in <image1> as a high-detail realistic render, seen from the back. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. Orthographic full-body view, solid flat grey background, no text.",
     "switch_1": false,
     "negative_prompt": "",
     "cfg": 1,
@@ -4827,7 +4827,7 @@
    },
    "widgets_values": [
     0,
-    "Redraw the character in <image1> as a high-detail realistic render, seen from the right side, an exact 90 degree profile. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Orthographic full-body view, solid flat grey background, no text.",
+    "Redraw the character in <image1> as a high-detail realistic render, seen from the right side, an exact 90 degree profile. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. Orthographic full-body view, solid flat grey background, no text.",
     false,
     "",
     1,
@@ -4847,7 +4847,7 @@
    ],
    "widgets_values_named": {
     "resolution": 0,
-    "prompt": "Redraw the character in <image1> as a high-detail realistic render, seen from the right side, an exact 90 degree profile. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Orthographic full-body view, solid flat grey background, no text.",
+    "prompt": "Redraw the character in <image1> as a high-detail realistic render, seen from the right side, an exact 90 degree profile. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. Orthographic full-body view, solid flat grey background, no text.",
     "switch_1": false,
     "negative_prompt": "",
     "cfg": 1,
