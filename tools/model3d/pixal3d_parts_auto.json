@@ -1,8 +1,8 @@
 {
- "id": "116cc9f7-3622-4c62-acb0-41b5da5c7566",
+ "id": "688da496-8c2e-43cc-86a8-4cd83ff99044",
  "revision": 0,
- "last_node_id": 2017,
- "last_link_id": 4825,
+ "last_node_id": 2018,
+ "last_link_id": 4822,
  "nodes": [
   {
    "id": 3,
@@ -3464,7 +3464,7 @@
      "name": "model_3d",
      "type": "FILE_3D",
      "links": [
-      4823
+      4820
      ]
     },
     {
@@ -3858,7 +3858,7 @@
      "label": "image_1",
      "name": "images.image_1",
      "type": "IMAGE",
-     "link": 4809
+     "link": 4814
     },
     {
      "label": "image_2",
@@ -3929,14 +3929,11 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      1385,
-      1387,
-      4817,
-      4818
+      4815
      ]
     }
    ],
-   "title": "Refine front (Qwen Image 2.1 Edit)",
+   "title": "Refine the 2x2 sheet of the part (Qwen Image 2.1 Edit)",
    "properties": {
     "cnr_id": "comfy-core",
     "ver": "0.37.0",
@@ -3965,8 +3962,8 @@
     1,
     25,
     true,
-    1024,
-    1024,
+    2048,
+    2048,
     "euler",
     "simple",
     939810832464276,
@@ -3980,726 +3977,6 @@
    "widgets_values_named": {
     "resolution": 0,
     "prompt": "Redraw the character in <image1> as a high-detail realistic render, seen from the front. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. Orthographic full-body view, solid flat grey background, no text.",
-    "switch_1": false,
-    "negative_prompt": "",
-    "cfg": 1,
-    "steps": 25,
-    "switch": true,
-    "width": 1024,
-    "height": 1024,
-    "scheduler": "euler",
-    "scheduler_1": "simple",
-    "seed": 939810832464276,
-    "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
-    "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
-    "vae_name": "qwen_image_2.1_vae_bf16.safetensors",
-    "device": "auto",
-    "dtype": "default",
-    "clip_name_1": "qwen3.5_9b_qwen_image_2.1_pe_i2i.int8_convrot.safetensors"
-   }
-  },
-  {
-   "id": 2001,
-   "type": "bc1c967a-7f6a-4be9-a372-dad16e4f28e3",
-   "pos": [
-    -3460,
-    800
-   ],
-   "size": [
-    460,
-    1100
-   ],
-   "flags": {
-    "collapsed": true
-   },
-   "order": 21,
-   "mode": 0,
-   "inputs": [
-    {
-     "label": "positive_prompt",
-     "name": "prompt",
-     "type": "STRING",
-     "widget": {
-      "name": "prompt"
-     },
-     "link": 4814
-    },
-    {
-     "label": "refine_prompt",
-     "name": "switch_1",
-     "type": "BOOLEAN",
-     "widget": {
-      "name": "switch_1"
-     },
-     "link": null
-    },
-    {
-     "label": "steps",
-     "name": "steps",
-     "type": "INT",
-     "widget": {
-      "name": "steps"
-     },
-     "link": null
-    },
-    {
-     "label": "custom_size",
-     "name": "switch",
-     "type": "BOOLEAN",
-     "widget": {
-      "name": "switch"
-     },
-     "link": null
-    },
-    {
-     "label": "sampler",
-     "name": "scheduler",
-     "type": "COMBO",
-     "widget": {
-      "name": "scheduler"
-     },
-     "link": null
-    },
-    {
-     "label": "scheduler",
-     "name": "scheduler_1",
-     "type": "COMBO",
-     "widget": {
-      "name": "scheduler_1"
-     },
-     "link": null
-    },
-    {
-     "label": "cache_device",
-     "name": "device",
-     "type": "COMBO",
-     "widget": {
-      "name": "device"
-     },
-     "link": null
-    },
-    {
-     "label": "dtype",
-     "name": "dtype",
-     "type": "COMBO",
-     "widget": {
-      "name": "dtype"
-     },
-     "link": null
-    },
-    {
-     "label": "PE_model",
-     "name": "clip_name_1",
-     "type": "COMBO",
-     "widget": {
-      "name": "clip_name_1"
-     },
-     "link": null
-    },
-    {
-     "label": "image_1",
-     "name": "images.image_1",
-     "type": "IMAGE",
-     "link": 4810
-    },
-    {
-     "label": "image_2",
-     "name": "images.image_2",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": 4817
-    },
-    {
-     "label": "image_3",
-     "name": "images.image_3",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_4",
-     "name": "images.image_4",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_5",
-     "name": "images.image_5_1",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_6",
-     "name": "images.image_6",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_7",
-     "name": "images.image_7",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_8",
-     "name": "images.image_8",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_9",
-     "name": "images.image_9",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_10",
-     "name": "images.image_10",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    }
-   ],
-   "outputs": [
-    {
-     "name": "IMAGE",
-     "type": "IMAGE",
-     "links": [
-      1391,
-      1392
-     ]
-    }
-   ],
-   "title": "Refine left (Qwen Image 2.1 Edit)",
-   "properties": {
-    "cnr_id": "comfy-core",
-    "ver": "0.37.0",
-    "previewExposures": [],
-    "ue_properties": {
-     "widget_ue_connectable": {
-      "prompt": true,
-      "switch_1": true,
-      "steps": true,
-      "switch": true,
-      "scheduler": true,
-      "scheduler_1": true,
-      "device": true,
-      "dtype": true,
-      "clip_name_1": true
-     },
-     "version": "7.7",
-     "input_ue_unconnectable": {}
-    }
-   },
-   "widgets_values": [
-    0,
-    "Redraw the character in <image1> as a high-detail realistic render, seen from the left side, an exact 90 degree profile. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. The arms stay in the T-pose, exactly sideways from the shoulders: in this exact profile the near arm points straight at the camera and is strongly foreshortened (only the shoulder, the cuff and the hand end are visible), the far arm is hidden behind the body. The arms must NOT point forward along the image. Orthographic full-body view, solid flat grey background, no text.",
-    false,
-    "",
-    1,
-    25,
-    true,
-    1024,
-    1024,
-    "euler",
-    "simple",
-    939810832464276,
-    "qwen_image_2.1_int8_convrot.safetensors",
-    "qwen3vl_8b_int8_convrot.safetensors",
-    "qwen_image_2.1_vae_bf16.safetensors",
-    "auto",
-    "default",
-    "qwen3.5_9b_qwen_image_2.1_pe_i2i.int8_convrot.safetensors"
-   ],
-   "widgets_values_named": {
-    "resolution": 0,
-    "prompt": "Redraw the character in <image1> as a high-detail realistic render, seen from the left side, an exact 90 degree profile. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. The arms stay in the T-pose, exactly sideways from the shoulders: in this exact profile the near arm points straight at the camera and is strongly foreshortened (only the shoulder, the cuff and the hand end are visible), the far arm is hidden behind the body. The arms must NOT point forward along the image. Orthographic full-body view, solid flat grey background, no text.",
-    "switch_1": false,
-    "negative_prompt": "",
-    "cfg": 1,
-    "steps": 25,
-    "switch": true,
-    "width": 1024,
-    "height": 1024,
-    "scheduler": "euler",
-    "scheduler_1": "simple",
-    "seed": 939810832464276,
-    "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
-    "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
-    "vae_name": "qwen_image_2.1_vae_bf16.safetensors",
-    "device": "auto",
-    "dtype": "default",
-    "clip_name_1": "qwen3.5_9b_qwen_image_2.1_pe_i2i.int8_convrot.safetensors"
-   }
-  },
-  {
-   "id": 2002,
-   "type": "bc1c967a-7f6a-4be9-a372-dad16e4f28e3",
-   "pos": [
-    -3460,
-    1240
-   ],
-   "size": [
-    460,
-    1100
-   ],
-   "flags": {
-    "collapsed": true
-   },
-   "order": 21,
-   "mode": 0,
-   "inputs": [
-    {
-     "label": "positive_prompt",
-     "name": "prompt",
-     "type": "STRING",
-     "widget": {
-      "name": "prompt"
-     },
-     "link": 4815
-    },
-    {
-     "label": "refine_prompt",
-     "name": "switch_1",
-     "type": "BOOLEAN",
-     "widget": {
-      "name": "switch_1"
-     },
-     "link": null
-    },
-    {
-     "label": "steps",
-     "name": "steps",
-     "type": "INT",
-     "widget": {
-      "name": "steps"
-     },
-     "link": null
-    },
-    {
-     "label": "custom_size",
-     "name": "switch",
-     "type": "BOOLEAN",
-     "widget": {
-      "name": "switch"
-     },
-     "link": null
-    },
-    {
-     "label": "sampler",
-     "name": "scheduler",
-     "type": "COMBO",
-     "widget": {
-      "name": "scheduler"
-     },
-     "link": null
-    },
-    {
-     "label": "scheduler",
-     "name": "scheduler_1",
-     "type": "COMBO",
-     "widget": {
-      "name": "scheduler_1"
-     },
-     "link": null
-    },
-    {
-     "label": "cache_device",
-     "name": "device",
-     "type": "COMBO",
-     "widget": {
-      "name": "device"
-     },
-     "link": null
-    },
-    {
-     "label": "dtype",
-     "name": "dtype",
-     "type": "COMBO",
-     "widget": {
-      "name": "dtype"
-     },
-     "link": null
-    },
-    {
-     "label": "PE_model",
-     "name": "clip_name_1",
-     "type": "COMBO",
-     "widget": {
-      "name": "clip_name_1"
-     },
-     "link": null
-    },
-    {
-     "label": "image_1",
-     "name": "images.image_1",
-     "type": "IMAGE",
-     "link": 4811
-    },
-    {
-     "label": "image_2",
-     "name": "images.image_2",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_3",
-     "name": "images.image_3",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_4",
-     "name": "images.image_4",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_5",
-     "name": "images.image_5_1",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_6",
-     "name": "images.image_6",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_7",
-     "name": "images.image_7",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_8",
-     "name": "images.image_8",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_9",
-     "name": "images.image_9",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_10",
-     "name": "images.image_10",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    }
-   ],
-   "outputs": [
-    {
-     "name": "IMAGE",
-     "type": "IMAGE",
-     "links": [
-      1396,
-      1398
-     ]
-    }
-   ],
-   "title": "Refine back (Qwen Image 2.1 Edit)",
-   "properties": {
-    "cnr_id": "comfy-core",
-    "ver": "0.37.0",
-    "previewExposures": [],
-    "ue_properties": {
-     "widget_ue_connectable": {
-      "prompt": true,
-      "switch_1": true,
-      "steps": true,
-      "switch": true,
-      "scheduler": true,
-      "scheduler_1": true,
-      "device": true,
-      "dtype": true,
-      "clip_name_1": true
-     },
-     "version": "7.7",
-     "input_ue_unconnectable": {}
-    }
-   },
-   "widgets_values": [
-    0,
-    "Redraw the character in <image1> as a high-detail realistic render, seen from the back. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. Both arms straight out sideways in the T-pose, not lowered, not forward. Orthographic full-body view, solid flat grey background, no text.",
-    false,
-    "",
-    1,
-    25,
-    true,
-    1024,
-    1024,
-    "euler",
-    "simple",
-    939810832464276,
-    "qwen_image_2.1_int8_convrot.safetensors",
-    "qwen3vl_8b_int8_convrot.safetensors",
-    "qwen_image_2.1_vae_bf16.safetensors",
-    "auto",
-    "default",
-    "qwen3.5_9b_qwen_image_2.1_pe_i2i.int8_convrot.safetensors"
-   ],
-   "widgets_values_named": {
-    "resolution": 0,
-    "prompt": "Redraw the character in <image1> as a high-detail realistic render, seen from the back. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. Both arms straight out sideways in the T-pose, not lowered, not forward. Orthographic full-body view, solid flat grey background, no text.",
-    "switch_1": false,
-    "negative_prompt": "",
-    "cfg": 1,
-    "steps": 25,
-    "switch": true,
-    "width": 1024,
-    "height": 1024,
-    "scheduler": "euler",
-    "scheduler_1": "simple",
-    "seed": 939810832464276,
-    "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
-    "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
-    "vae_name": "qwen_image_2.1_vae_bf16.safetensors",
-    "device": "auto",
-    "dtype": "default",
-    "clip_name_1": "qwen3.5_9b_qwen_image_2.1_pe_i2i.int8_convrot.safetensors"
-   }
-  },
-  {
-   "id": 2003,
-   "type": "bc1c967a-7f6a-4be9-a372-dad16e4f28e3",
-   "pos": [
-    -3460,
-    1680
-   ],
-   "size": [
-    460,
-    1100
-   ],
-   "flags": {
-    "collapsed": true
-   },
-   "order": 21,
-   "mode": 0,
-   "inputs": [
-    {
-     "label": "positive_prompt",
-     "name": "prompt",
-     "type": "STRING",
-     "widget": {
-      "name": "prompt"
-     },
-     "link": 4816
-    },
-    {
-     "label": "refine_prompt",
-     "name": "switch_1",
-     "type": "BOOLEAN",
-     "widget": {
-      "name": "switch_1"
-     },
-     "link": null
-    },
-    {
-     "label": "steps",
-     "name": "steps",
-     "type": "INT",
-     "widget": {
-      "name": "steps"
-     },
-     "link": null
-    },
-    {
-     "label": "custom_size",
-     "name": "switch",
-     "type": "BOOLEAN",
-     "widget": {
-      "name": "switch"
-     },
-     "link": null
-    },
-    {
-     "label": "sampler",
-     "name": "scheduler",
-     "type": "COMBO",
-     "widget": {
-      "name": "scheduler"
-     },
-     "link": null
-    },
-    {
-     "label": "scheduler",
-     "name": "scheduler_1",
-     "type": "COMBO",
-     "widget": {
-      "name": "scheduler_1"
-     },
-     "link": null
-    },
-    {
-     "label": "cache_device",
-     "name": "device",
-     "type": "COMBO",
-     "widget": {
-      "name": "device"
-     },
-     "link": null
-    },
-    {
-     "label": "dtype",
-     "name": "dtype",
-     "type": "COMBO",
-     "widget": {
-      "name": "dtype"
-     },
-     "link": null
-    },
-    {
-     "label": "PE_model",
-     "name": "clip_name_1",
-     "type": "COMBO",
-     "widget": {
-      "name": "clip_name_1"
-     },
-     "link": null
-    },
-    {
-     "label": "image_1",
-     "name": "images.image_1",
-     "type": "IMAGE",
-     "link": 4812
-    },
-    {
-     "label": "image_2",
-     "name": "images.image_2",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": 4818
-    },
-    {
-     "label": "image_3",
-     "name": "images.image_3",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_4",
-     "name": "images.image_4",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_5",
-     "name": "images.image_5_1",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_6",
-     "name": "images.image_6",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_7",
-     "name": "images.image_7",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_8",
-     "name": "images.image_8",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_9",
-     "name": "images.image_9",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "label": "image_10",
-     "name": "images.image_10",
-     "shape": 7,
-     "type": "IMAGE",
-     "link": null
-    }
-   ],
-   "outputs": [
-    {
-     "name": "IMAGE",
-     "type": "IMAGE",
-     "links": [
-      1400,
-      1402
-     ]
-    }
-   ],
-   "title": "Refine right (Qwen Image 2.1 Edit)",
-   "properties": {
-    "cnr_id": "comfy-core",
-    "ver": "0.37.0",
-    "previewExposures": [],
-    "ue_properties": {
-     "widget_ue_connectable": {
-      "prompt": true,
-      "switch_1": true,
-      "steps": true,
-      "switch": true,
-      "scheduler": true,
-      "scheduler_1": true,
-      "device": true,
-      "dtype": true,
-      "clip_name_1": true
-     },
-     "version": "7.7",
-     "input_ue_unconnectable": {}
-    }
-   },
-   "widgets_values": [
-    0,
-    "Redraw the character in <image1> as a high-detail realistic render, seen from the right side, an exact 90 degree profile. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. The arms stay in the T-pose, exactly sideways from the shoulders: in this exact profile the near arm points straight at the camera and is strongly foreshortened (only the shoulder, the cuff and the hand end are visible), the far arm is hidden behind the body. The arms must NOT point forward along the image. Orthographic full-body view, solid flat grey background, no text.",
-    false,
-    "",
-    1,
-    25,
-    true,
-    1024,
-    1024,
-    "euler",
-    "simple",
-    939810832464276,
-    "qwen_image_2.1_int8_convrot.safetensors",
-    "qwen3vl_8b_int8_convrot.safetensors",
-    "qwen_image_2.1_vae_bf16.safetensors",
-    "auto",
-    "default",
-    "qwen3.5_9b_qwen_image_2.1_pe_i2i.int8_convrot.safetensors"
-   ],
-   "widgets_values_named": {
-    "resolution": 0,
-    "prompt": "Redraw the character in <image1> as a high-detail realistic render, seen from the right side, an exact 90 degree profile. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. The arms stay in the T-pose, exactly sideways from the shoulders: in this exact profile the near arm points straight at the camera and is strongly foreshortened (only the shoulder, the cuff and the hand end are visible), the far arm is hidden behind the body. The arms must NOT point forward along the image. Orthographic full-body view, solid flat grey background, no text.",
     "switch_1": false,
     "negative_prompt": "",
     "cfg": 1,
@@ -4738,80 +4015,82 @@
      "name": "front",
      "type": "IMAGE",
      "links": [
-      4809,
-      4819
+      4816
      ]
     },
     {
      "name": "left",
      "type": "IMAGE",
      "links": [
-      4810,
-      4820
+      4817
      ]
     },
     {
      "name": "back",
      "type": "IMAGE",
      "links": [
-      4811,
-      4821
+      4818
      ]
     },
     {
      "name": "right",
      "type": "IMAGE",
      "links": [
-      4812,
-      4822
+      4819
      ]
     },
     {
      "name": "prompt_front",
      "type": "STRING",
-     "links": [
-      4813
-     ]
+     "links": []
     },
     {
      "name": "prompt_left",
      "type": "STRING",
-     "links": [
-      4814
-     ]
+     "links": []
     },
     {
      "name": "prompt_back",
      "type": "STRING",
-     "links": [
-      4815
-     ]
+     "links": []
     },
     {
      "name": "prompt_right",
      "type": "STRING",
-     "links": [
-      4816
-     ]
+     "links": []
     },
     {
      "name": "part",
      "type": "STRING",
      "links": [
-      4824
+      4821
      ]
     },
     {
      "name": "model",
      "type": "STRING",
      "links": [
-      4825
+      4822
      ]
     },
     {
      "name": "info",
      "type": "STRING",
      "links": []
+    },
+    {
+     "name": "sheet",
+     "type": "IMAGE",
+     "links": [
+      4814
+     ]
+    },
+    {
+     "name": "prompt_sheet",
+     "type": "STRING",
+     "links": [
+      4813
+     ]
     }
    ],
    "title": "PDM Part Views: the part comes by itself (Batch count 6)",
@@ -4827,14 +4106,160 @@
     true,
     -1.0,
     false,
-    "python"
+    "python",
+    1024
    ]
   },
   {
    "id": 2012,
+   "type": "PDMSheetSplit",
+   "pos": [
+    -2960,
+    360
+   ],
+   "size": [
+    260,
+    120
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "sheet",
+     "type": "IMAGE",
+     "link": 4815
+    }
+   ],
+   "outputs": [
+    {
+     "name": "front",
+     "type": "IMAGE",
+     "links": [
+      1385,
+      1387
+     ]
+    },
+    {
+     "name": "left",
+     "type": "IMAGE",
+     "links": [
+      1391,
+      1392
+     ]
+    },
+    {
+     "name": "back",
+     "type": "IMAGE",
+     "links": [
+      1396,
+      1398
+     ]
+    },
+    {
+     "name": "right",
+     "type": "IMAGE",
+     "links": [
+      1400,
+      1402
+     ]
+    }
+   ],
+   "title": "PDM Sheet Split (2x2 -> 4 views)",
+   "properties": {
+    "Node name for S&R": "PDMSheetSplit"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 2013,
    "type": "PreviewImage",
    "pos": [
     -5000,
+    300
+   ],
+   "size": [
+    240,
+    280
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 4816
+    }
+   ],
+   "outputs": [],
+   "title": "raw front view of the part",
+   "properties": {
+    "Node name for S&R": "PreviewImage"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 2014,
+   "type": "PreviewImage",
+   "pos": [
+    -4750,
+    300
+   ],
+   "size": [
+    240,
+    280
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 4817
+    }
+   ],
+   "outputs": [],
+   "title": "raw left view of the part",
+   "properties": {
+    "Node name for S&R": "PreviewImage"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 2015,
+   "type": "PreviewImage",
+   "pos": [
+    -4500,
+    300
+   ],
+   "size": [
+    240,
+    280
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 4818
+    }
+   ],
+   "outputs": [],
+   "title": "raw back view of the part",
+   "properties": {
+    "Node name for S&R": "PreviewImage"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 2016,
+   "type": "PreviewImage",
+   "pos": [
+    -4250,
     300
    ],
    "size": [
@@ -4852,90 +4277,6 @@
     }
    ],
    "outputs": [],
-   "title": "raw front view of the part",
-   "properties": {
-    "Node name for S&R": "PreviewImage"
-   },
-   "widgets_values": []
-  },
-  {
-   "id": 2013,
-   "type": "PreviewImage",
-   "pos": [
-    -4750,
-    300
-   ],
-   "size": [
-    240,
-    280
-   ],
-   "flags": {},
-   "order": 1,
-   "mode": 0,
-   "inputs": [
-    {
-     "name": "images",
-     "type": "IMAGE",
-     "link": 4820
-    }
-   ],
-   "outputs": [],
-   "title": "raw left view of the part",
-   "properties": {
-    "Node name for S&R": "PreviewImage"
-   },
-   "widgets_values": []
-  },
-  {
-   "id": 2014,
-   "type": "PreviewImage",
-   "pos": [
-    -4500,
-    300
-   ],
-   "size": [
-    240,
-    280
-   ],
-   "flags": {},
-   "order": 1,
-   "mode": 0,
-   "inputs": [
-    {
-     "name": "images",
-     "type": "IMAGE",
-     "link": 4821
-    }
-   ],
-   "outputs": [],
-   "title": "raw back view of the part",
-   "properties": {
-    "Node name for S&R": "PreviewImage"
-   },
-   "widgets_values": []
-  },
-  {
-   "id": 2015,
-   "type": "PreviewImage",
-   "pos": [
-    -4250,
-    300
-   ],
-   "size": [
-    240,
-    280
-   ],
-   "flags": {},
-   "order": 1,
-   "mode": 0,
-   "inputs": [
-    {
-     "name": "images",
-     "type": "IMAGE",
-     "link": 4822
-    }
-   ],
-   "outputs": [],
    "title": "raw right view of the part",
    "properties": {
     "Node name for S&R": "PreviewImage"
@@ -4943,7 +4284,7 @@
    "widgets_values": []
   },
   {
-   "id": 2016,
+   "id": 2017,
    "type": "PDMPartSave",
    "pos": [
     4900,
@@ -4960,17 +4301,17 @@
     {
      "name": "mesh",
      "type": "FILE_3D",
-     "link": 4823
+     "link": 4820
     },
     {
      "name": "part",
      "type": "STRING",
-     "link": 4824
+     "link": 4821
     },
     {
      "name": "model",
      "type": "STRING",
-     "link": 4825
+     "link": 4822
     }
    ],
    "outputs": [
@@ -4994,7 +4335,7 @@
    ]
   },
   {
-   "id": 2017,
+   "id": 2018,
    "type": "Note",
    "pos": [
     -3900,
@@ -5675,7 +5016,7 @@
   ],
   [
    1385,
-   2000,
+   2012,
    0,
    192,
    1,
@@ -5683,7 +5024,7 @@
   ],
   [
    1387,
-   2000,
+   2012,
    0,
    312,
    0,
@@ -5707,16 +5048,16 @@
   ],
   [
    1391,
-   2001,
-   0,
+   2012,
+   1,
    348,
    1,
    "IMAGE"
   ],
   [
    1392,
-   2001,
-   0,
+   2012,
+   1,
    349,
    0,
    "IMAGE"
@@ -5731,8 +5072,8 @@
   ],
   [
    1396,
-   2002,
-   0,
+   2012,
+   2,
    351,
    1,
    "IMAGE"
@@ -5747,8 +5088,8 @@
   ],
   [
    1398,
-   2002,
-   0,
+   2012,
+   2,
    350,
    0,
    "IMAGE"
@@ -5763,8 +5104,8 @@
   ],
   [
    1400,
-   2003,
-   0,
+   2012,
+   3,
    353,
    1,
    "IMAGE"
@@ -5779,8 +5120,8 @@
   ],
   [
    1402,
-   2003,
-   0,
+   2012,
+   3,
    352,
    0,
    "IMAGE"
@@ -5818,41 +5159,9 @@
    "FILE_3D_GLB"
   ],
   [
-   4809,
-   2011,
-   0,
-   2000,
-   9,
-   "IMAGE"
-  ],
-  [
-   4810,
-   2011,
-   1,
-   2001,
-   9,
-   "IMAGE"
-  ],
-  [
-   4811,
-   2011,
-   2,
-   2002,
-   9,
-   "IMAGE"
-  ],
-  [
-   4812,
-   2011,
-   3,
-   2003,
-   9,
-   "IMAGE"
-  ],
-  [
    4813,
    2011,
-   4,
+   12,
    2000,
    0,
    "STRING"
@@ -5860,96 +5169,72 @@
   [
    4814,
    2011,
-   5,
-   2001,
-   0,
-   "STRING"
+   11,
+   2000,
+   9,
+   "IMAGE"
   ],
   [
    4815,
-   2011,
-   6,
-   2002,
-   0,
-   "STRING"
-  ],
-  [
-   4816,
-   2011,
-   7,
-   2003,
-   0,
-   "STRING"
-  ],
-  [
-   4817,
    2000,
-   0,
-   2001,
-   10,
-   "IMAGE"
-  ],
-  [
-   4818,
-   2000,
-   0,
-   2003,
-   10,
-   "IMAGE"
-  ],
-  [
-   4819,
-   2011,
    0,
    2012,
    0,
    "IMAGE"
   ],
   [
-   4820,
+   4816,
    2011,
-   1,
+   0,
    2013,
    0,
    "IMAGE"
   ],
   [
-   4821,
+   4817,
    2011,
-   2,
+   1,
    2014,
    0,
    "IMAGE"
   ],
   [
-   4822,
+   4818,
    2011,
-   3,
+   2,
    2015,
    0,
    "IMAGE"
   ],
   [
-   4823,
+   4819,
+   2011,
+   3,
+   2016,
+   0,
+   "IMAGE"
+  ],
+  [
+   4820,
    701,
    0,
-   2016,
+   2017,
    0,
    "FILE_3D"
   ],
   [
-   4824,
+   4821,
    2011,
    8,
-   2016,
+   2017,
    1,
    "STRING"
   ],
   [
-   4825,
+   4822,
    2011,
    9,
-   2016,
+   2017,
    2,
    "STRING"
   ]

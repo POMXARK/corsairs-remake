@@ -36,13 +36,14 @@ def main():
     views = new_node()
     outs = [("front", "IMAGE"), ("left", "IMAGE"), ("back", "IMAGE"), ("right", "IMAGE"),
             ("prompt_front", "STRING"), ("prompt_left", "STRING"), ("prompt_back", "STRING"), ("prompt_right", "STRING"),
-            ("part", "STRING"), ("model", "STRING"), ("info", "STRING")]
+            ("part", "STRING"), ("model", "STRING"), ("info", "STRING"),
+            ("sheet", "IMAGE"), ("prompt_sheet", "STRING")]
     node_views = {"id": views, "type": "PDMPartViews", "pos": [-3900, 300], "size": [470, 520], "flags": {},
                   "order": 0, "mode": 0, "inputs": [],
                   "outputs": [{"name": n, "type": t, "links": []} for n, t in outs],
                   "title": "PDM Part Views: the part comes by itself (Batch count 6)",
                   "properties": {"Node name for S&R": "PDMPartViews"},
-                  "widgets_values": [r"C:\corsairs-remake", "pdm-game", "hero1", 0, "increment", True, -1.0, False, "python"]}
+                  "widgets_values": [r"C:\corsairs-remake", "pdm-game", "hero1", 0, "increment", True, -1.0, False, "python", 1024]}
     # the old loaders go, their links move to the new node
     for old, slot in LOADERS.items():
         for l in list(links.values()):
@@ -50,27 +51,47 @@ def main():
                 l[1], l[2] = views, slot
                 node_views["outputs"][slot]["links"].append(l[0])
         del nodes[old]
-    # prompts of the refine nodes come from the part
+    # ONE Qwen pass on a 2x2 sheet of the four views (front, left / back, right), then the sheet is cut back: the four
+    # views agree with each other (the independent redraws of ComfyUI_00007 hid the ears under hair, doubled the lips)
+    main = REFINE[1140]
+    n = nodes[main]
+    i_prompt = next(i for i in n["inputs"] if i["name"] == "prompt")
+    i_img = next(i for i in n["inputs"] if i["name"] == "images.image_1")
+    links.pop(i_prompt["link"], None)
+    links.pop(i_img["link"], None)
+    i_prompt["link"] = new_link(views, 12, main, n["inputs"].index(i_prompt), "STRING")
+    i_img["link"] = new_link(views, 11, main, n["inputs"].index(i_img), "IMAGE")
+    node_views["outputs"][12]["links"].append(i_prompt["link"])
+    node_views["outputs"][11]["links"].append(i_img["link"])
+    n["widgets_values"][7] = n["widgets_values"][8] = 2048  # width, height of the sheet (sheet_cell 1024 x 2)
+    n["title"] = "Refine the 2x2 sheet of the part (Qwen Image 2.1 Edit)"
+    split = new_node()
+    nodes[split] = {"id": split, "type": "PDMSheetSplit", "pos": [n["pos"][0] + 500, n["pos"][1]], "size": [260, 120],
+                    "flags": {}, "order": 5, "mode": 0, "inputs": [{"name": "sheet", "type": "IMAGE", "link": None}],
+                    "outputs": [{"name": v, "type": "IMAGE", "links": []} for v in ("front", "left", "back", "right")],
+                    "title": "PDM Sheet Split (2x2 -> 4 views)", "properties": {"Node name for S&R": "PDMSheetSplit"},
+                    "widgets_values": []}
+    nodes[split]["inputs"][0]["link"] = new_link(main, 0, split, 0, "IMAGE")
+    n["outputs"][0]["links"] = [nodes[split]["inputs"][0]["link"]]
+    # the consumers of the four old refine nodes now take the views of the split node
     for old, ref in REFINE.items():
-        slot = 4 + LOADERS[old]
-        n = nodes[ref]
-        inp = next(i for i in n["inputs"] if i["name"] == "prompt")
-        inp["link"] = new_link(views, slot, ref, n["inputs"].index(inp), "STRING")
-        node_views["outputs"][slot]["links"].append(inp["link"])
+        for l in list(links.values()):
+            if l[1] == ref and l[3] != split and l[3] not in REFINE.values():
+                l[1], l[2] = split, LOADERS[old]
+                nodes[split]["outputs"][LOADERS[old]]["links"].append(l[0])
+    for ref in list(REFINE.values())[1:]:  # the other three refine nodes are not needed
+        for l in list(links.values()):
+            if l[3] == ref or l[1] == ref:
+                links.pop(l[0], None)
+        del nodes[ref]
+    for o in node_views["outputs"]:
+        o["links"] = [x for x in o["links"] if x in links]
     # refine_prompt (widget 2): the VLM of the subgraph (Qwen3.5 PE) looks at the view and rewrites our prompt by what it shows
-    for ref in REFINE.values():
+    for ref in [REFINE[1140]]:
         nodes[ref]["widgets_values"][2] = False  # True crashes: comfy_kitchen flash_attention_decode_gqa, "Unsupported Flash Attention tensor strides" (torch cu128)
     # DecimateMesh (186) 700000 faces -> UnwrapMesh cut them into 10 358 tiny charts, the 4096 atlas was confetti
     # (the log of the first run). 60000 faces unwrap into big charts; the detail comes from reference_mesh / normal map.
     nodes[186]["widgets_values"][0] = 60000
-    # the refined front is the second reference of the other views: one identity in all of them
-    front_ref = REFINE[1140]
-    # not for the back: with the face as a reference Qwen drew the face instead of the back of the head
-    for old in (1143, 1147):
-        ref = nodes[REFINE[old]]
-        inp = next(i for i in ref["inputs"] if i["name"] == "images.image_2")
-        inp["link"] = new_link(front_ref, 0, REFINE[old], ref["inputs"].index(inp), "IMAGE")
-        nodes[front_ref]["outputs"][0]["links"].append(inp["link"])
     # UnwrapMesh (196): "pec" cuts the dense voxel-born mesh into hundreds of small charts (the atlas of ComfyUI_00007 is
     # confetti); "adaptive" (CPU) is slower and should give fewer, bigger charts. Not checked in ComfyUI yet.
     nodes[196]["widgets_values"][0] = "adaptive"

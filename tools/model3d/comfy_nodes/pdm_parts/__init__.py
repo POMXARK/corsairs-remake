@@ -46,6 +46,17 @@ def prompt_of(part, view):
             "A flat bright green background.")
 
 
+def sheet_prompt(part):
+    """One prompt for the 2x2 sheet: Qwen draws the four views in one pass, so they agree with each other."""
+    return (f"<image1> is a 2x2 contact sheet: four views of the same {WHAT[part]} on a flat bright green background. "
+            "Top left: from the front. Top right: from the left side. Bottom left: from the back. Bottom right: from the "
+            "right side. Redraw the whole sheet as clean high-detail realistic renders. Keep the grid, the position of "
+            "every view, its camera, pose and proportions exactly. All four views must show one and the same real "
+            "object with the same colours, the same hair and the same details. Do not add anything that is not in "
+            f"<image1>: no hat, no clothes, no mask. {OUTLINE[part]}{EXTRA[part]}{CUT[part]} In the view from the back "
+            "the face is not visible. A flat bright green background in all four cells.")
+
+
 def run(cmd, cwd, log):
     log.append("> " + " ".join(map(str, cmd)))
     print(log[-1], flush=True)
@@ -79,6 +90,15 @@ def crop(paths, margin, size=1024):
     return out, int(side)
 
 
+def sheet(pics, cell):
+    """The four views as a 2x2 sheet: front, left / back, right."""
+    from PIL import Image
+    sh = Image.new("RGB", (2 * cell, 2 * cell))
+    for k, im in enumerate(pics):
+        sh.paste(im.resize((cell, cell), Image.LANCZOS), ((k % 2) * cell, (k // 2) * cell))
+    return sh
+
+
 def tensor(im):
     import numpy as np
     import torch
@@ -97,11 +117,12 @@ class PDMPartViews:
             "margin": ("FLOAT", {"default": -1.0, "min": -1.0, "max": 0.5, "step": 0.01}),
             "rerender": ("BOOLEAN", {"default": False}),
             "python": ("STRING", {"default": "python"}),
+            "sheet_cell": ("INT", {"default": 1024, "min": 256, "max": 2048, "step": 64}),
         }}
 
-    RETURN_TYPES = ("IMAGE",) * 4 + ("STRING",) * 7
+    RETURN_TYPES = ("IMAGE",) * 4 + ("STRING",) * 7 + ("IMAGE", "STRING")
     RETURN_NAMES = ("front", "left", "back", "right", "prompt_front", "prompt_left", "prompt_back", "prompt_right",
-                    "part", "model", "info")
+                    "part", "model", "info", "sheet", "prompt_sheet")
     OUTPUT_NODE = True
     FUNCTION = "go"
     CATEGORY = "pdm"
@@ -110,7 +131,7 @@ class PDMPartViews:
     def IS_CHANGED(cls, **kw):
         return float("nan")
 
-    def go(self, repo, game, model, part_index, tpose, margin, rerender, python):
+    def go(self, repo, game, model, part_index, tpose, margin, rerender, python, sheet_cell=1024):
         STATE["start"] = time.time()
         part = PARTS[part_index % len(PARTS)]
         m = CFG[part][0] if margin < 0 else margin
@@ -128,7 +149,7 @@ class PDMPartViews:
         text = "\n".join(log)
         return {"ui": {"text": [text]},
                 "result": tuple(tensor(p) for p in pics) + tuple(prompt_of(part, v) for v in VIEW_ORDER)
-                + (part, model, text)}
+                + (part, model, text, tensor(sheet(pics, sheet_cell)), sheet_prompt(part))}
 
 
 def find_glb(mesh):
@@ -151,6 +172,27 @@ def find_glb(mesh):
     new = [p for p in glob.glob(os.path.join(out, "**", "*.glb"), recursive=True)
            if os.path.getmtime(p) >= STATE["start"] - 5]
     return max(new, key=os.path.getmtime) if new else None
+
+
+class PDMSheetSplit:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"sheet": ("IMAGE",)}}
+
+    RETURN_TYPES = ("IMAGE",) * 4
+    RETURN_NAMES = VIEW_ORDER
+    FUNCTION = "go"
+    CATEGORY = "pdm"
+
+    def go(self, sheet):
+        """The 2x2 sheet (front, left / back, right) back into four views of 1024 px."""
+        import torch
+        h, w = sheet.shape[1] // 2, sheet.shape[2] // 2
+        cells = [sheet[:, (k // 2) * h:(k // 2 + 1) * h, (k % 2) * w:(k % 2 + 1) * w, :] for k in range(4)]
+        if h != 1024:
+            cells = [torch.nn.functional.interpolate(c.permute(0, 3, 1, 2), size=(1024, 1024), mode="bicubic",
+                                                     align_corners=False).permute(0, 2, 3, 1).clamp(0, 1) for c in cells]
+        return tuple(cells)
 
 
 class PDMPartSave:
@@ -209,8 +251,9 @@ class PDMPartSave:
         return {"ui": {"text": [text]}, "result": (text,)}
 
 
-NODE_CLASS_MAPPINGS = {"PDMPartViews": PDMPartViews, "PDMPartSave": PDMPartSave}
+NODE_CLASS_MAPPINGS = {"PDMPartViews": PDMPartViews, "PDMPartSave": PDMPartSave, "PDMSheetSplit": PDMSheetSplit}
 NODE_DISPLAY_NAME_MAPPINGS = {"PDMPartViews": "PDM Part Views (splits the character)",
-                              "PDMPartSave": "PDM Part Save (GLB + optimize)"}
+                              "PDMPartSave": "PDM Part Save (GLB + optimize)",
+                              "PDMSheetSplit": "PDM Sheet Split (2x2 -> 4 views)"}
 WEB_DIRECTORY = "./js"
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]
