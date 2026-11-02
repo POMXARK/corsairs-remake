@@ -52,7 +52,7 @@ USER_STD = {"documents", "desktop", "pictures", "music", "videos", "downloads", 
 
 
 class Dir:
-    __slots__ = ("name", "size", "files", "t", "dirs", "fl", "err", "cat")
+    __slots__ = ("name", "size", "files", "t", "dirs", "fl", "err", "cat", "mt", "own")
 
     def __init__(self, name, ctime):
         self.name = name
@@ -63,6 +63,8 @@ class Dir:
         self.fl = []  # крупные файлы: (name, size, ctime, mtime, atime)
         self.err = False
         self.cat = None
+        self.mt = 0.0  # mtime самой папки: не изменилась — файлы внутри не перечитываем (умное обновление)
+        self.own = None  # итоги по файлам прямо в папке: [размер, файлов, cat, t1, t2]
 
 
 class Scan:
@@ -78,8 +80,13 @@ class Scan:
         self.cancel = False
         self.errors = 0
         self.keep = 1 << 20
+        self.cached = 0
+        self.reused = 0
 
-    def run(self, path, keep_mb):
+    def run(self, path, keep_mb, full=False):
+        old = None if full else load_scan(path, keep_mb)
+        self.reused = 0
+        self.cached = 0
         self.state = "scanning"
         self.cancel = False
         self.files = self.bytes = self.errors = 0
@@ -88,16 +95,22 @@ class Scan:
         self.t0 = time.time()
         try:
             st = os.stat(path)
-            self.root = self._dir(path, path, st.st_ctime)
+            log("сканирование %s (%s)" % (path, "быстрое, по кэшу" if old else "полное"))
+            self.root = self._dir(path, path, st.st_ctime, st.st_mtime, old)
             self.state = "cancelled" if self.cancel else "done"
             if self.state == "done":
                 save_cards()
+                save_scan()
+                log("сканирование готово: %d файлов, папок из кэша %d, %.1f с" % (self.files, self.reused, time.time() - self.t0))
         except OSError as e:
             self.state = "error: %s" % e
         self.elapsed = time.time() - self.t0
 
-    def _dir(self, path, name, ctime):
+    def _dir(self, path, name, ctime, mt=0.0, old=None):
         d = Dir(name, ctime)
+        d.mt = mt
+        reuse = old is not None and old.own is not None and old.mt == mt and not old.err
+        own = [0, 0, None, 0.0, 0.0]
         self.cur = path
         try:
             it = os.scandir(path)
@@ -110,11 +123,13 @@ class Scan:
                 if self.cancel:
                     break
                 try:
+                    if reuse and not e.is_dir(follow_symlinks=False):
+                        continue
                     s = e.stat(follow_symlinks=False)
                     if getattr(s, "st_file_attributes", 0) & REPARSE or e.is_symlink():
                         continue
                     if e.is_dir(follow_symlinks=False):
-                        sub = self._dir(e.path, e.name, s.st_ctime)
+                        sub = self._dir(e.path, e.name, s.st_ctime, s.st_mtime, old.dirs.get(e.name) if old else None)
                         d.dirs[e.name] = sub
                         d.size += sub.size
                         d.files += sub.files
@@ -126,19 +141,34 @@ class Scan:
                             for i, v in enumerate(sub.cat):
                                 d.cat[i] += v
                     else:
-                        d.size += s.st_size
-                        d.files += 1
-                        self.files += 1
-                        self.bytes += s.st_size
-                        if d.cat is None:
-                            d.cat = [0] * NCAT
-                        d.cat[_E.get(os.path.splitext(e.name)[1].lower(), NCAT - 1)] += s.st_size
-                        d.t[1] = max(d.t[1], s.st_mtime)
-                        d.t[2] = max(d.t[2], s.st_atime)
+                        k = _E.get(os.path.splitext(e.name)[1].lower(), NCAT - 1)
+                        own[0] += s.st_size
+                        own[1] += 1
+                        if own[2] is None:
+                            own[2] = [0] * NCAT
+                        own[2][k] += s.st_size
+                        own[3] = max(own[3], s.st_mtime)
+                        own[4] = max(own[4], s.st_atime)
                         if s.st_size >= self.keep:
                             d.fl.append((e.name, s.st_size, s.st_ctime, s.st_mtime, s.st_atime))
                 except OSError:
                     self.errors += 1
+        if reuse and not self.cancel:
+            own = [old.own[0], old.own[1], list(old.own[2]) if old.own[2] else None, old.own[3], old.own[4]]
+            d.fl = list(old.fl)
+            self.reused += 1
+        d.own = own
+        d.size += own[0]
+        d.files += own[1]
+        self.files += own[1]
+        self.bytes += own[0]
+        if own[2]:
+            if d.cat is None:
+                d.cat = [0] * NCAT
+            for i, v in enumerate(own[2]):
+                d.cat[i] += v
+        d.t[1] = max(d.t[1], own[3])
+        d.t[2] = max(d.t[2], own[4])
         return d
 
     def find(self, path):
@@ -160,6 +190,78 @@ class Scan:
 
 
 SC = Scan()
+
+
+def _scan_file(path):
+    import hashlib
+    return "scan_%s.json.gz" % hashlib.md5(os.path.normcase(path).encode("utf-8")).hexdigest()[:12]
+
+
+def _dump(d):
+    return [d.name, d.t[0], d.mt, int(d.err), d.own, [list(f) for f in d.fl],
+            [_dump(x) for x in d.dirs.values()]]
+
+
+def _undump(a):
+    d = Dir(a[0], a[1])
+    d.mt, d.err, d.own, d.fl = a[2], bool(a[3]), a[4], [tuple(f) for f in a[5]]
+    own = d.own or [0, 0, None, 0.0, 0.0]
+    d.size, d.files = own[0], own[1]
+    d.t[1], d.t[2] = own[3], own[4]
+    d.cat = list(own[2]) if own[2] else None
+    for x in a[6]:
+        sub = _undump(x)
+        d.dirs[sub.name] = sub
+        d.size += sub.size
+        d.files += sub.files
+        d.t[1] = max(d.t[1], sub.t[1])
+        d.t[2] = max(d.t[2], sub.t[2])
+        if sub.cat:
+            if d.cat is None:
+                d.cat = [0] * NCAT
+            for i, v in enumerate(sub.cat):
+                d.cat[i] += v
+    return d
+
+
+def save_scan():
+    """Результат сканирования на диск (gzip): после перезапуска сервера он не теряется, повторный скан обновляет только изменившееся."""
+    import gzip
+    try:
+        os.makedirs(DATA, exist_ok=True)
+        meta = {"path": SC.root_path, "keep": SC.keep, "ts": int(time.time()), "files": SC.files, "bytes": SC.bytes,
+                "errors": SC.errors, "elapsed": SC.elapsed}
+        sys.setrecursionlimit(max(sys.getrecursionlimit(), 5000))
+        with gzip.open(os.path.join(DATA, _scan_file(SC.root_path)), "wt", encoding="utf-8") as f:
+            json.dump({"meta": meta, "tree": _dump(SC.root)}, f, ensure_ascii=False)
+        _jsave("scan_last.json", meta)
+    except (OSError, RecursionError) as e:
+        log("не удалось сохранить скан: %s" % e)
+
+
+def load_scan(path, keep_mb=None, meta_only=False):
+    import gzip
+    try:
+        sys.setrecursionlimit(max(sys.getrecursionlimit(), 5000))
+        with gzip.open(os.path.join(DATA, _scan_file(path)), "rt", encoding="utf-8") as f:
+            j = json.load(f)
+        if keep_mb is not None and int(keep_mb * (1 << 20)) != j["meta"]["keep"]:
+            return None  # порог «крупных файлов» другой — списки файлов не совпадут
+        return j["meta"] if meta_only else _undump(j["tree"])
+    except (OSError, ValueError, KeyError, IndexError, TypeError):
+        return None
+
+
+def restore_scan():
+    m = _jload("scan_last.json", None)
+    if not m or SC.root is not None:
+        return
+    t = load_scan(m["path"])
+    if t is None:
+        return
+    SC.root, SC.root_path, SC.state = t, m["path"], "done"
+    SC.files, SC.bytes, SC.errors, SC.elapsed, SC.keep, SC.cached = m["files"], m["bytes"], m["errors"], m["elapsed"], m["keep"], m["ts"]
+    log("скан восстановлен из кэша: %s, %d файлов (%s)" % (m["path"], m["files"], time.strftime("%Y-%m-%d %H:%M", time.localtime(m["ts"]))))
 
 
 _PROGS = None
@@ -466,25 +568,34 @@ def http_json(url, body=None, key="", timeout=300):
         return json.loads(r.read())
 
 
-def llm(prompt, model="", max_tokens=300, temp=0.2, prof=None, timeout=300, as_json=False):
+def llm(prompt, model="", max_tokens=300, temp=0.2, prof=None, timeout=300, as_json=False, keep=False):
     """Один вызов модели через активный профиль: Ollama или любой OpenAI-совместимый сервер."""
     p = prof or profile()
     model = model or p.get("model", "")
-    if p["type"] == "ollama" and "qwen3" in model:
-        prompt += "\n/no_think"
-    prompt += "\nОтвечай сразу готовым ответом, без рассуждений и пересказа задачи."
+    if not keep:
+        if p["type"] == "ollama" and "qwen3" in model:
+            prompt += "\n/no_think"
+        prompt += "\nОтвечай сразу готовым ответом, без рассуждений и пересказа задачи."
     url = p["url"].rstrip("/")
     if p["type"] == "ollama":
-        r = http_json(url + "/api/generate", {"model": model, "prompt": prompt, "stream": False, "think": False,
+        r = http_json(url + "/api/generate", {"model": model, "prompt": prompt, "stream": False, "think": bool(keep),
                                               "options": {"temperature": temp, "num_predict": max_tokens},
                                               **({"format": "json"} if as_json else {})}, p.get("key", ""), timeout)
         text = r.get("response", "")
+        if keep and r.get("thinking"):
+            text = "<think>%s</think>%s" % (r["thinking"], text)
     else:
         r = http_json(url + "/chat/completions", {"model": model, "messages": [{"role": "user", "content": prompt}],
                                                   "temperature": temp, "max_tokens": max_tokens,
                                                   **({"response_format": {"type": "json_object"}} if as_json else {})}, p.get("key", ""), timeout)
         text = r["choices"][0]["message"]["content"]
     text = text or ""
+    if keep:
+        m = re.match(r"\s*<think>(.*?)</think>(.*)$", text, re.S)
+        th, ans = (m.group(1).strip(), m.group(2).strip()) if m else ("", text.strip())
+        if not ans:
+            ans = "(модель не успела дать вывод — рассуждения заняли весь лимит; повторите или выберите другую модель)"
+        return ("💭 Размышления:\n" + th + "\n\n" if th else "") + "✅ Вывод:\n" + ans
     if "</think>" in text:
         text = text.rsplit("</think>", 1)[1]
     text = re.sub(r"<think>.*$", "", text, flags=re.S).strip()
@@ -889,10 +1000,38 @@ def web_info(path, model="", save=True, q=""):
 
 
 
-def describe(path, model):
+AN = _jload("analysis.json", {})
+
+
+def ai_cached(kind, path, model, force, make):
+    """Кэш ответов модели (analysis.json): результат по папке переиспользуется, пока размер и число файлов
+    изменились меньше чем на 3% («умное обновление»); иначе или по force считается заново."""
     d = SC.find(path)
     if d is None:
         return {"error": "нет такой папки"}
+    k = kind + "|" + os.path.normcase(path)
+    e = AN.get(k)
+    near = lambda a, b: abs(a - b) <= 0.03 * max(a, b, 1)
+    if e and not force and near(e["size"], d.size) and near(e["files"], d.files):
+        log("кэш анализа: %s %s (%s)" % (kind, path, time.strftime("%Y-%m-%d %H:%M", time.localtime(e["ts"]))))
+        return dict(e["res"], cached=e["ts"])
+    why = "пересчёт по запросу" if force else ("папка изменилась" if e else "первый раз")
+    log("анализ моделью: %s %s — %s" % (kind, path, why))
+    res = make(d)
+    if not res.get("error"):
+        AN[k] = {"size": d.size, "files": d.files, "ts": int(time.time()), "model": model, "res": res}
+        try:
+            _jsave("analysis.json", AN)
+        except OSError as ex:
+            log("analysis.json: %s" % ex)
+    return res
+
+
+def describe(path, model, force=False):
+    return ai_cached("describe", path, model, force, lambda d: _describe(d, path, model))
+
+
+def _describe(d, path, model):
     f = lambda t: time.strftime("%Y-%m-%d", time.localtime(t)) if t else "?"
     subs = sorted(d.dirs.items(), key=lambda x: -x[1].size)[:10]
     big = sorted(d.fl, key=lambda x: -x[1])[:10]
@@ -908,7 +1047,7 @@ def describe(path, model):
          "; ".join("%s (%.0f МБ)" % (x[0], x[1] / 2**20) for x in big) or "нет",
          program_of(path) or "не найдена")
     try:
-        return {"text": llm(prompt, model, 500)}
+        return {"text": llm(prompt, model, 4000, timeout=600, keep=True)}
     except Exception as e:
         return {"error": "модель недоступна: %s" % e}
 
@@ -1242,10 +1381,11 @@ def ask(q, model):
     return {"answer": ans, "sources": src, "dups": dp}
 
 
-def suggest(path, model):
-    d = SC.find(path)
-    if d is None:
-        return {"error": "нет такой папки"}
+def suggest(path, model, force=False):
+    return ai_cached("suggest", path, model, force, lambda d: _suggest(d, path, model))
+
+
+def _suggest(d, path, model):
     c = {"path": path, "name": d.name, "size": d.size, "files": d.files, "t": d.t, "cats": cats_of(d, 4),
          "prog": program_of(path) if os.name == "nt" else "",
          "subs": [n for n, _ in sorted(d.dirs.items(), key=lambda x: -x[1].size)[:8]],
@@ -1957,7 +2097,7 @@ class H(BaseHTTPRequestHandler):
         if u.path == "/api/status":
             el = time.time() - SC.t0 if SC.state == "scanning" else SC.elapsed
             return self.send({"state": SC.state, "files": SC.files, "bytes": SC.bytes, "cur": SC.cur,
-                              "elapsed": el, "errors": SC.errors, "root": SC.root_path})
+                              "elapsed": el, "errors": SC.errors, "root": SC.root_path, "cached": SC.cached, "reused": SC.reused})
         if u.path == "/api/icon":
             b = icon_png(q.get("path", ""))
             if b is None:
@@ -2014,7 +2154,7 @@ class H(BaseHTTPRequestHandler):
             p = b.get("path", "")
             if not os.path.isdir(p):
                 return self.send({"error": "нет такой папки"}, 400)
-            threading.Thread(target=SC.run, args=(p, float(b.get("keep", 1))), daemon=True).start()
+            threading.Thread(target=SC.run, args=(p, float(b.get("keep", 1)), bool(b.get("full"))), daemon=True).start()
             return self.send({"ok": True})
         if u.path == "/api/cancel":
             SC.cancel = True
@@ -2035,7 +2175,7 @@ class H(BaseHTTPRequestHandler):
         if u.path == "/api/ask":
             return self.send(ask(b.get("q", ""), b.get("model", "")))
         if u.path == "/api/suggest":
-            return self.send(suggest(b.get("path", ""), b.get("model", "")))
+            return self.send(suggest(b.get("path", ""), b.get("model", ""), b.get("force", False)))
         if u.path == "/api/trash":
             return self.send(to_trash(b.get("path", "")))
         if u.path == "/api/delete":
@@ -2058,7 +2198,7 @@ class H(BaseHTTPRequestHandler):
         if u.path == "/api/web":
             return self.send(web_info(b.get("path", ""), b.get("model", ""), q=b.get("q", "")))
         if u.path == "/api/describe":
-            return self.send(describe(b.get("path", ""), b.get("model", "")))
+            return self.send(describe(b.get("path", ""), b.get("model", ""), b.get("force", False)))
         if u.path == "/api/reveal":
             ok = reveal(b.get("path", ""))
             if ok and in_library(b.get("path", "")):
@@ -2097,7 +2237,7 @@ footer span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
  <span id="drv"></span>
  <input id="path" placeholder="Что сканировать: C:\ или любая папка">
  <label>файлы от <input id="keep" type="number" value="1" min="0" step="0.5" style="width:60px"> МБ</label>
- <button class="p" id="go">Сканировать</button><button id="stop" disabled>Стоп</button>
+ <button class="p" id="go" title="Быстро: папки, у которых не изменилось время, берутся из сохранённого скана">Сканировать</button><label title="Игнорировать кэш и перечитать всё"><input type="checkbox" id="full"> полностью</label><button id="stop" disabled>Стоп</button>
  <label>Возраст по <select id="field"><option value="m">изменению</option><option value="a">доступу</option><option value="c">созданию</option></select></label>
  <button id="web" disabled title="Поиск в интернете: наружу уходит только имя файла/папки">🌐 В интернете</button><button id="cfg">⚙ Модель</button><span class="legend">свежее<i></i>старше 3 лет</span>
 </header>
@@ -2122,7 +2262,7 @@ footer span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 <div style="color:var(--mut)">Рекомендуется для этой задачи: небольшая инструкционная модель с русским — <b>qwen3:8b</b> (или 4b на слабой видеокарте); для будущего семантического поиска — эмбеддинги <b>bge-m3</b>. Coder/vision-модели не нужны.</div><div id="cwarn" style="color:#c80"></div><div id="cres" style="color:var(--mut);white-space:pre-wrap"></div>
 <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" id="csv2" class="p">Сохранить</button><button type="button" id="cts">Проверить и получить список</button><button type="button" id="cact">Сделать активной</button><button type="button" id="cdel">Удалить</button><button value="x">Закрыть</button></div></form></dialog>
 <div id="tip"></div>
-<div id="aiw" style="display:none;position:relative;background:var(--pan);border-top:1px solid var(--line)"><button id="aix" title="Закрыть" style="position:absolute;right:8px;top:4px">✕</button><div id="ai" style="padding:6px 40px 6px 12px;max-height:40vh;min-height:60px;overflow:auto;resize:vertical;white-space:pre-wrap;user-select:text"></div></div>
+<div id="aiw" style="display:none;position:relative;background:var(--pan);border-top:1px solid var(--line)"><button id="aix" title="Закрыть" style="position:absolute;right:8px;top:4px">✕</button><div id="ai" style="padding:6px 40px 6px 12px;height:30vh;min-height:60px;max-height:70vh;overflow-y:scroll;resize:vertical;white-space:pre-wrap;user-select:text;scrollbar-width:auto;scrollbar-color:#888 transparent"></div></div>
 <div id="logw" style="display:none;background:var(--pan);border-top:1px solid var(--line)"><div style="padding:2px 12px;color:var(--mut)">📜 Логи сервера <button id="logc">Очистить</button> <button id="logx">✕</button></div><pre id="logp" style="margin:0;padding:4px 12px;height:22vh;overflow:auto;font-size:12px;user-select:text"></pre></div>
 <footer><span id="sel" style="min-width:200px">—</span><select id="coll" title="Коллекция"></select><button id="tocoll" disabled>В коллекцию</button><button id="tags" disabled>Теги…</button><button id="sug" disabled>Теги ИИ</button><select id="model" title="Локальная модель Ollama"></select><button id="desc" disabled>Что это? (ИИ)</button><button id="rev" disabled>Показать в Проводнике</button><button id="cp" disabled>Копировать путь</button><button id="tomap" disabled>На карте</button><button id="tr" disabled>В корзину</button><button id="rm" disabled style="color:#d33">Удалить навсегда</button></footer>
 <script>
@@ -2137,13 +2277,13 @@ async function api(u,b){const r=await fetch(u,b?{method:"POST",body:JSON.stringi
 (async()=>{const d=await api("/api/drives");sep=d.sep;$("#drv").innerHTML=d.drives.map(x=>`<button data-d="${esc(x)}">${esc(x)}</button>`).join("");
  $("#path").value=d.drives[0];try{const l=localStorage.getItem("dv_root");if(l)$("#path").value=l}catch(e){}$("#drv").onclick=e=>{if(e.target.dataset.d)$("#path").value=e.target.dataset.d};
  const s=await api("/api/status");if(s.state=="done"){rootPath=s.root;$("#path").value=s.root;show(s)}})();
-$("#go").onclick=async()=>{const r=await api("/api/scan",{path:$("#path").value.trim(),keep:+$("#keep").value});if(r.error)return alert(r.error);
+$("#go").onclick=async()=>{const r=await api("/api/scan",{path:$("#path").value.trim(),keep:+$("#keep").value,full:$("#full").checked});if(r.error)return alert(r.error);
  $("#go").disabled=true;$("#stop").disabled=false;poll=setInterval(tick,500)};
 $("#stop").onclick=()=>api("/api/cancel",{});
 async function tick(){const s=await api("/api/status");
  $("#st").textContent=s.state=="scanning"?`Сканирую… ${s.files.toLocaleString()} файлов, ${fmt(s.bytes)}, ${s.elapsed.toFixed(0)} с — ${s.cur}`:`${s.state}: ${s.files.toLocaleString()} файлов, ${fmt(s.bytes)}, ${s.elapsed.toFixed(1)} с, недоступных папок: ${s.errors}`;
  if(s.state!="scanning"){clearInterval(poll);$("#go").disabled=false;$("#stop").disabled=true;if(s.state=="done"||s.state=="cancelled")show(s)}}
-function show(s){rootPath=s.root;try{localStorage.setItem("dv_root",s.root)}catch(e){}mapPath=s.root;$("#st").textContent=`${s.root}: ${s.files.toLocaleString()} файлов, ${fmt(s.bytes)}, ${s.elapsed.toFixed(1)} с, недоступных папок: ${s.errors}`;render()}
+function show(s){rootPath=s.root;s.cachedTxt=s.cached?" · из кэша от "+new Date(s.cached*1000).toLocaleString()+" — «Сканировать» обновит только изменившееся":(s.reused?" · из кэша папок: "+s.reused:"");try{localStorage.setItem("dv_root",s.root)}catch(e){}mapPath=s.root;$("#st").textContent=`${s.root}: ${s.files.toLocaleString()} файлов, ${fmt(s.bytes)}, ${s.elapsed.toFixed(1)} с, недоступных папок: ${s.errors}${s.cachedTxt}`;render()}
 document.addEventListener("click",e=>{const a=e.target.closest(".shots a");if(!a)return;e.preventDefault();e.stopPropagation();
  const L=[...a.closest(".shots").querySelectorAll("a")].map(x=>x.getAttribute("href"));let k=L.indexOf(a.getAttribute("href"));
  const o=document.createElement("div");o.id="lbx";o.innerHTML=`<img referrerpolicy="no-referrer"><b class="lp">‹</b><b class="ln">›</b><b class="lx">✕</b><span class="lc"></span>`;
@@ -2196,8 +2336,9 @@ $("#web").onclick=async()=>{if(!sel)return;const a=$("#ai");$("#aiw").style.disp
  const r=await api("/api/web",{path:sel.path,model:$("#model").value});if(r.error){a.textContent=r.error;return}
  a.innerHTML=(r.image?`<img src="${esc(r.image)}" referrerpolicy="no-referrer" style="float:right;max-height:120px;margin-left:8px;border-radius:4px">`:"")+`<b>${esc(r.title||r.query)}</b><br>${esc(r.text)}`+(r.tips?`<br><br><b>Что делать:</b><br>${esc(r.tips).replace(/\n/g,"<br>")}`:"")+
   (r.results.length?"<br><br>"+r.results.map(x=>`<a href="${esc(x.url)}" target="_blank" rel="noreferrer">${esc(x.title)}</a>`).join("<br>"):"")+`<br><i>Сохранено в заметке папки (библиотека).</i>`};
-$("#desc").onclick=async()=>{if(!sel)return;const a=$("#ai");$("#aiw").style.display="block";a.textContent="Думаю… ("+$("#model").value+")";
- const r=await api("/api/describe",{path:sel.path,model:$("#model").value});a.textContent=r.error||r.text};
+const aiNote=(a,r,again)=>{if(!r.cached)return;const b=document.createElement("button");b.textContent="↻ Пересчитать";b.onclick=again;a.append("\n\n📦 Из кэша от "+new Date(r.cached*1000).toLocaleString()+" (папка почти не менялась) ",b)};
+$("#desc").onclick=async function go(force){if(!sel)return;const a=$("#ai");$("#aiw").style.display="block";a.textContent="Думаю… ("+$("#model").value+")";
+ const r=await api("/api/describe",{path:sel.path,model:$("#model").value,force:force===true});a.textContent=r.error||r.text;aiNote(a,r,()=>go(true))};
 async function afterLib(){await libLoad();if(view=="lib")rLib();else if(sel){const p=sel.path;render()}}
 async function place(it){const w=$("#aiw"),a=$("#ai");w.style.display="block";a.textContent="Подбираю коллекцию и теги ("+($("#model").value||"без модели")+")…";
  const r=await api("/api/autoplace",{...it,model:$("#model").value,web:true});await afterLib();
@@ -2209,7 +2350,7 @@ async function editTags(def){if(!sel)return;const cur=def||{tags:sel.tags||[],no
  const s=sel.path;await afterLib();if(view!="lib")render()}
 $("#tags").onclick=()=>editTags();
 $("#sug").onclick=async()=>{const a=$("#ai");$("#aiw").style.display="block";a.textContent="Предлагаю теги…";const r=await api("/api/suggest",{path:sel.path,model:$("#model").value});
- if(r.error){a.textContent=r.error;return}a.textContent="Предложено: "+r.tags.join(", ")+" — "+r.note;editTags({tags:r.tags,note:r.note})};
+ if(r.error){a.textContent=r.error;return}a.textContent="Предложено: "+r.tags.join(", ")+" — "+r.note+(r.cached?" (из кэша от "+new Date(r.cached*1000).toLocaleString()+")":"");editTags({tags:r.tags,note:r.note})};
 async function gone(r){if(!r.ok)return alert("Не вышло: "+r.error);sel=null;pick(null);render()}
 $("#tr").onclick=async()=>{if(sel&&confirm(`Отправить в корзину?\n${sel.path}\n${fmt(sel.size)}\nМесто на диске освободится после очистки корзины.`))gone(await api("/api/trash",{path:sel.path}))};
 $("#rm").onclick=async()=>{if(!sel)return;const nm=sel.path.split(sep).filter(Boolean).pop();
@@ -2459,6 +2600,7 @@ def main():
         SC.run(a.scan, 1)
         print(SC.state, SC.files, SC.bytes, "%.1fs" % SC.elapsed, "errors", SC.errors)
         return
+    restore_scan()
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), H)
     SRV.append(srv)
     url = "http://127.0.0.1:%d/" % a.port
