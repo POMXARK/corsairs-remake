@@ -222,7 +222,7 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
     return acc, wsum, cover, used
 
 
-TONE_SIGMA = 24  # texels: the views differ in tone (lighting, colour grading) and the seams between them show; level the low frequencies
+TONE_SIGMA = 40  # texels: the views differ in tone (lighting, colour grading) and the seams between them show; level the low frequencies
 
 
 def combine(atlas, acc, wsum):
@@ -236,7 +236,7 @@ def combine(atlas, acc, wsum):
         cols[n] = acc[n] / np.maximum(wsum[n], 1e-6)[..., None]
         norm = np.maximum(cv2.GaussianBlur(m, (0, 0), TONE_SIGMA), 1e-4)[..., None]
         lows[n] = cv2.GaussianBlur(cols[n] * m[..., None], (0, 0), TONE_SIGMA) / norm
-        ws[n] = cv2.GaussianBlur(np.minimum(wsum[n] * 50, 1), (0, 0), TONE_SIGMA)[..., None]
+        ws[n] = cv2.GaussianBlur(wsum[n] ** (1 / 3), (0, 0), TONE_SIGMA)[..., None]  # w**2: a view that faces the texel sets the tone, a grazing one does not
     target = sum(lows[n] * ws[n] for n in acc) / np.maximum(sum(ws.values()), 1e-6)
     out = np.zeros_like(atlas)
     for n in acc:
