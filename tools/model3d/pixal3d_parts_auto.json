@@ -1,5 +1,5 @@
 {
- "id": "c0fb257c-11fa-4555-8fae-74459d6c76b3",
+ "id": "b6356910-3a46-4270-be5e-8568fc42ce92",
  "revision": 0,
  "last_node_id": 2017,
  "last_link_id": 4826,
@@ -1221,7 +1221,7 @@
     }
    },
    "widgets_values": [
-    700000,
+    60000,
     "midpoint"
    ],
    "widgets_values_named": {

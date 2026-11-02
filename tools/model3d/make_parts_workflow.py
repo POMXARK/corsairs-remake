@@ -60,6 +60,9 @@ def main():
     # refine_prompt (widget 2): the VLM of the subgraph (Qwen3.5 PE) looks at the view and rewrites our prompt by what it shows
     for ref in REFINE.values():
         nodes[ref]["widgets_values"][2] = True
+    # DecimateMesh (186) 700000 faces -> UnwrapMesh cut them into 10 358 tiny charts, the 4096 atlas was confetti
+    # (the log of the first run). 60000 faces unwrap into big charts; the detail comes from reference_mesh / normal map.
+    nodes[186]["widgets_values"][0] = 60000
     # the refined front is the second reference of the other views: one identity in all of them
     front_ref = REFINE[1140]
     for old in (1143, 1144, 1147):
