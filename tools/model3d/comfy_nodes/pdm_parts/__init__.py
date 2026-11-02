@@ -254,8 +254,11 @@ class PDMPartSave:
                 Image.fromarray((t[0].cpu().numpy() * 255).clip(0, 255).astype("uint8")).save(pth)
                 paths.append(pth)
             try:
-                run([python, Path(repo) / "tools" / "pdm_project_views.py", src, glb / f"{name}.glb", *paths], repo, log)
                 import shutil
+                plain = Path(src).with_name(Path(src).stem + "_projected.glb")  # views projected as they are, without the fit to the mesh
+                run([python, Path(repo) / "tools" / "pdm_project_views.py", src, plain, *paths, "--no-align"], repo, log)
+                log.append(f"projected without alignment: {plain}")
+                run([python, Path(repo) / "tools" / "pdm_project_views.py", src, glb / f"{name}.glb", *paths], repo, log)
                 painted = Path(src).with_name(Path(src).stem + "_painted.glb")  # the raw ComfyUI GLB has the smeared generated texture
                 shutil.copyfile(glb / f"{name}.glb", painted)
                 log.append(f"painted from the views: {painted}")
