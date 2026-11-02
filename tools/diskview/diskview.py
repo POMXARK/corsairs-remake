@@ -923,7 +923,7 @@ def all_cards():
 
 
 def toks(s):
-    return [t[:6] for t in re.findall(r"[^\W_]+", s.lower())]
+    return [t[:5] for t in re.findall(r"[^\W_]+", s.lower())]
 
 
 def card_text(c):
@@ -964,7 +964,7 @@ def query_toks(q):
     out = toks(q)
     for t in list(out):
         for ru, en in RU_EN.items():
-            if t.startswith(ru[:6]):
+            if t.startswith(ru[:5]):
                 out += toks(en)
     return out
 
@@ -985,6 +985,82 @@ def search(q, k=8):
             sc.append((s, i))
     sc.sort(reverse=True)
     return [cards[i] for _, i in sc[:k]]
+
+
+_SG = None
+
+
+def _sg_vocab():
+    """Словарь подсказок: названия, теги, жанры, коллекции — со счётчиками."""
+    global _SG
+    if _SG and _SG[0] is _IDX and _IDX is not None:
+        return _SG[1], _SG[2]
+    index()
+    ents, words = {}, {}
+
+    def add(x, kind, w=1):
+        x = re.sub(r"[-_.]+", " ", x or "").strip()
+        x = re.sub(r"\s*(InsaneRamZes|Repack|RePack|FitGirl|GOG|CODEX|SKIDROW).*$", "", x, flags=re.I).strip()
+        if 2 <= len(x) <= 70:
+            ents.setdefault(x, [kind, 0])[1] += w
+            for t in re.findall(r"[^\W_]{3,}", x.lower()):
+                words[t] = words.get(t, 0) + w
+    for col in LIB["collections"]:
+        add(col["name"], "коллекция", 5)
+    for p, v in LIB["tags"].items():
+        for t in v.get("tags", []):
+            add(t, "тег", 2)
+        w = v.get("web") or {}
+        if w.get("src"):
+            add(w.get("title", ""), "игра/программа", 3)
+            for g in w.get("genres", []):
+                add(g, "жанр", 1)
+            for t in re.findall(r"[^\W_]{5,}", (w.get("text") or "").lower()):
+                words[t] = words.get(t, 0) + 1
+    for c in all_cards()[:3000]:
+        add(os.path.basename(c["name"].rstrip("\\/")) or c["name"], "папка", 1)
+    _SG = (_IDX, ents, words)
+    return ents, words
+
+
+SG_TPL = ["что занимает больше всего места", "найди дубликаты", "что можно архивировать", "что давно не использовал",
+          "игры про", "программы для"]
+
+
+def suggestions(q, k=8):
+    ents, words = _sg_vocab()
+    ql = q.lower().strip()
+    if not ql:
+        top = sorted(ents.items(), key=lambda x: -x[1][1])
+        return [{"text": t, "kind": "шаблон"} for t in SG_TPL[:4]] + [{"text": t, "kind": v[0]} for t, v in top if v[0] in ("коллекция", "жанр")][:4]
+    parts = ql.split()
+    last, head = parts[-1], " ".join(parts[:-1])
+    out, seen = [], set()
+
+    def put(t, kind):
+        if t.lower() not in seen and t.lower() != ql:
+            seen.add(t.lower())
+            out.append({"text": t, "kind": kind})
+    for t, (kind, n) in sorted(ents.items(), key=lambda x: -x[1][1]):
+        tl = t.lower()
+        if all(any(w.startswith(p) for w in re.findall(r"[^\W_]+", tl)) for p in parts):
+            put(t, kind)
+        if len(out) >= 4:
+            break
+    glue = last in ("про", "для", "из", "на", "с", "по")
+    for w, n in sorted(words.items(), key=lambda x: -x[1]):
+        if (glue or w.startswith(last)) and w != last:
+            if w not in parts:
+                put(((ql if glue else head) + " " + w).strip(), "слово")
+        if len(out) >= 7:
+            break
+    for t in SG_TPL:
+        if t.startswith(ql) or (len(ql) >= 3 and ql in t):
+            put(t, "шаблон")
+    if len(ql) >= 3 and not any(ql.startswith(x) for x in ("игры", "программы", "найди", "что", "где")):
+        put("игры про " + ql, "запрос")
+        put("где лежит " + ql, "запрос")
+    return out[:k]
 
 
 def fdate(t):
@@ -1795,6 +1871,8 @@ class H(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         if u.path == "/":
             return self.send(PAGE.encode(), ctype="text/html")
+        if u.path == "/api/suggest":
+            return self.send({"items": suggestions(q.get("q", ""))})
         if u.path == "/api/drives":
             return self.send({"drives": drives(), "sep": os.sep})
         if u.path == "/api/status":
@@ -1917,6 +1995,7 @@ header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;b
 input,select,button{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:4px 8px}
 button{cursor:pointer}button.p{background:var(--acc);color:#fff;border-color:var(--acc)}button:disabled{opacity:.5}
 #path{width:320px}#st{color:var(--mut);padding:4px 12px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#sg{display:none;position:absolute;left:0;right:0;bottom:100%;margin-bottom:4px;background:var(--bg2,#1b2230);border:1px solid var(--bd,#3a4358);border-radius:8px;box-shadow:0 6px 24px #0008;z-index:50;max-height:300px;overflow:auto}.sgi{padding:7px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:12px}.sgi.on,.sgi:hover{background:var(--acc);color:#fff}.sgi span{opacity:.6;font-size:12px}
 nav{display:flex;gap:2px;padding:6px 12px 0}nav button{border-bottom:none;border-radius:5px 5px 0 0}nav button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
 main{flex:1;overflow:auto;position:relative;border-top:1px solid var(--line)}
 table{border-collapse:collapse;width:100%}th,td{padding:2px 8px;white-space:nowrap;text-align:right}th:first-child,td:first-child{text-align:left}
@@ -2114,7 +2193,7 @@ async function rLib(){await libLoad();const m=$("#main");
  m.innerHTML=`<div id="lay" style="display:flex;height:100%"><div id="lb" style="${LAIS?`width:${LW?LW+"px":"62%"};flex:none`:"flex:1"};overflow:auto;padding:8px 12px;min-width:0"></div>
  <div id="spl" title="Потяните, чтобы изменить ширину" style="width:6px;cursor:col-resize;background:var(--line);flex:none;${LAIS?"":"display:none"}"></div>
  <div id="aip" style="flex:1;display:${LAIS?"flex":"none"};flex-direction:column;min-width:0"><div id="msgs" style="flex:1;overflow:auto;padding:8px 12px"></div>
- <div style="padding:8px 12px;display:flex;gap:6px"><input id="q" style="flex:1" placeholder="Спросите о своих данных: что у меня из FL Studio? что можно архивировать?"><button id="askb" class="p">Спросить</button></div></div></div>`;
+ <div style="padding:8px 12px;display:flex;gap:6px"><div id="sgw" style="position:relative;flex:1;display:flex"><input id="q" style="flex:1" autocomplete="off" placeholder="Спросите о своих данных: что у меня из FL Studio? что можно архивировать?"><div id="sg"></div></div><button id="askb" class="p">Спросить</button></div></div></div>`;
  const lb=$("#lb");const tags=LB.tags.map(([t,n])=>`<span class="chip" data-t="${esc(t)}" style="${t==tagFilter?"outline:2px solid var(--acc)":""}">${esc(t)} ${n}</span>`).join("")||"<i>тегов пока нет</i>";
  const bar=`<div><input id="cn" placeholder="новая коллекция"> <button id="cadd">Создать</button> <button id="atg" class="p" title="Модель смотрит существующие коллекции и теги, раскладывает неразмеченные папки; потом всё можно править или откатить">🤖 Авторазметка (${LB.todo})</button>${LB.undo?` <button id="atu">Отменить авторазметку (${LB.undo})</button>`:""} <button id="rsc" title="Пересчитать размер, число файлов и даты изменения у всех элементов коллекций; видно рост/убыль и «забытые» папки">↻ Пересканировать</button> <button id="aitg" title="Показать/скрыть помощника справа">💬 Помощник</button> <button id="enr" title="Для папок с тегом/коллекцией «игры» и «программы»: описание, обложка и скриншоты из Steam (наружу уходит только название)">🖼 Картинки и описания</button> <button id="rtg">Переименовать тег…</button> <label title="Имя папки уходит в Википедию/DuckDuckGo, чтобы понять незнакомые программы"><input type="checkbox" id="atw" checked> сверять с интернетом</label></div><div id="atp" style="color:var(--mut)"></div>
   <div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input id="lq" placeholder="Поиск: название, тег, описание" value="${esc(LQ)}" style="width:240px"><select id="lcs"><option value="">все коллекции</option>${LB.collections.map(c=>`<option value="${c.id}" ${c.id==LCOL?"selected":""}>${esc(c.name)} (${c.items.length})</option>`).join("")}</select><label><input type="checkbox" id="lau" ${LAUTO?"checked":""}> только 🤖</label><select id="lso" title="Порядок карточек"><option value="">порядок: как добавлены</option><option value="size">по размеру</option><option value="freq">чаще используются</option><option value="last">недавно использованы</option><option value="idle">давно не используются</option></select><label title="Нет запусков за 30 дней и ничего не менялось больше 90 дней"><input type="checkbox" id="lid" ${LIDLE?"checked":""}> 💤 забытые</label></div>
@@ -2156,7 +2235,15 @@ async function rLib(){await libLoad();const m=$("#main");
   if(r.dups){w.lastChild.innerHTML+=`<div style="margin-top:8px"><b>Дубликаты:</b> групп ${r.dups.count}, лишних ${fmt(r.dups.wasted)}<div style="color:var(--mut)">${esc(r.dups.note)}</div>`+r.dups.groups.slice(0,30).map(g=>`<div style="margin:6px 0"><b>${fmt(g.size)} × ${g.paths.length}</b>`+g.paths.map(p=>`<div class="r" data-dp="${esc(p)}" data-sz="${g.size}" style="cursor:pointer;padding-left:8px">📄 ${esc(p)}</div>`).join("")+`</div>`).join("")+`</div>`}
   w.onclick=async e=>{const rv=e.target.closest("[data-rvp]");if(rv){e.preventDefault();const x=await api("/api/reveal",{path:rv.dataset.rvp});if(!x.ok)alert("Не удалось открыть Проводник");return}const dpe=e.target.closest("[data-dp]");if(dpe){pick({path:dpe.dataset.dp,name:dpe.dataset.dp,size:+dpe.dataset.sz,dir:false,risk:0,tags:[]});return}
    const row=e.target.closest(".r");if(row&&row.dataset.i!==undefined){const c=r.sources[row.dataset.i];pick({path:c.path,name:c.name,size:c.size,dir:true,risk:0,tags:c.tags,note:c.note})}}};
- $("#askb").onclick=go;$("#q").onkeydown=e=>{if(e.key=="Enter")go()}}
+ $("#askb").onclick=go;
+ const qi=$("#q"),sg=$("#sg");let sgi=[],sgk=-1,sgt=0;
+ const sgHide=()=>{sg.style.display="none";sgk=-1},sgShow=()=>{sg.innerHTML=sgi.map((x,i)=>`<div class="sgi${i==sgk?" on":""}" data-i="${i}">${esc(x.text)}<span>${esc(x.kind)}</span></div>`).join("");sg.style.display=sgi.length?"block":"none"};
+ const sgLoad=async()=>{const r=await api("/api/suggest?q="+encodeURIComponent(qi.value.trim()));sgi=r.items||[];sgk=-1;if(document.activeElement===qi)sgShow()};
+ qi.oninput=()=>{clearTimeout(sgt);sgt=setTimeout(sgLoad,120)};qi.onfocus=sgLoad;qi.onblur=()=>setTimeout(sgHide,150);
+ sg.onmousedown=e=>{const d=e.target.closest(".sgi");if(!d)return;e.preventDefault();qi.value=sgi[+d.dataset.i].text;sgHide();qi.focus();go()};
+ qi.onkeydown=e=>{if(e.key=="ArrowDown"||e.key=="ArrowUp"){if(!sgi.length)return;e.preventDefault();sgk=(sgk+(e.key=="ArrowDown"?1:-1)+sgi.length+1)%(sgi.length+1);if(sgk==sgi.length)sgk=-1;sgShow();if(sgk>=0)qi.value=sgi[sgk].text;return}
+  if(e.key=="Tab"&&sgi.length&&sg.style.display=="block"){e.preventDefault();qi.value=sgi[Math.max(sgk,0)].text;sgLoad();return}
+  if(e.key=="Escape"){sgHide();return}if(e.key=="Enter"){sgHide();go()}}}
 // ---- лаунчер: всё нужное из одного места
 // ---- карточка элемента (лаунчер и библиотека): иконка/картинка, описание, теги, правка
 const bn=p=>p.replace(/[\\/]+$/,"").split(/[\\/]/).pop()||p;
