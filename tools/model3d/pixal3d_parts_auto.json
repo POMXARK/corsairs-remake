@@ -1,8 +1,8 @@
 {
- "id": "0957a5e3-0677-46e5-80c3-6f6ff80850c7",
+ "id": "3bc8e481-3e92-436e-9d16-45065346523e",
  "revision": 0,
- "last_node_id": 2023,
- "last_link_id": 4834,
+ "last_node_id": 2024,
+ "last_link_id": 4835,
  "nodes": [
   {
    "id": 3,
@@ -2782,7 +2782,7 @@
      "type": "IMAGE",
      "links": [
       1389,
-      4823
+      4824
      ]
     }
    ],
@@ -2836,7 +2836,7 @@
      "type": "IMAGE",
      "links": [
       1399,
-      4829
+      4830
      ]
     }
    ],
@@ -2890,7 +2890,7 @@
      "type": "IMAGE",
      "links": [
       1435,
-      4826
+      4827
      ]
     }
    ],
@@ -2944,7 +2944,7 @@
      "type": "IMAGE",
      "links": [
       1436,
-      4832
+      4833
      ]
     }
    ],
@@ -3468,7 +3468,7 @@
      "name": "model_3d",
      "type": "FILE_3D",
      "links": [
-      4820
+      4821
      ]
     },
     {
@@ -3961,7 +3961,7 @@
    "widgets_values": [
     0,
     "Redraw the character in <image1> as a high-detail realistic render, seen from the front. Keep exactly the same camera view, the same T-pose with both arms straight out horizontally, the same proportions, the same costume, the same colours and the same gold embroidery. Smooth surfaces without visible polygon edges, realistic detailed fabric, a detailed face, clean hands with five separate fingers, sharp leather boots, a thin sword at the hip. Both hands open and flat, fingers together and straight, thumbs along the hand, palms facing down, exactly the same on every view; never a fist. Orthographic full-body view, solid flat grey background, no text.",
-    true,
+    false,
     "",
     1,
     20,
@@ -4067,14 +4067,14 @@
      "name": "part",
      "type": "STRING",
      "links": [
-      4821
+      4822
      ]
     },
     {
      "name": "model",
      "type": "STRING",
      "links": [
-      4822
+      4823
      ]
     },
     {
@@ -4093,7 +4093,8 @@
      "name": "prompt_sheet",
      "type": "STRING",
      "links": [
-      4813
+      4813,
+      4820
      ]
     }
    ],
@@ -4289,6 +4290,34 @@
   },
   {
    "id": 2017,
+   "type": "PreviewAny",
+   "pos": [
+    -3900,
+    880
+   ],
+   "size": [
+    470,
+    300
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "source",
+     "type": "*",
+     "link": 4820
+    }
+   ],
+   "outputs": [],
+   "title": "Prompt of the sheet (what Qwen gets)",
+   "properties": {
+    "Node name for S&R": "PreviewAny"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 2018,
    "type": "PDMPartSave",
    "pos": [
     4900,
@@ -4305,37 +4334,37 @@
     {
      "name": "mesh",
      "type": "FILE_3D",
-     "link": 4820
+     "link": 4821
     },
     {
      "name": "part",
      "type": "STRING",
-     "link": 4821
+     "link": 4822
     },
     {
      "name": "model",
      "type": "STRING",
-     "link": 4822
+     "link": 4823
     },
     {
      "name": "front",
      "type": "IMAGE",
-     "link": 4825
+     "link": 4826
     },
     {
      "name": "left",
      "type": "IMAGE",
-     "link": 4828
+     "link": 4829
     },
     {
      "name": "back",
      "type": "IMAGE",
-     "link": 4831
+     "link": 4832
     },
     {
      "name": "right",
      "type": "IMAGE",
-     "link": 4834
+     "link": 4835
     }
    ],
    "outputs": [
@@ -4359,7 +4388,7 @@
    ]
   },
   {
-   "id": 2018,
+   "id": 2019,
    "type": "UpscaleModelLoader",
    "pos": [
     4000,
@@ -4378,10 +4407,10 @@
      "name": "UPSCALE_MODEL",
      "type": "UPSCALE_MODEL",
      "links": [
-      4824,
-      4827,
-      4830,
-      4833
+      4825,
+      4828,
+      4831,
+      4834
      ]
     }
    ],
@@ -4394,7 +4423,7 @@
    ]
   },
   {
-   "id": 2019,
+   "id": 2020,
    "type": "ImageUpscaleWithModel",
    "pos": [
     4300,
@@ -4411,12 +4440,12 @@
     {
      "name": "upscale_model",
      "type": "UPSCALE_MODEL",
-     "link": 4824
+     "link": 4825
     },
     {
      "name": "image",
      "type": "IMAGE",
-     "link": 4823
+     "link": 4824
     }
    ],
    "outputs": [
@@ -4424,7 +4453,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      4825
+      4826
      ]
     }
    ],
@@ -4435,7 +4464,7 @@
    "widgets_values": []
   },
   {
-   "id": 2020,
+   "id": 2021,
    "type": "ImageUpscaleWithModel",
    "pos": [
     4300,
@@ -4452,12 +4481,12 @@
     {
      "name": "upscale_model",
      "type": "UPSCALE_MODEL",
-     "link": 4827
+     "link": 4828
     },
     {
      "name": "image",
      "type": "IMAGE",
-     "link": 4826
+     "link": 4827
     }
    ],
    "outputs": [
@@ -4465,7 +4494,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      4828
+      4829
      ]
     }
    ],
@@ -4476,7 +4505,7 @@
    "widgets_values": []
   },
   {
-   "id": 2021,
+   "id": 2022,
    "type": "ImageUpscaleWithModel",
    "pos": [
     4300,
@@ -4493,12 +4522,12 @@
     {
      "name": "upscale_model",
      "type": "UPSCALE_MODEL",
-     "link": 4830
+     "link": 4831
     },
     {
      "name": "image",
      "type": "IMAGE",
-     "link": 4829
+     "link": 4830
     }
    ],
    "outputs": [
@@ -4506,7 +4535,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      4831
+      4832
      ]
     }
    ],
@@ -4517,7 +4546,7 @@
    "widgets_values": []
   },
   {
-   "id": 2022,
+   "id": 2023,
    "type": "ImageUpscaleWithModel",
    "pos": [
     4300,
@@ -4534,12 +4563,12 @@
     {
      "name": "upscale_model",
      "type": "UPSCALE_MODEL",
-     "link": 4833
+     "link": 4834
     },
     {
      "name": "image",
      "type": "IMAGE",
-     "link": 4832
+     "link": 4833
     }
    ],
    "outputs": [
@@ -4547,7 +4576,7 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      4834
+      4835
      ]
     }
    ],
@@ -4558,7 +4587,7 @@
    "widgets_values": []
   },
   {
-   "id": 2023,
+   "id": 2024,
    "type": "Note",
    "pos": [
     -3900,
@@ -5439,121 +5468,129 @@
   ],
   [
    4820,
+   2011,
+   12,
+   2017,
+   0,
+   "STRING"
+  ],
+  [
+   4821,
    701,
    0,
-   2017,
+   2018,
    0,
    "FILE_3D"
   ],
   [
-   4821,
-   2011,
-   8,
-   2017,
-   1,
-   "STRING"
-  ],
-  [
    4822,
    2011,
-   9,
-   2017,
-   2,
+   8,
+   2018,
+   1,
    "STRING"
   ],
   [
    4823,
-   340,
-   0,
-   2019,
-   1,
-   "IMAGE"
+   2011,
+   9,
+   2018,
+   2,
+   "STRING"
   ],
   [
    4824,
-   2018,
+   340,
    0,
-   2019,
-   0,
-   "UPSCALE_MODEL"
+   2020,
+   1,
+   "IMAGE"
   ],
   [
    4825,
    2019,
    0,
-   2017,
+   2020,
+   0,
+   "UPSCALE_MODEL"
+  ],
+  [
+   4826,
+   2020,
+   0,
+   2018,
    3,
    "IMAGE"
   ],
   [
-   4826,
+   4827,
    344,
    0,
-   2020,
+   2021,
    1,
    "IMAGE"
   ],
   [
-   4827,
-   2018,
+   4828,
+   2019,
    0,
-   2020,
+   2021,
    0,
    "UPSCALE_MODEL"
   ],
   [
-   4828,
-   2020,
+   4829,
+   2021,
    0,
-   2017,
+   2018,
    4,
    "IMAGE"
   ],
   [
-   4829,
+   4830,
    343,
    0,
-   2021,
+   2022,
    1,
    "IMAGE"
   ],
   [
-   4830,
-   2018,
+   4831,
+   2019,
    0,
-   2021,
+   2022,
    0,
    "UPSCALE_MODEL"
   ],
   [
-   4831,
-   2021,
+   4832,
+   2022,
    0,
-   2017,
+   2018,
    5,
    "IMAGE"
   ],
   [
-   4832,
+   4833,
    346,
    0,
-   2022,
+   2023,
    1,
    "IMAGE"
   ],
   [
-   4833,
-   2018,
+   4834,
+   2019,
    0,
-   2022,
+   2023,
    0,
    "UPSCALE_MODEL"
   ],
   [
-   4834,
-   2022,
+   4835,
+   2023,
    0,
-   2017,
+   2018,
    6,
    "IMAGE"
   ]

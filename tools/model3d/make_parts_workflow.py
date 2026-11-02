@@ -89,7 +89,7 @@ def main():
     # refine_prompt (widget 2): the VLM of the subgraph (Qwen3.5 PE) looks at the view and rewrites our prompt by what it shows
     # pdm_parts patches flash_attention_decode_gqa (contiguous q/k/v, torch fallback), so the VLM can run again
     for ref in [REFINE[1140]]:
-        nodes[ref]["widgets_values"][2] = True  # the enhancer (Qwen3.5 PE) sees the sheet and writes what is on it: hair, tail, beard - no hand-written phrases
+        nodes[ref]["widgets_values"][2] = False  # ComfyUI_00013 with the enhancer on: the sheet came out as garbage, the prompt goes as it is
         nodes[ref]["widgets_values"][5] = 20  # steps 25 -> 20, 13.6 s/it at 2048x2048
     # TextGenerate wrote up to 16256 tokens (9 minutes at 5 tokens/s in ComfyUI_00009); the description took 2916 tokens, cut at 400 the sheet came out as a collage of tiny heads
     for sg in g["definitions"]["subgraphs"]:
@@ -124,6 +124,13 @@ def main():
                     "order": 1, "mode": 0, "inputs": [{"name": "images", "type": "IMAGE", "link": l}], "outputs": [],
                     "title": f"raw {v} view of the part", "properties": {"Node name for S&R": "PreviewImage"},
                     "widgets_values": []}
+    # the exact prompt Qwen draws from, to read and copy
+    show = new_node()
+    nodes[show] = {"id": show, "type": "PreviewAny", "pos": [-3900, 880], "size": [470, 300], "flags": {}, "order": 1, "mode": 0,
+                   "inputs": [{"name": "source", "type": "*", "link": new_link(views, 12, show, 0, "STRING")}], "outputs": [],
+                   "title": "Prompt of the sheet (what Qwen gets)", "properties": {"Node name for S&R": "PreviewAny"},
+                   "widgets_values": []}
+    node_views["outputs"][12]["links"].append(lid)
     nodes[views] = node_views
     # after Save 3D: GLB of the part into the game
     save = new_node()

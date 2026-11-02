@@ -21,7 +21,7 @@ CFG = {"head": (0.02, 15000, 2048), "torso": (0.04, 20000, 2048), "arm_l": (0.05
        "arm_r": (0.05, 8000, 1024), "sword": (0.05, 4000, 1024), "legs": (0.04, 15000, 2048)}
 WHAT = {"head": "head", "torso": "torso", "arm_l": "left arm with the hand", "arm_r": "right arm with the hand",
         "sword": "thin sabre", "legs": "legs with the boots"}
-EXTRA = {"head": " Keep the eyes exactly as in the picture: open, white eyeballs, dark irises, round pupils, eyelids, with no catchlight, no white reflection dot and no glint in the eyes. Keep both ears visible and uncovered, the hair goes behind the ears, never over them. Keep the hair exactly as in the picture, including a ponytail or long strands at the back: do not shorten or remove them. Soft even matte lighting, no glossy highlights or shine on the skin, no reflections. Keep the closed mouth as in the picture: one clean line between the lips, no teeth, no second lip line.",
+EXTRA = {"head": " Keep the eyes exactly as in the picture: open, white eyeballs, dark irises, round pupils, eyelids. Keep both ears visible and uncovered, the hair goes behind the ears, never over them. Keep the hair exactly as in the picture. Soft even matte lighting, no glossy highlights or shine on the skin, no reflections. Keep the closed mouth as in the picture: one clean line between the lips, no teeth, no second lip line.",
          "arm_l": " A clean hand with five separate fingers.", "arm_r": " A clean hand with five separate fingers.",
          "legs": "", "torso": "", "sword": ""}
 OUTLINE = {"head": "The outline must be smooth and organic like a real person: a round skull, a natural jaw and chin, natural hair, a round neck, no angular polygon silhouette. Keep the skin as in the picture with natural pores."}
