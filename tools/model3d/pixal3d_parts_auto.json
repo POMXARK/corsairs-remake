@@ -1,5 +1,5 @@
 {
- "id": "4162eda9-b6cf-4af5-b8ad-cf4468f83b09",
+ "id": "bdba81d4-e221-450f-82d4-91a956efceb3",
  "revision": 0,
  "last_node_id": 2026,
  "last_link_id": 4838,
@@ -4154,8 +4154,8 @@
     "8-bit (Balanced)",
     "auto",
     "Tags",
-    "List the key visible details of the subject in this picture as comma-separated tags, at most 50, most important first: hair (colour, length, style, anything hanging at the back such as a ponytail or braid), face shape, skin marks, eyebrows, eyes, nose, mouth, beard or stubble, ears, neck, headwear, jewellery, clothing, colours, materials. Only what really is in the picture. Ignore the background and the grid. No filler, no sentences.",
-    400,
+    "List the key visible details of the subject in this picture as comma-separated tags, at most 25, most important first: hair (colour, length, style, anything hanging at the back such as a ponytail or braid), face shape, skin marks, eyebrows, eyes, nose, mouth, beard or stubble, ears, neck, headwear, jewellery, clothing, colours, materials. Only what really is in the picture. Ignore the background and the grid. No filler, no sentences.",
+    250,
     false,
     1,
     "fixed"

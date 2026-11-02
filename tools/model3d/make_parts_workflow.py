@@ -16,7 +16,7 @@ LOADERS = {1140: 0, 1143: 1, 1144: 2, 1147: 3}  # LoadImage -> output of PDMPart
 REFINE = {1140: 2000, 1143: 2001, 1144: 2002, 1147: 2003}  # LoadImage -> its Refine subgraph node
 
 
-TAGS_PROMPT = ("List the key visible details of the subject in this picture as comma-separated tags, at most 50, most important first: "
+TAGS_PROMPT = ("List the key visible details of the subject in this picture as comma-separated tags, at most 25, most important first: "
                "hair (colour, length, style, anything hanging at the back such as a ponytail or braid), face shape, skin marks, "
                "eyebrows, eyes, nose, mouth, beard or stubble, ears, neck, headwear, jewellery, clothing, colours, materials. "
                "Only what really is in the picture. Ignore the background and the grid. No filler, no sentences.")
@@ -71,7 +71,7 @@ def main():
                   "inputs": [{"name": "image", "type": "IMAGE", "link": new_link(views, 11, vlm, 0, "IMAGE")}],
                   "outputs": [{"name": "RESPONSE", "type": "STRING", "links": []}],
                   "title": "QwenVL: tags of the sheet", "properties": {"Node name for S&R": "AILab_QwenVL"},
-                  "widgets_values": ["Qwen3-VL-4B-Instruct", "8-bit (Balanced)", "auto", "Tags", TAGS_PROMPT, 400, False, 1, "fixed"]}
+                  "widgets_values": ["Qwen3-VL-4B-Instruct", "8-bit (Balanced)", "auto", "Tags", TAGS_PROMPT, 250, False, 1, "fixed"]}
     node_views["outputs"][11]["links"].append(lid)
     nodes[join] = {"id": join, "type": "PDMPromptJoin", "pos": [-2900, 300], "size": [260, 80], "flags": {}, "order": 2, "mode": 0,
                    "inputs": [{"name": "prompt", "type": "STRING", "link": new_link(views, 12, join, 0, "STRING")},
