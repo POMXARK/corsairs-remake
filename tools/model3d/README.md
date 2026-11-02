@@ -46,3 +46,5 @@
 ## ComfyUI_00008: лист 2×2 сработал; refine_prompt снова включён
 Результат лучше (уши, рот, цвета согласованы), но пропал хвост волос (Qwen сократил причёску) и в текстуре остался лёгкий блеск (в Blender не виден — блики запечены из видов). Правки: в промпт головы добавлено «сохранить причёску, включая хвост/длинные пряди» и «мягкий ровный матовый свет, без бликов»; `refine_prompt` включён обратно.
 Причина сбоя `Unsupported Flash Attention tensor strides` (`TextGenerate`): CUDA-ядро `comfy_kitchen.flash_attention_decode_gqa` (BF16, head_dim 256 — Qwen3.5) требует непрерывных (contiguous) q/k/v, а KV-кэш отдаёт view. Узлы `pdm_parts` при импорте оборачивают функцию: q/k/v делаются `.contiguous()`, а если ядро всё равно отказывает — считается торч-версией (`_decode_gqa_torch`, тот же результат, чуть медленнее). Файлы ComfyUI/comfy_kitchen не правим. Нужен перезапуск ComfyUI после `install_parts.ps1`.
+
+Оптимизатор (`pdm_glb_optimize.py`) при `No module named …` сам ставит `numpy Pillow scipy trimesh rtree fast-simplification` (`pip install --user`) и повторяет запуск; если и это не помогло — GLB сохранён, команда для ручного запуска остаётся в логе.

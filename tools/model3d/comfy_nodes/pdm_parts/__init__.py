@@ -57,6 +57,9 @@ def sheet_prompt(part):
             "the face is not visible. A flat bright green background in all four cells.")
 
 
+PIP = ["numpy", "Pillow", "scipy", "trimesh", "rtree", "fast-simplification"]
+
+
 def run(cmd, cwd, log):
     log.append("> " + " ".join(map(str, cmd)))
     print(log[-1], flush=True)
@@ -234,9 +237,17 @@ class PDMPartSave:
         log.append(f"{src} -> {glb / (name + '.glb')} ({os.path.getsize(src) // 1024} KB)")
         _, f0, t0 = CFG[part]
         if optimize:
+            cmd = [python, Path(repo) / "tools" / "pdm_glb_optimize.py", gamedir, name, "--faces", faces or f0,
+                   "--tex", tex or t0]
             try:
-                run([python, Path(repo) / "tools" / "pdm_glb_optimize.py", gamedir, name, "--faces", faces or f0,
-                     "--tex", tex or t0], repo, log)
+                try:
+                    run(cmd, repo, log)
+                except RuntimeError as e:
+                    if "No module named" not in str(e):
+                        raise
+                    log.append("a module is missing: installing the packages of the optimizer")
+                    run([python, "-m", "pip", "install", "--user", *PIP], repo, log)
+                    run(cmd, repo, log)
             except RuntimeError as e:
                 log.append(f"OPTIMIZE FAILED, the GLB is saved, the run goes on. If a module is missing: "
                            f"{python} -m pip install --user numpy Pillow scipy trimesh rtree fast-simplification, "
