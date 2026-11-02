@@ -407,8 +407,21 @@ def hard_delete(path, confirm):
 DATA = os.environ.get("DISKVIEW_DATA") or os.path.join(os.path.expanduser("~"), ".diskview")
 
 
-def log(msg):
-    """Журнал ошибок и ответов модели: ~/.diskview/diskview.log (для разбора, когда что-то «не сработало»)."""
+LOGB = []
+LOGN = [0]
+
+
+def log(msg, quiet=False):
+    """Журнал ошибок и ответов модели: ~/.diskview/diskview.log (для разбора, когда что-то «не сработало»);
+    последние строки видны в панели «Логи» и в консоли сервера."""
+    LOGN[0] += 1
+    line = "%s %s" % (time.strftime("%H:%M:%S"), str(msg).replace("\n", " ")[:400])
+    LOGB.append((LOGN[0], line))
+    del LOGB[:-600]
+    try:
+        print(line, flush=True)
+    except Exception:
+        pass
     try:
         os.makedirs(DATA, exist_ok=True)
         with open(os.path.join(DATA, "diskview.log"), "a", encoding="utf-8") as f:
@@ -785,6 +798,9 @@ def smart_steam(q):
 def web_get(url, timeout=12):
     if priv()["offline"]:
         raise OSError("режим «без интернета»")
+    from urllib.parse import urlsplit
+    sp = urlsplit(url)
+    log("сеть: %s %s" % (sp.netloc, sp.query[:80]))
     req = urllib.request.Request(url, headers={"User-Agent": "diskview/1.0 (local tool)"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read().decode("utf-8", "replace")
@@ -1320,6 +1336,7 @@ def enrich(limit=12):
                 todo.append((it["path"], t.get("web", {}).get("image")))
     left = len(todo)
     batch = todo[:limit]
+    log("enrich: к поиску в Steam %d, в этой пачке %d" % (left, len(batch)))
 
     def one(p):
         try:
@@ -1348,6 +1365,7 @@ def enrich(limit=12):
             else:
                 t["web"] = dict(t.get("web") or {}, checked=1)
     lib_touch()
+    log("enrich: найдено %d из %d" % (got, len(batch)))
     return {"ok": True, "found": got, "tried": len(batch), "left": max(0, left - len(batch))}
 
 
@@ -1360,6 +1378,7 @@ def autotag(model, n=6, web=True):
     """Один пакет: модель видит существующие коллекции и теги и по возможности использует их; новые создаёт, только
     если ничего не подходит. Всё помечается auto и откатывается autotag_undo; правки пользователя снимают метку."""
     cand = autotag_candidates(n)
+    log("авторазметка: пачка %d папок (%s), модель %s, интернет %s" % (len(cand), ", ".join(os.path.basename(c["path"]) for c in cand), model, "да" if web else "нет"))
     if not cand:
         return {"ok": True, "done": 0, "left": 0, "new_cols": [], "msg": "размечать нечего"}
     return autotag_run(cand, model, web)
@@ -1420,6 +1439,7 @@ def autotag_run(cand, model, web=True, force=False):
                                "Если у карточки есть «веб:» — это справка из интернета по названию папки, опирайся на неё, когда по содержимому неясно (она по одному названию и может быть неточной: если не сходится с типами файлов и содержимым — игнорируй).\n" if web else "",
                                "\n".join(card_line(c) + (" | веб: " + hints[c["path"]] if hints.get(c["path"]) else "") for c in cand)))
     try:
+        log("авторазметка: запрос к модели (%d символов)" % len(prompt))
         txt = llm(prompt, model, 2500, timeout=900, as_json=True)
         log("autotag ответ модели (%s): %s" % (model, txt[:1500].replace("\n", " ")))
         has_path = lambda v: any(isinstance(x, dict) and "path" in x for x in v)
@@ -1473,6 +1493,7 @@ def autotag_run(cand, model, web=True, force=False):
         LIB["tags"][p] = {"tags": [], "note": "", "size": byp[p]["size"], "dir": True, "auto": True, "skipped": True}
         alog.append({"path": p, "col": ""})
     lib_touch()
+    log("авторазметка: размечено %d, пропущено моделью %d, новых коллекций %d, осталось %d" % (done, len(names) - done, len(new_cols), len(autotag_candidates(100000))))
     return {"ok": True, "done": done, "left": len(autotag_candidates(1000)), "new_cols": new_cols}
 
 
@@ -1585,10 +1606,20 @@ def launch(path):
     ok = any(it["path"] == path for c in LIB["collections"] for it in c["items"]) or any(p["path"] == path for p in program_list())
     if not ok or not os.path.exists(path):
         return {"ok": False, "error": "не в лаунчере или нет на диске"}
+    own = LIB["tags"].get(path, {}).get("exe", "")
+    if own and not os.path.isfile(own):
+        return {"ok": False, "error": "файл запуска из карточки не найден: %s (поменяйте в ✎)" % own}
+    target = own or (main_exe(path) if os.path.isdir(path) else path)
+    if not target:
+        return {"ok": False, "error": "в папке не найден exe для запуска (кнопка 📂 откроет её в Проводнике)"}
+    log("запуск: %s" % target)
     if os.name == "nt":
-        os.startfile(path)
+        try:
+            os.startfile(target, cwd=os.path.dirname(target))
+        except TypeError:
+            os.startfile(target)
     else:
-        subprocess.Popen(["xdg-open", path])
+        subprocess.Popen(["xdg-open", target])
     track(path)
     return {"ok": True}
 
@@ -1764,7 +1795,7 @@ def launcher_items():
             e["colls"].append(c["name"])
     for p, e in out.items():
         tg = LIB["tags"].get(p, {})
-        e["tags"], e["note"], e["web"], e["auto"] = tg.get("tags", []), tg.get("note", ""), tg.get("web") or {}, bool(tg.get("auto"))
+        e["tags"], e["note"], e["web"], e["auto"], e["exe"] = tg.get("tags", []), tg.get("note", ""), tg.get("web") or {}, bool(tg.get("auto")), tg.get("exe", "")
         e.update(use_info(p))
     return sorted(out.values(), key=lambda x: (-x["last"], x["name"].lower()))
 
@@ -1777,7 +1808,7 @@ def lib_info():
     cols = []
     for c in LIB["collections"]:
         items = [dict(it, exists=os.path.exists(it["path"]), tags=LIB["tags"].get(it["path"], {}).get("tags", []),
-                      note=LIB["tags"].get(it["path"], {}).get("note", ""), name=os.path.basename(it["path"].rstrip("\\/")) or it["path"], web=LIB["tags"].get(it["path"], {}).get("web") or {}, auto=bool(it.get("auto") and LIB["tags"].get(it["path"], {}).get("auto")), **use_info(it["path"])) for it in c["items"]]
+                      note=LIB["tags"].get(it["path"], {}).get("note", ""), name=os.path.basename(it["path"].rstrip("\\/")) or it["path"], web=LIB["tags"].get(it["path"], {}).get("web") or {}, exe=LIB["tags"].get(it["path"], {}).get("exe", ""), auto=bool(it.get("auto") and LIB["tags"].get(it["path"], {}).get("auto")), **use_info(it["path"])) for it in c["items"]]
         cols.append({"id": c["id"], "name": c["name"], "auto": bool(c.get("auto")), "items": items})
     return {"collections": cols, "tags": sorted(cnt.items(), key=lambda x: -x[1]), "cards": len(CARDS), "todo": len(autotag_candidates(100000)), "undo": len(LIB.get("autolog", []))}
 
@@ -1821,6 +1852,12 @@ def lib_action(b):
         t["note"] = b.get("note", "").strip()
         t.pop("auto", None)
         t.pop("skipped", None)
+        if "exe" in b:
+            ex = b.get("exe", "").strip().strip('"')
+            if ex:
+                t["exe"] = ex
+            else:
+                t.pop("exe", None)
         if b.get("reset"):
             t.pop("web", None)
         else:
@@ -1835,10 +1872,11 @@ def lib_action(b):
         p = b.get("path", "")
         tags = [t.strip().lower() for t in b.get("tags", []) if t.strip()]
         if tags or b.get("note", "").strip():
-            web = LIB["tags"].get(p, {}).get("web")
+            old = LIB["tags"].get(p, {})
             LIB["tags"][p] = {"tags": tags, "note": b.get("note", "").strip(), "size": b.get("size", 0), "dir": b.get("dir", True)}
-            if web:
-                LIB["tags"][p]["web"] = web
+            for k in ("web", "exe"):
+                if old.get(k):
+                    LIB["tags"][p][k] = old[k]
             for c in cols:
                 for i in c["items"]:
                     if i["path"] == p:
@@ -1938,6 +1976,9 @@ class H(BaseHTTPRequestHandler):
             return self.send(lib_info())
         if u.path == "/api/launcher":
             return self.send({"items": launcher_items()})
+        if u.path == "/api/logs":
+            since = int(parse_qs(u.query).get("since", ["0"])[0] or 0)
+            return self.send({"n": LOGN[0], "lines": [l for k, l in LOGB if k > since]})
         if u.path == "/api/programs":
             return self.send({"programs": program_list()})
         if u.path == "/api/models":
@@ -2061,7 +2102,7 @@ footer span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
  <button id="web" disabled title="Поиск в интернете: наружу уходит только имя файла/папки">🌐 В интернете</button><button id="cfg">⚙ Модель</button><span class="legend">свежее<i></i>старше 3 лет</span>
 </header>
 <div id="st">Выберите диск или папку и нажмите «Сканировать».</div>
-<nav><button data-v="tree" class="on">Папки</button><button data-v="map">Карта</button><button data-v="old">Мёртвые папки</button><button data-v="launch">Лаунчер</button><button data-v="lib">Библиотека</button><button id="rld" title="Перезагрузить страницу" style="margin-left:auto">⟳ Страница</button><button id="rsv" title="Перезапустить сервер DiskView (подхватит обновлённый diskview.py) и обновить страницу">↻ Сервер</button><button id="quit" title="Остановить сервер DiskView">⏻ Выход</button></nav>
+<nav><button data-v="tree" class="on">Папки</button><button data-v="map">Карта</button><button data-v="old">Мёртвые папки</button><button data-v="launch">Лаунчер</button><button data-v="lib">Библиотека</button><button id="rld" title="Перезагрузить страницу" style="margin-left:auto">⟳ Страница</button><button id="rsv" title="Перезапустить сервер DiskView (подхватит обновлённый diskview.py) и обновить страницу">↻ Сервер</button><button id="logb" title="Панель логов: что сейчас делает сервер (разметка, поиск в Steam, сеть)">📜 Логи</button><button id="quit" title="Остановить сервер DiskView">⏻ Выход</button></nav>
 <main id="main"></main>
 <dialog id="dlg" style="border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);min-width:460px;max-width:90vw"><form method="dialog" id="cf" style="display:grid;gap:6px">
 <b>Модель для помощника</b><div style="color:var(--mut)">Любой сервер: Ollama или OpenAI-совместимый (LM Studio, llama.cpp, vLLM, OpenRouter, OpenAI…). В модель уходят только метаданные папок (названия, размеры, даты, типы, теги), не содержимое файлов.</div>
@@ -2082,6 +2123,7 @@ footer span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" id="csv2" class="p">Сохранить</button><button type="button" id="cts">Проверить и получить список</button><button type="button" id="cact">Сделать активной</button><button type="button" id="cdel">Удалить</button><button value="x">Закрыть</button></div></form></dialog>
 <div id="tip"></div>
 <div id="aiw" style="display:none;position:relative;background:var(--pan);border-top:1px solid var(--line)"><button id="aix" title="Закрыть" style="position:absolute;right:8px;top:4px">✕</button><div id="ai" style="padding:6px 40px 6px 12px;max-height:40vh;min-height:60px;overflow:auto;resize:vertical;white-space:pre-wrap;user-select:text"></div></div>
+<div id="logw" style="display:none;background:var(--pan);border-top:1px solid var(--line)"><div style="padding:2px 12px;color:var(--mut)">📜 Логи сервера <button id="logc">Очистить</button> <button id="logx">✕</button></div><pre id="logp" style="margin:0;padding:4px 12px;height:22vh;overflow:auto;font-size:12px;user-select:text"></pre></div>
 <footer><span id="sel" style="min-width:200px">—</span><select id="coll" title="Коллекция"></select><button id="tocoll" disabled>В коллекцию</button><button id="tags" disabled>Теги…</button><button id="sug" disabled>Теги ИИ</button><select id="model" title="Локальная модель Ollama"></select><button id="desc" disabled>Что это? (ИИ)</button><button id="rev" disabled>Показать в Проводнике</button><button id="cp" disabled>Копировать путь</button><button id="tomap" disabled>На карте</button><button id="tr" disabled>В корзину</button><button id="rm" disabled style="color:#d33">Удалить навсегда</button></footer>
 <script>
 const $=s=>document.querySelector(s);let sep="\\",view="tree",sel=null,mapPath=null,poll=null,rootPath="";
@@ -2122,6 +2164,9 @@ const RK=["можно чистить","осторожно","защищено"];
 const tg=n=>(n.tags||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join("")+(n.note?` <span title="${esc(n.note)}">📝</span>`:"")+((n.colls||[]).length?` <span title="${esc(n.colls.join(", "))}">📚</span>`:"");
 let LB={collections:[],tags:[]},tagFilter="";
 async function libLoad(){LB=await api("/api/lib");$("#coll").innerHTML=`<option value="">Все коллекции</option>`+LB.collections.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("");if(!LB.collections.some(c=>c.id==LCOL))LCOL="";$("#coll").value=LCOL}
+let LGN=0,LGT=null;const lgPoll=async()=>{try{const r=await fetch("/api/logs?since="+LGN).then(x=>x.json());const p=$("#logp");if(r.n<LGN){p.textContent=""}LGN=r.n;if(r.lines.length){const b=p.scrollTop+p.clientHeight>=p.scrollHeight-20;p.textContent+=r.lines.join("\n")+"\n";if(p.textContent.length>60000)p.textContent=p.textContent.slice(-40000);if(b)p.scrollTop=p.scrollHeight}}catch(e){}};
+$("#logb").onclick=()=>{const w=$("#logw"),on=w.style.display=="none";w.style.display=on?"block":"none";clearInterval(LGT);if(on){LGN=0;$("#logp").textContent="";lgPoll();LGT=setInterval(lgPoll,1500)}};
+$("#logx").onclick=()=>$("#logb").click();$("#logc").onclick=()=>{$("#logp").textContent=""};
 $("#coll").onchange=e=>{LCOL=e.target.value;if(view=="lib"||view=="launch")render()};
 libLoad();
 function pick(n){sel=n;$("#sel").textContent=n?`${n.path||n.name} — ${fmt(n.size)}`:"—";const ok=n&&n.path;$("#rev").disabled=$("#cp").disabled=!ok;$("#tomap").disabled=!(n&&n.dir);
@@ -2265,7 +2310,7 @@ async function rLib(){await libLoad();const m=$("#main");
  $("#lq").oninput=e=>{LQ=e.target.value;body()};$("#lcs").onchange=e=>{LCOL=e.target.value;$("#coll").value=LCOL;body()};$("#lau").onchange=e=>{LAUTO=e.target.checked;body()};$("#lid").onchange=e=>{LIDLE=e.target.checked;body()};$("#lso").value=LSORT;$("#lso").onchange=e=>{LSORT=e.target.value;body()};
  const lay=$("#lay"),sp=$("#spl");sp.onmousedown=ev=>{ev.preventDefault();const mv=e=>{const r=lay.getBoundingClientRect();LW=Math.max(320,Math.min(r.width-240,e.clientX-r.left));lb.style.width=LW+"px";lb.style.flex="none"},up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);lsset("dv.lw",LW)};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up)};
  $("#aitg").onclick=()=>{LAIS=!LAIS;lsset("dv.ai",LAIS);rLib()};
- if(!window.__enr){window.__enr=true;(async()=>{let f=0;while(true){const r=await api("/api/enrich",{});if(!r.ok||!r.tried)break;f+=r.found;const p=$("#atp");if(p&&view=="lib")p.textContent="Ищу обложки и описания в Steam… найдено "+f+(r.left?", осталось "+r.left:"");await libLoad();if(view=="lib"&&!document.querySelector("#cadd:disabled")&&!document.querySelector("[data-k]"))body();if(!r.left)break}window.__enr=false;const p=$("#atp");if(p&&view=="lib"&&f)p.textContent="Обложки и описания добавлены: "+f}) ()}
+ if(!window.__enr){window.__enr=true;(async()=>{let f=0;while(true){while(window.__atrun)await new Promise(z=>setTimeout(z,2000));const r=await api("/api/enrich",{});if(!r.ok||!r.tried)break;f+=r.found;const p=$("#atp");if(p&&view=="lib")p.textContent="Ищу обложки и описания в Steam… найдено "+f+(r.left?", осталось "+r.left:"");await libLoad();if(view=="lib"&&!document.querySelector("#cadd:disabled")&&!document.querySelector("[data-k]"))body();if(!r.left)break}window.__enr=false;const p=$("#atp");if(p&&view=="lib"&&f)p.textContent="Обложки и описания добавлены: "+f}) ()}
  lb.onclick=async e=>{const t=e.target;const gl=t.closest("[data-gp]");if(gl){e.preventDefault();const r=await api("/api/reveal",{path:gl.dataset.gp});if(!r.ok)alert("Не удалось открыть Проводник");return}if(t.closest("details.grp"))return;
   if(t.id=="lsetx"){e.preventDefault();LSET=null;body();return}
   if(await cardAct(e,p=>{for(const c of LB.collections){const i=c.items.find(x=>x.path==p);if(i)return i}},async()=>{await libLoad();rLib()}))return;
@@ -2275,10 +2320,10 @@ async function rLib(){await libLoad();const m=$("#main");
   if(t.id=="rsc"){t.disabled=true;const p=$("#atp");while(true){const r=await api("/api/rescan",{});if(!r.running){p.textContent="Готово: проверено "+r.done+", изменилось "+r.changed+(r.missing?", пропало с диска "+r.missing:"")+".";break}p.textContent="Пересканирую "+r.done+" из "+r.total+" · "+(r.cur||"");await new Promise(z=>setTimeout(z,1200))}await libLoad();return rLib()}
   if(t.id=="enr"){t.disabled=true;const p=$("#atp");let f=0,n=0;while(true){p.textContent="Ищу в Steam… найдено "+f+" из "+n;const r=await api("/api/enrich",{});if(!r.ok){p.textContent=r.error||"ошибка";break}f+=r.found;n+=r.tried;if(!r.left||!r.tried){p.textContent="Готово: найдено "+f+" из "+n+" (остальное — не игры Steam или другое название).";break}}await libLoad();return rLib()}
   if(t.id=="atu"){if(confirm("Убрать всё, что создала авторазметка (и не правили вручную)?")){await api("/api/autotag/undo",{});rLib()}return}
-  if(t.id=="atg"){if(!$("#model").value)return alert("Выберите модель (⚙ Модель).");t.disabled=true;let tot=0,first=true,stop=false;const p=$("#atp");
+  if(t.id=="atg"){if(!$("#model").value)return alert("Выберите модель (⚙ Модель).");t.disabled=true;window.__atrun=true;let tot=0,first=true,stop=false;const p=$("#atp");
    while(!stop){p.textContent="Модель размечает… готово "+tot+(LB.todo?" из ~"+LB.todo:"");const r=await api("/api/autotag",{model:$("#model").value,start:first,web:$("#atw").checked});first=false;
     if(!r.ok){p.textContent=r.error;break}tot+=r.done;if(r.done){await libLoad();window.__lbLive&&window.__lbLive();const p2=$("#atp");if(p2)p2.textContent="Модель размечает… готово "+tot}if(!r.left||!r.done&&!r.left){p.textContent="Готово: размечено "+tot+". Проверьте результат ниже: 🤖 — созданное ИИ; правьте, переименовывайте или отмените.";break}if(tot>=200){p.textContent="Размечено "+tot+", осталось "+r.left+" — нажмите ещё раз.";break}}
-   await libLoad();return rLib()}
+   window.__atrun=false;await libLoad();return rLib()}
   if(t.dataset.t!==undefined){tagFilter=tagFilter==t.dataset.t?"":t.dataset.t;return rLib()}
   if(t.dataset.del){if(confirm("Удалить коллекцию (файлы не затрагиваются)?")){await api("/api/lib",{action:"delete",id:t.dataset.del});rLib()}return}
   if(t.dataset.rm){e.preventDefault();await api("/api/lib",{action:"remove",id:t.dataset.rm,path:t.dataset.p});return rLib()}
@@ -2339,6 +2384,7 @@ function editCard(i){return new Promise(res=>{const w=i.web||{},d=document.creat
  <label>Название<input id="e_t" value="${esc(w.title||"")}" placeholder="${esc(i.name||bn(i.path))}"></label>
  <label>Описание<textarea id="e_d" rows="4">${esc(w.text||i.note||"")}</textarea></label>
  <label>Жанры (через запятую)<input id="e_g" value="${esc((w.genres||[]).join(", "))}"></label>
+ <label>Файл запуска ▶ (пусто — главный exe папки выбирается сам)<input id="e_x" value="${esc(i.exe||"")}" placeholder="${esc(i.dir===false?i.path:i.path+"\\game.exe")}"></label>
  <label>Теги (через запятую)<input id="e_tg" value="${esc((i.tags||[]).join(", "))}"></label>
  <label>Обложка — ссылка или файл<span class="er"><input id="e_i" value="${esc(w.image||"")}" placeholder="https://… или выберите файл"><button type="button" id="e_if">Файл…</button><input type="file" id="e_if_f" accept="image/*" hidden></span></label>
  <label>Скриншоты — по одной ссылке в строке<textarea id="e_s" rows="3">${esc((w.shots||[]).join("\n"))}</textarea></label><button type="button" id="e_sf">Добавить файлы…</button><input type="file" id="e_sf_f" accept="image/*" multiple hidden>
@@ -2350,8 +2396,8 @@ function editCard(i){return new Promise(res=>{const w=i.web||{},d=document.creat
  $$("#e_if_f").onchange=async e=>{if(e.target.files[0]){$$("#e_i").value=await up(e.target.files[0]);prev()}};
  $$("#e_sf_f").onchange=async e=>{for(const f of e.target.files){const u=await up(f);if(u)$$("#e_s").value=($$("#e_s").value.trim()+"\n"+u).trim()}prev()};
  $$("#e_i").oninput=prev;$$("#e_s").oninput=prev;prev();
- d.onclick=e=>{const k=e.target.dataset.k;if(e.target===d||k=="no")return close(null);if(k=="reset")return close({reset:true,tags:L($$("#e_tg").value.toLowerCase()),note:""});
-  if(k=="ok")close({title:$$("#e_t").value.trim(),text:$$("#e_d").value.trim(),genres:L($$("#e_g").value),tags:L($$("#e_tg").value.toLowerCase()),image:$$("#e_i").value.trim(),shots:$$("#e_s").value.split("\n").map(x=>x.trim()).filter(Boolean),note:$$("#e_d").value.trim()})};
+ d.onclick=e=>{const k=e.target.dataset.k;if(e.target===d||k=="no")return close(null);if(k=="reset")return close({reset:true,exe:$$("#e_x").value.trim(),tags:L($$("#e_tg").value.toLowerCase()),note:""});
+  if(k=="ok")close({exe:$$("#e_x").value.trim(),title:$$("#e_t").value.trim(),text:$$("#e_d").value.trim(),genres:L($$("#e_g").value),tags:L($$("#e_tg").value.toLowerCase()),image:$$("#e_i").value.trim(),shots:$$("#e_s").value.split("\n").map(x=>x.trim()).filter(Boolean),note:$$("#e_d").value.trim()})};
  $$("#e_t").focus()})}
 function itemCard(i,o={}){const gp=GRP[(o.rm||"")+"\0"+i.path];const w=i.web||{},isg=!!w.src,desc=isg?w.text:(i.note||w.text||""),fb=i.dir?"📁":"📄";
  const ico="/api/icon?path="+encodeURIComponent(i.path);
@@ -2361,7 +2407,7 @@ function itemCard(i,o={}){const gp=GRP[(o.rm||"")+"\0"+i.path];const w=i.web||{}
  const tg=(i.tags||[]),shown=tg.slice(0,4);
  return `<div class="tile card" data-p="${esc(i.path)}" data-rm="${esc(o.rm||"")}" style="${i.exists===false||i.gone?"opacity:.5":""}">
   <div class="art">${cover}${cover?"":icon}<span class="sz">${gp?"Σ "+fmt(gp.total):fmt(i.size||0)}</span>${i.auto?`<span class="rb" title="разметил ИИ">🤖</span>`:""}
-   <div class="act"><button data-act="note" title="редактировать карточку: название, описание, картинки, теги">✎</button><button data-act="open" title="открыть страницу игры/программы в браузере (если не найдена — поиск в интернете)">🌐</button><button data-act="web" title="найти описание и скриншоты в интернете и записать в карточку">🔍</button><button data-act="rv" title="показать в Проводнике">📂</button>${o.rm?`<button data-act="rmc" data-c="${o.rm}" title="убрать из коллекции">✕</button>`:""}</div></div>
+   <div class="act"><button data-act="run" title="запустить (главный exe папки)">▶</button><button data-act="note" title="редактировать карточку: название, описание, картинки, теги">✎</button><button data-act="open" title="открыть страницу игры/программы в браузере (если не найдена — поиск в интернете)">🌐</button><button data-act="web" title="найти описание и скриншоты в интернете и записать в карточку">🔍</button><button data-act="rv" title="показать в Проводнике">📂</button>${o.rm?`<button data-act="rmc" data-c="${o.rm}" title="убрать из коллекции">✕</button>`:""}</div></div>
   ${shots}
   <div class="meta"><b title="${esc(i.path)}">${esc(isg&&w.title?w.title:(i.name||bn(i.path)))}</b>
    <div class="sub">${esc((i.colls||[]).join(", "))}${i.colls&&i.colls.length?" · ":""}${(w.genres||[]).length?esc(w.genres.join(" · ")):esc(bn(i.path))}</div>
@@ -2371,10 +2417,11 @@ function itemCard(i,o={}){const gp=GRP[(o.rm||"")+"\0"+i.path];const w=i.web||{}
 async function cardAct(e,find,done){const b=e.target.closest("[data-act]");if(!b)return false;e.preventDefault();e.stopPropagation();const tile=b.closest(".tile"),p=tile.dataset.p,i=find(p),act=b.dataset.act;if(!i)return true;
  const rm=tile.dataset.rm||undefined,redraw=()=>{tile.outerHTML=itemCard(rm?{...i,colls:[]}:i,{rm})};
  const save=async(tags,note)=>{const r=await api("/api/lib",{action:"tag",path:p,tags,note,size:i.size||0,dir:i.dir!==false});if(r&&r.ok===false)return alert(r.error||"не сохранилось");i.tags=tags;i.note=note;i.auto=false;redraw()};
+ if(act=="run"){const r=await api("/api/launch",{path:p});if(!r.ok)alert(r.error);return true}
  if(act=="rmtag"){await save((i.tags||[]).filter(t=>t!=b.dataset.t),i.note||"")}
  else if(act=="addtag"){const t=await ask("Новый тег (можно несколько через запятую):","");if(!t)return true;await save([...new Set([...(i.tags||[]),...t.split(",").map(x=>x.trim().toLowerCase()).filter(Boolean)])],i.note||"")}
  else if(act=="note"){const r=await editCard(i);if(!r)return true;const x=await api("/api/lib",{action:"edit",path:p,size:i.size||0,dir:i.dir!==false,...r});if(x&&x.ok===false)return alert(x.error||"не сохранилось");
-  if(r.reset){i.web={}}else i.web={title:r.title,text:r.text,genres:r.genres,image:r.image,shots:r.shots,full:r.shots,src:"вручную",manual:1};i.tags=r.tags;i.note=r.note;i.auto=false;redraw()}
+  if(r.reset){i.web={}}else i.web={title:r.title,text:r.text,genres:r.genres,image:r.image,shots:r.shots,full:r.shots,src:"вручную",manual:1};i.tags=r.tags;i.note=r.note;i.exe=r.exe;i.auto=false;redraw()}
  else if(act=="open"){const w=i.web||{},u=/^https?:\/\//.test(w.url||"")?w.url:"https://www.google.com/search?q="+encodeURIComponent((w.title||(/[\\/]/.test(i.name||"")?"":i.name)||bn(i.path))+(i.tags&&i.tags.includes("игры")?" игра":""));window.open(u,"_blank","noopener")}
  else if(act=="web"){if(i.web&&i.web.manual&&!confirm("Данные карточки введены вручную. Заменить найденными в интернете?"))return true;b.textContent="…";b.disabled=true;let r=await api("/api/web",{path:p,model:$("#model").value,q:""});while(r.error&&r.retry){const q=await ask(r.error+". Введите название вручную (например, настоящее имя игры):","",false);if(!q)break;b.textContent="…";r=await api("/api/web",{path:p,model:$("#model").value,q:q.trim()})}if(r.error){b.textContent="🔍";b.disabled=false;if(!r.retry)alert(r.error)}else{i.web={title:r.title,text:r.text,image:r.image,url:r.url,tips:r.tips,shots:r.shots,full:r.full,genres:r.genres,src:r.src};if(!i.note)i.note=(r.tips||r.text||"").slice(0,300);redraw()}}
  else if(act=="rv"){const r=await api("/api/reveal",{path:p});if(!r.ok)alert("Не удалось открыть Проводник");else{i.n=(i.n||0)+1;i.n30=(i.n30||0)+1;i.last=nowS();redraw()}}
