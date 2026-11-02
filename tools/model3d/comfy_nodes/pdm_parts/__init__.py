@@ -24,6 +24,9 @@ WHAT = {"head": "head", "torso": "torso", "arm_l": "left arm with the hand", "ar
 EXTRA = {"head": " Keep the eyes exactly as in the picture: open, white eyeballs, dark irises, round pupils, eyelids.",
          "arm_l": " A clean hand with five separate fingers.", "arm_r": " A clean hand with five separate fingers.",
          "legs": "", "torso": "", "sword": ""}
+BACK = " This is the view from behind: the face is NOT visible, draw only the back of the head, the hair and the ears."
+CUT = {"head": " The neck is cut off flat at the bottom: keep that cut in the skin colour, never grey.",
+       "torso": "", "arm_l": "", "arm_r": "", "legs": "", "sword": ""}
 SIDE = {"front": "seen from the front", "left": "seen from the left side", "back": "seen from the back",
         "right": "seen from the right side"}
 VIEW_ORDER = ("front", "left", "back", "right")  # the order of the outputs
@@ -32,12 +35,13 @@ STATE = {"start": 0.0}
 
 def prompt_of(part, view):
     """Nothing is invented: only what the picture shows (the first version said "with the hat" and Qwen drew one)."""
-    ref = ("" if view == "front" else " <image2> is the same part seen from the front: take the identity, hair, "
+    ref = ("" if view in ("front", "back") else " <image2> is the same part seen from the front: take the identity, hair, "
            "colours and details from it, so that all views show one and the same object.")
     return (f"Redraw <image1>, the {WHAT[part]} {SIDE[view]}, as a clean high-detail realistic render. Keep exactly "
             "the same camera view, pose, proportions, colours and every detail that <image1> shows. Do not add "
             "anything that is not in <image1>: no hat, no clothes, no mask, no accessories. Smooth surfaces "
-            f"without polygon edges, realistic skin and fabric.{EXTRA[part]}{ref} A flat grey background.")
+            f"without polygon edges, realistic skin and fabric.{'' if view == 'back' else EXTRA[part]}{ref}{BACK if view == 'back' else ''}{CUT[part]} "
+            "A flat grey background.")
 
 
 def run(cmd, cwd, log):

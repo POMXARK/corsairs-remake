@@ -65,7 +65,8 @@ def main():
     nodes[186]["widgets_values"][0] = 60000
     # the refined front is the second reference of the other views: one identity in all of them
     front_ref = REFINE[1140]
-    for old in (1143, 1144, 1147):
+    # not for the back: with the face as a reference Qwen drew the face instead of the back of the head
+    for old in (1143, 1147):
         ref = nodes[REFINE[old]]
         inp = next(i for i in ref["inputs"] if i["name"] == "images.image_2")
         inp["link"] = new_link(front_ref, 0, REFINE[old], ref["inputs"].index(inp), "IMAGE")
