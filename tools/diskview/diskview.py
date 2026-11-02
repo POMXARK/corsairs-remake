@@ -14,12 +14,14 @@ import math
 import os
 import re
 import shutil
+import struct
 import urllib.request
 import subprocess
 import sys
 import threading
 import time
 import webbrowser
+import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -993,13 +995,23 @@ def _norm(s):
 def autotag_candidates(limit):
     """Папки без тегов и вне коллекций (то, что пользователь уже разметил, не трогаем); крупные первыми,
     вложенные в уже выбранную пропускаем."""
-    out = []
+    out, chosen = [], set()
     for c in sorted(CARDS, key=lambda x: -x["size"]):
         p = c["path"]
         if p in LIB["tags"] or p in _PCOLL or c["size"] < (20 << 20) or protected(p):
             continue
-        if any(under(p, o["path"]) for o in out):
+        q, nested = p, False
+        while True:
+            if os.path.normcase(q) in chosen:
+                nested = True
+                break
+            up = os.path.dirname(q)
+            if up == q:
+                break
+            q = up
+        if nested:
             continue
+        chosen.add(os.path.normcase(p))
         out.append(c)
         if len(out) >= limit:
             break
@@ -1367,21 +1379,99 @@ public static bool Save(string f,string o){
 """
 
 
+def _png(w, h, rgba):
+    raw = b"".join(b"\0" + rgba[y * w * 4:(y + 1) * w * 4] for y in range(h))
+
+    def ch(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    return b"\x89PNG\r\n\x1a\n" + ch(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)) + ch(b"IDAT", zlib.compress(raw, 6)) + ch(b"IEND", b"")
+
+
+def _icon_native(exe):
+    """Иконка exe до 256 px в PNG без запуска процессов (user32/gdi32 через ctypes); None, если не вышло."""
+    import ctypes
+    from ctypes import wintypes as W
+    u, g = ctypes.windll.user32, ctypes.windll.gdi32
+    P = ctypes.c_void_p
+
+    class II(ctypes.Structure):
+        _fields_ = [("f", W.BOOL), ("x", W.DWORD), ("y", W.DWORD), ("m", P), ("c", P)]
+
+    class BM(ctypes.Structure):
+        _fields_ = [("t", W.LONG), ("w", W.LONG), ("h", W.LONG), ("wb", W.LONG), ("p", W.WORD), ("bpp", W.WORD), ("bits", P)]
+
+    class BIH(ctypes.Structure):
+        _fields_ = [("sz", W.DWORD), ("w", W.LONG), ("h", W.LONG), ("pl", W.WORD), ("bc", W.WORD), ("cmp", W.DWORD), ("si", W.DWORD),
+                    ("xp", W.LONG), ("yp", W.LONG), ("cu", W.DWORD), ("ci", W.DWORD)]
+    u.PrivateExtractIconsW.argtypes = [W.LPCWSTR, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.POINTER(P), ctypes.POINTER(W.UINT), W.UINT, W.UINT]
+    u.GetIconInfo.argtypes = [P, ctypes.POINTER(II)]
+    u.DestroyIcon.argtypes = [P]
+    u.GetDC.restype = P
+    u.ReleaseDC.argtypes = [P, P]
+    g.GetObjectW.argtypes = [P, ctypes.c_int, ctypes.POINTER(BM)]
+    g.GetDIBits.argtypes = [P, P, W.UINT, W.UINT, ctypes.c_char_p, ctypes.POINTER(BIH), W.UINT]
+    g.DeleteObject.argtypes = [P]
+    for size in (256, 128, 64, 48, 32):
+        h, i = P(), W.UINT()
+        if u.PrivateExtractIconsW(exe, 0, size, size, ctypes.byref(h), ctypes.byref(i), 1, 0) < 1 or not h.value:
+            continue
+        info = II()
+        dc = u.GetDC(None)
+        try:
+            if not u.GetIconInfo(h, ctypes.byref(info)) or not info.c:
+                continue
+            bm = BM()
+            g.GetObjectW(info.c, ctypes.sizeof(bm), ctypes.byref(bm))
+            w, hh = bm.w, bm.h
+
+            def bits(hb):
+                bi = BIH(ctypes.sizeof(BIH), w, -hh, 1, 32, 0, 0, 0, 0, 0, 0)
+                buf = ctypes.create_string_buffer(w * hh * 4)
+                g.GetDIBits(dc, hb, 0, hh, buf, ctypes.byref(bi), 0)
+                return bytearray(buf.raw)
+            c = bits(info.c)
+            a = bytearray(c[3::4])
+            if not any(a):
+                a = bytearray(0 if v else 255 for v in bits(info.m)[0::4]) if info.m else bytearray(b"\xff" * (w * hh))
+            out = bytearray(w * hh * 4)
+            out[0::4], out[1::4], out[2::4], out[3::4] = c[2::4], c[1::4], c[0::4], a
+            return _png(w, hh, bytes(out))
+        finally:
+            u.ReleaseDC(None, dc)
+            for hb in (info.c, info.m):
+                if hb:
+                    g.DeleteObject(hb)
+            u.DestroyIcon(h)
+    return None
+
+
+_EXE = {}
+_ICON_LOCK = threading.Lock()
+
+
 def icon_png(path):
     """Иконка игры/программы (Windows): у папки — из её главного exe, до 256 px; кэшируется; только для путей из библиотеки/программ."""
     if os.name != "nt" or not in_library(path):
         return None
-    exe = main_exe(path)
+    if path not in _EXE:
+        _EXE[path] = main_exe(path)
+    exe = _EXE[path]
     if not exe:
         return None
     out = os.path.join(DATA, "icons", hashlib.sha1(exe.lower().encode()).hexdigest()[:16] + "_l.png")
     if not os.path.exists(out):
         os.makedirs(os.path.dirname(out), exist_ok=True)
         try:
-            r = subprocess.run(["powershell", "-NoProfile", "-Command", ICON_PS], env=dict(os.environ, DV_P=exe, DV_O=out), timeout=30,
-                               creationflags=0x08000000, capture_output=True)
-            if r.returncode or not os.path.exists(out):
-                log("icon %s: %s" % (exe, (r.stderr or b"")[:300]))
+            b = _icon_native(exe)
+            if b is None:
+                with _ICON_LOCK:
+                    r = subprocess.run(["powershell", "-NoProfile", "-Command", ICON_PS], env=dict(os.environ, DV_P=exe, DV_O=out), timeout=30,
+                                       creationflags=0x08000000, capture_output=True)
+                if r.returncode or not os.path.exists(out):
+                    log("icon %s: %s" % (exe, (r.stderr or b"")[:300]))
+            else:
+                with open(out, "wb") as f:
+                    f.write(b)
         except Exception as e:
             log("icon %s: %s" % (exe, e))
             return None
