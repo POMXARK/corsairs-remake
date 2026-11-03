@@ -1,5 +1,5 @@
 {
- "id": "e3c38576-d682-449d-aca6-e8e8fe66d6f1",
+ "id": "afcb1989-8595-4edc-81a7-b2bfd5ad31b3",
  "revision": 0,
  "last_node_id": 2032,
  "last_link_id": 4850,
@@ -1944,12 +1944,12 @@
     768,
     "udf",
     false,
-    false,
-    false,
+    true,
+    true,
     1,
     0,
     false,
-    20,
+    3,
     0.01,
     20000000
    ],

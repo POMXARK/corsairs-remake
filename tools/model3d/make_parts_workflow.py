@@ -147,6 +147,11 @@ def main():
     # DecimateMesh (186) 700000 faces -> UnwrapMesh cut them into 10 358 tiny charts, the 4096 atlas was confetti
     # (the log of the first run). 60000 faces unwrap into big charts; the detail comes from reference_mesh / normal map.
     nodes[186]["widgets_values"][0] = 60000
+    # RemeshMesh (241) in udf mode wraps the surface in two shells, the inner one inverted; with both drops off it stays and
+    # gives the self-intersections, the inconsistent winding and the folds of ComfyUI_00013 (825 self-intersecting faces,
+    # 19 pieces). Drop the inner shell and the enclosed bits; smooth_iters 20 washed the face out (the tooltip: 2-3).
+    rm = nodes[241]["widgets_values"]  # resolution, sign_mode, qef, drop_inverted, drop_enclosed, band, project_back, fix_poles, smooth_iters, ...
+    rm[3], rm[4], rm[8] = True, True, 3
     # UnwrapMesh (196): "pec" cuts the dense voxel-born mesh into hundreds of small charts (the atlas of ComfyUI_00007 is
     # confetti); "adaptive" (CPU) is slower and should give fewer, bigger charts. Not checked in ComfyUI yet.
     nodes[196]["widgets_values"][0] = "adaptive"
