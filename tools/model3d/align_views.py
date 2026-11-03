@@ -14,7 +14,7 @@ import argparse
 
 import numpy as np
 from PIL import Image, ImageDraw
-from scipy.ndimage import binary_fill_holes, gaussian_filter1d
+from scipy.ndimage import binary_fill_holes, gaussian_filter1d, median_filter
 
 BAND = (0.30, 0.70)  # the face band in parts of the outline height: brows .. mouth
 N = 1024  # samples of the profile over the outline height
@@ -78,6 +78,8 @@ def ears(a, m, box):
             k = int(0.015 * w)
             c = a[y, e + k:e + 3 * k].mean(0) if side == 0 else a[y, e - 3 * k:e - k].mean(0)
             skin[i] = c.mean() > 70 and c[0] - c[2] > 20
+        if not skin[int(0.25 * N):int(0.6 * N)].any():
+            return None  # ears under the hair or not skin-coloured
         i0 = int(0.25 * N) + int(np.argmax(skin[int(0.25 * N):int(0.6 * N)]))
         d = np.diff(gaussian_filter1d(edge, 1))
         lo, hi = i0 + int(0.03 * N), i0 + int(0.2 * N)
@@ -96,26 +98,56 @@ def widths(m, box):
     return w
 
 
+def neck(m, box):
+    """The narrowest place of the neck and its cut (the last row still as wide as the neck: below it only the tail)."""
+    w = widths(m, box)
+    i = int(0.65 * N) + int(np.argmin(w[int(0.65 * N):int(0.9 * N)]))
+    wide = np.nonzero(w[i:] > 0.8 * w[i])[0]
+    return i / N, (i + wide.max()) / N
+
+
+def edges(m):
+    """Outer left and right edge of the outline for every row, smoothed over the rows (stray hairs), -1 for none."""
+    l, r = np.full(m.shape[0], -1.0), np.full(m.shape[0], -1.0)
+    rows = np.nonzero(m.any(1))[0]
+    l[rows] = m[rows].argmax(1)
+    r[rows] = m.shape[1] - 1 - m[rows, ::-1].argmax(1)
+    for e in (l, r):
+        e[rows] = median_filter(e[rows], 41)
+    return l, r
+
+
 def stretch_x(res, m, ref):
-    """Horizontal scale about the centre of the outline so that its row widths match the reference view (the back to
-    the front, one side to the other). The height is larger than the width, so the square crop does not change."""
+    """Every row is stretched from the edges of its own outline to the mirrored edges of the reference row at the same
+    height: the back seen from behind and the front have one outline, mirrored, the left and the right side too."""
     rm = binary_fill_holes(ref.max(2) > 8)
-    ys, xs = np.nonzero(rm)
-    wr = widths(rm, (xs.min(), ys.min(), xs.max(), ys.max()))
-    ys, xs = np.nonzero(m)
-    box = (xs.min(), ys.min(), xs.max(), ys.max())
-    ws = widths(m, box)
-    sel = slice(int(0.1 * N), int(0.9 * N))
-    ok = (wr[sel] > 0) & (ws[sel] > 0)
-    s = float(np.median(wr[sel][ok] / ws[sel][ok]))
-    cx = (box[0] + box[2]) / 2
-    src = cx + (np.arange(res.shape[1], dtype=np.float32) - cx) / s
-    j0 = np.clip(np.floor(src).astype(int), 0, res.shape[1] - 1)
-    j1 = np.clip(j0 + 1, 0, res.shape[1] - 1)
-    k = (src - np.floor(src))[None, :, None]
-    out = res[:, j0] * (1 - k) + res[:, j1] * k
-    out[:, (src < 0) | (src > res.shape[1] - 1)] = 0
-    return out, s
+    ry = np.nonzero(rm.any(1))[0]
+    sy = np.nonzero(m.any(1))[0]
+    rl, rr = edges(rm)
+    sl, sr = edges(m)
+    W = res.shape[1]
+    out = res.copy()
+    x = np.arange(W, dtype=np.float32)
+    yr = np.round(ry[0] + (sy - sy[0]) / (sy[-1] - sy[0]) * (ry[-1] - ry[0])).astype(int)
+    L, R = W - 1 - rr[yr], W - 1 - rl[yr]
+    ws, wr = sr[sy] - sl[sy], R - L
+    # scale and shift of every row, smooth over the height: row by row they jump on stray hairs and wave the strands;
+    # where the outline is narrow (the crown, the tail tip) the edges say little and the scale of the neighbours is kept
+    ok = (rl[yr] >= 0) & (ws > 0.5 * ws.max()) & (wr > 0.5 * wr.max())
+    idx = np.arange(len(sy))
+    s = np.interp(idx, idx[ok], ws[ok] / wr[ok])
+    cr = np.interp(idx, idx[ok], ((L + R) / 2)[ok])
+    cs = np.interp(idx, idx[ok], ((sl[sy] + sr[sy]) / 2)[ok])
+    s, cr, cs = (gaussian_filter1d(v, 60) for v in (s, cr, cs))
+    diff = np.abs(np.r_[sl[sy] - L, sr[sy] - R][np.r_[ok, ok]])
+    for i, y in enumerate(sy):
+        src = cs[i] + (x - cr[i]) * s[i]
+        j0 = np.clip(np.floor(src).astype(int), 0, W - 1)
+        k = (src - np.floor(src))[:, None]
+        row = res[y, j0] * (1 - k) + res[y, np.clip(j0 + 1, 0, W - 1)] * k
+        row[(src < 0) | (src > W - 1)] = 0
+        out[y] = row
+    return out, float(np.mean(diff)) / W * 1024
 
 
 def check(front, side, out, labels):
@@ -154,15 +186,35 @@ def main():
     sa, sm, sbox = load(o.side)
     if o.facing == "back":  # no face on the back: the ears are the only common marks
         ef, es = ears(fa, fm, fbox), ears(sa, sm, sbox)
-        tf, ts = np.array([0.0, *ef, 1.0]), np.array([0.0, *es, 1.0])
+        if ef is None or es is None or abs(ef[0] - es[0]) > 0.08 or abs(ef[1] - es[1]) > 0.08:
+            print(f"{o.side}: ears not found or too far from the front ({ef}, {es}), height left as it is")
+            ef = es = np.array(BAND)
+        # the neck: its narrowest place and its cut; the tail below the cut of the back goes out of the frame
+        nf, ns = neck(fm, fbox), neck(sm, sbox)
+        if not (ef[1] < nf[0] < nf[1] and es[1] < ns[0] < ns[1]):
+            nf = ns = (1.0, 1.0)
+        tf, ts = np.array([0.0, *ef, *nf]), np.array([0.0, *es, *ns])
+        tf, ts = np.append(tf, 1.0), np.append(ts, ts[-1] + 1.0 - tf[-1])
+        keep = np.r_[True, np.diff(tf) > 1e-6]
+        tf, ts = tf[keep], ts[keep]
         h = (sbox[3] - sbox[1]) / sa.shape[0] * 1024
         print(f"{o.side}: ears {es[0]:.3f}..{es[1]:.3f}, front {ef[0]:.3f}..{ef[1]:.3f}; "
-              f"top moved {(ef[0] - es[0]) * h:+.0f} px, bottom {(ef[1] - es[1]) * h:+.0f} px of 1024")
+              f"top moved {(ef[0] - es[0]) * h:+.0f} px, bottom {(ef[1] - es[1]) * h:+.0f} px of 1024; "
+              f"neck {ns[0]:.3f}..{ns[1]:.3f}, front {nf[0]:.3f}..{nf[1]:.3f}")
     else:
         f = profile(fa, fm, fbox, "front")
-        s = profile(sa, sm, sbox, o.facing)
-        best = max(((corr(f, s, a, b), a, b) for a in np.arange(0.90, 1.12, 0.005) for b in np.arange(-0.08, 0.08, 0.001)))
-        c, a, b = best
+        fits = {}
+        for facing in ("left", "right"):  # the face side is found by itself, the argument only tells it is a side
+            p = profile(sa, sm, sbox, facing)
+            fits[facing] = (max((corr(f, p, a, b), a, b) for a in np.arange(0.90, 1.12, 0.005)
+                                for b in np.arange(-0.08, 0.08, 0.001)), p)
+        facing = max(fits, key=lambda k: fits[k][0][0])
+        if facing != o.facing:
+            print(f"{o.side}: the face looks {facing}, not {o.facing} ({fits[facing][0][0]:.2f} > {fits[o.facing][0][0]:.2f})")
+        (c, a, b), s = fits[facing]
+        if c < 0.3 or c - corr(f, s, 1, 0) < 0.1:  # the bands do not match: a wrong facing or another head
+            print(f"{o.side}: face bands not matched (match {c:.2f}), height left as it is")
+            a, b = 1.0, 0.0
         # side row for every output row: identity at the crown and the neck, the fitted affine over the face band
         tf = np.array([0.0, BAND[0], BAND[1], 1.0])
         ts = np.array([0.0, (BAND[0] - b) / a, (BAND[1] - b) / a, 1.0])
@@ -179,9 +231,9 @@ def main():
     raw = np.asarray(im.convert("RGBA") if im.mode == "RGBA" else im.convert("RGB")).astype(np.float32)
     res = raw[i0] * (1 - k) + raw[i1] * k
     if o.width:
-        res, sx = stretch_x(res, binary_fill_holes(res[..., :3].max(2) > 8),
+        res, dx = stretch_x(res, binary_fill_holes(res[..., :3].max(2) > 8),
                             np.asarray(Image.open(o.width).convert("RGB")))
-        print(f"{o.side}: width x{sx:.3f} to {o.width}")
+        print(f"{o.side}: outline edges moved {dx:.1f} px of 1024 on average to the mirrored {o.width}")
     Image.fromarray(np.clip(res + 0.5, 0, 255).astype(np.uint8)).save(o.out)
     if o.facing != "back":
         shift = [(BAND[j] - ((BAND[j] - b) / a)) * (y1 - y0) / sa.shape[0] * 1024 for j in (0, 1)]
