@@ -199,6 +199,18 @@ def coat_relax(h, mask, degree=0.5, tangent=0, mode='mesh'):
     return f'coat_relax: {op}, {int(move.sum())} vertices'
 
 
+def open_relax(h, mask, degree=0.5, tangent=0, crease=180.):
+    """The open copy of 3DCoat Mesh.relax (coat_algos.relax, same result to 1e-6, no Windows): umbrella Laplacian
+    steps on the welded mesh, only the inner vertices of the region move."""
+    from coat_algos import relax
+    pid, F, W = _welded(h)
+    move = inner_vertices(h, mask)
+    W2 = relax(W.astype(np.float64), F, float(degree), bool(int(tangent)), float(crease), free=move)
+    W[move] = W2[move]
+    h.P = W[pid]
+    return f'open_relax: degree {degree} tangent {int(tangent)} crease {crease}, {int(move.sum())} vertices'
+
+
 # ---------- texture tools ----------
 
 def repaint(h, mask, views='all', align=1):
@@ -281,6 +293,7 @@ TOOLS = {
     'relax': (relax, {'steps': 10, 'lam': 0.5}, 'сгладить форму (Taubin), край области на месте', 'geometry'),
     'membrane': (membrane, {'blend': 0.6}, 'натянуть гладкую плёнку на край области (складки век, ямы)', 'geometry'),
     'push': (push, {'amount': 0.003}, 'выдвинуть/вдавить область по нормали (доля высоты)', 'geometry'),
+    'open_relax': (open_relax, {'degree': 0.5, 'tangent': 0, 'crease': 180.}, 'relax как в 3DCoat (без Windows)', 'geometry'),
     'coat_relax': (coat_relax, {'degree': 0.5, 'tangent': 0, 'mode': 'mesh'}, '3DCoat relax (Windows, на экране)', 'geometry'),
     'repaint': (repaint, {'views': 'all', 'align': 1}, 'перекрасить текселы области из видов', 'texture'),
     'hair_to_skin': (hair_to_skin, {}, 'тёмные (волосы) текселы области → ближайшая кожа', 'texture'),

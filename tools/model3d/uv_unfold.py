@@ -5,8 +5,10 @@ all islands are packed anew.
 3DCoat Auto Seams leaves about 4 % of the texels used twice inside one island: the tube of the neck and the ponytail
 flattened folds over itself, one texel serves the neck and the ponytail, and the ponytail gets the skin of the neck
 (light spots). Here every such island is cut by the plane between the two 3D clusters of its overlapping faces
-(head_seams.split_folds), each piece is unwrapped by LSCM (least squares conformal map, two pinned far vertices) at
-the 3D scale of the island, a piece that still overlaps is cut again (up to MAX_DEPTH), and xatlas packs all
+(head_seams.split_folds), each piece is unwrapped at the 3D scale of the island by LSCM (UNFOLD=lscm, default) or
+ARAP (UNFOLD=arap: as rigid as possible, the open copy of 3DCoat's GU, even area inside a piece). On the hero1 head
+(fix2/solid_auv.obj) LSCM gave 397 islands, 15 faces over themselves, uv_score 2.40; ARAP 426 islands, 26 faces,
+2.06: ARAP pieces of the folded tube overlap more often and are cut again, so the atlas gets more small islands, a piece that still overlaps is cut again (up to MAX_DEPTH), and xatlas packs all
 islands from the given UV (use_input_mesh_uvs: the other islands keep their shape). The positions keep their order
 (uv_from_obj.py and head_parts.py work on the output as on the input).
 """
@@ -79,15 +81,25 @@ def split(V, F, faces):
     return faces[side], faces[~side]
 
 
+METHOD = os.environ.get('UNFOLD', 'lscm')  # lscm or arap (= GU of 3DCoat), see the docstring for the measured scores
+
+
+def flat(P, tri):
+    if METHOD == 'lscm':
+        return lscm(P, tri)
+    from coat_algos import arap
+    return arap(P, tri)
+
+
 def unfold(V, F, faces, scale, depth=0):
-    """Pieces (face lists) with their new per-face-corner UV: connected parts of the faces, each unwrapped by LSCM;
+    """Pieces (face lists) with their new per-face-corner UV: connected parts of the faces, each unwrapped by flat() (LSCM or ARAP);
     a piece that still overlaps itself is cut again."""
     out = []
     comp = hs.face_components(F[faces])
     for c in np.unique(comp):
         f = faces[comp == c]
         vid, loc = np.unique(F[f], return_inverse=True)
-        uv = lscm(V[vid], loc.reshape(-1, 3)) * scale
+        uv = flat(V[vid], loc.reshape(-1, 3)) * scale
         T = uv - uv.min(0)
         T = T / max(T.max(), 1e-30)
         bad, _ = hs.uv_overlap(T, loc.reshape(-1, 3), res=512)

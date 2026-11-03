@@ -273,6 +273,7 @@ ComfyUI_00015 (`solid`, fill 20): самопересечений 3 338, и се�
 - Модальный диалог: у `cmd` второй аргумент — функция, её 3DCoat вызывает каждый кадр, пока диалог открыт; `coat.ui.cmd('$DialogButton#1')` в ней жмёт OK. Файловый диалог: `coat.ui.setFileForFileDialog(path)` перед командой.
 - Импорт для попиксельной покраски: `setFileForFileDialog(obj)` + `cmd('$ImportDPMesh', ok)`; UV-комната работает только с такими объектами (сетка ретопо в ней пустая).
 - Свои разрезы: `coat.Model.fromUv()` — ссылка на сетку UV-комнаты, `setEdgeSeam(a, b, True)` по позиционным индексам вершин (порядок вершин входного obj сохраняется), затем `UpdateMesh()`. Читать — `coat.uv.getSeams()`.
+- Как устроены инструменты 3DCoat (измерено чёрным ящиком, без декомпиляции — EULA 4.1) и открытые копии `coat_algos.py` (relax точно, plane/LSCM/ARAP≈GU) — `docs/coat-tools.md`; стенд — `coat_probe.py make|run|analyze|seams`.
 - Скрипты: `tools/model3d/coat_autouv.py` (внутри 3DCoat, задание в `_coat_job.txt`: вход, выход, лог, режим `auto|seams|export`, файл разрезов) и `tools/model3d/coat_run.sh in.obj out.obj [auto|seams] [seams.txt]` (с Linux: закрывает 3DCoat, кладёт файлы, запускает задачу `coatrun`, ждёт `done` в логе, забирает obj, закрывает 3DCoat). Один прогон ≈ 3,5–4 мин (старт 3DCoat, импорт 200 тыс. граней, развёртка).
 - `tools/model3d/uv_from_obj.py src.glb unwrapped.obj out.glb [tex]` — переносит цвет на новую UV (ближайшая точка исходной поверхности, как в solidify), затем обычный `pdm_project_views.py`.
 

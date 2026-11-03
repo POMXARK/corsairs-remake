@@ -15,7 +15,9 @@ from _coat_job.txt next to this script: input .obj, output .obj, log file, mode,
            the moved positions back): relax:degree[:tangent 0/1[:crease angle]] (Mesh.relax), weld[:rel distance]
            (Mesh.weld), triangulate, reduce:faces (reduceToPolycount). Volume tools give a new surface: vrelax:degree
            (surface volume, Volume.relaxSurface), voxrelax:steps (voxels, relaxVoxels), closeholes:size (voxels,
-           Volume.closeHoles), vfaces:N (back from the volume with at most N faces, else fromVolume).
+           Volume.closeHoles), vfaces:N (back from the volume with at most N faces, else fromVolume);
+  probe  - the input is a list made by coat_probe.py: single tools on small test meshes (flattenSingleIsland with
+           each of its methods, Mesh.relax), each result written next to the list (black-box study of the tools).
 The mesh is imported for per pixel painting (the import dialog is confirmed by $DialogButton#1), the old seams are
 cleared in the UV room, then the seams, Unwrap (it packs too: Pack UV after it packed worse, fill 0.574 vs 0.611),
 Apply UV; the result is written as .obj with UV and 'done' goes to the log (the runner closes 3DCoat then).
@@ -102,8 +104,34 @@ def ops(src, dst, spec, dens, say):
     say('write', dst, m.Write(dst))
 
 
+def probe(listfile, say):
+    """Black-box probe of single 3DCoat tools (coat_probe.py makes the list): each line 'in.obj op arg... out.obj'.
+    flatten M: uv.flattenSingleIsland(mesh, M, no rotation, scaled to the geometry) - M 0 plane, 1 LSCM, 2 ABF, 3 GU,
+    4 stripe; relax D T C: Mesh.relax(D, tangent T, crease C)."""
+    here = os.path.dirname(listfile)
+    for ln in open(listfile, encoding='utf-8'):
+        w = ln.split()
+        if len(w) < 3:
+            continue
+        src, op, args, dst = os.path.join(here, w[0]), w[1], w[2:-1], os.path.join(here, w[-1])
+        try:
+            m = coat.Mesh()
+            m.Read(src)
+            if op == 'flatten':
+                out = coat.uv.flattenSingleIsland(m, int(args[0]), False, True)
+            elif op == 'relax':
+                m.relax(float(args[0]), bool(int(args[1])), float(args[2]))
+                out = m
+            else:
+                say('unknown op', ln.strip())
+                continue
+            say('probe', w[0], op, *args, 'faces', out.facesCount(), 'write', out.Write(dst))
+        except Exception:
+            say('probe failed', ln.strip(), traceback.format_exc().replace('\n', ' | '))
+
+
 def main():
-    job = [s.strip() for s in open(JOB, encoding='utf-8').read().split('\n')] + [''] * 5
+    job =[s.strip() for s in open(JOB, encoding='utf-8').read().split('\n')] + [''] * 5
     src, dst, logp, mode, seams, dens, faces, opspec = job[:8]
     log = open(logp, 'w', encoding='utf-8')
 
@@ -115,6 +143,12 @@ def main():
         return coat.Model.fromUv().islandsCount(0)
 
     try:
+        if mode == 'probe':
+            probe(src, say)
+            open(dst, 'w').write('# probe: the results lie next to the list\n')  # coat_run.sh fetches dst
+            say('done')
+            log.close()
+            return
         if mode == 'ops':
             ops(src, dst, opspec, float(dens or 0), say)
             say('done')
