@@ -390,6 +390,13 @@ def main():
         prim["attributes"]["NORMAL"] = len(j["accessors"]) - 1
         b += nrm.tobytes()
     prim["attributes"].pop("TANGENT", None)  # stale after the smoothing
+    # the normal, occlusion and metal-roughness maps were baked for the unsmoothed mesh: Blender showed their chart borders as
+    # cracks over the face and a glossy see-through ponytail. The views carry the shading already, the engine ignores the maps.
+    mat.pop("normalTexture", None)
+    mat.pop("occlusionTexture", None)
+    pbr = mat.setdefault("pbrMetallicRoughness", {})
+    pbr.pop("metallicRoughnessTexture", None)
+    pbr["metallicFactor"], pbr["roughnessFactor"] = 0.0, 1.0
     buf = io.BytesIO()
     Image.fromarray(out.clip(0, 255).astype(np.uint8)).save(buf, format="PNG")
     b = b + b"\0" * (-len(b) % 4)
