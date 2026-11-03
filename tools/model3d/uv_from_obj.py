@@ -55,7 +55,8 @@ def main():
     tpos, tx, ty = _face_texels(V2.astype(np.float64), uvg * size, F2.astype(np.int64), size,
                                 np.ones((size, size), np.bool_))
     log('texels', len(tpos))
-    _, k = tree.query(tpos, k=1, workers=-1, distance_upper_bound=0.02)
+    # no distance bound: the neck lid of solidify is new surface far from the open neck of src; bounded at 0.02 it stayed black
+    _, k = tree.query(tpos, k=1, workers=-1)
     hit = k < len(pts)
     out = np.zeros((size, size, 3), np.uint8)
     used = np.zeros((size, size), bool)

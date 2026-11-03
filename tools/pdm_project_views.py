@@ -4,7 +4,8 @@
 The Pixal3D/TRELLIS.2 texture is generated per voxel and smears small details (eyes, eyebrows, lips). The views
 (front, left, back, right, orthographic, cropped to the figure) are sharp and the mesh is built to match them, so every
 texel is projected into the views and coloured from the view that faces it; where no view sees the texel the generated
-colour stays. Usage: pdm_project_views.py in.glb out.glb front.png left.png back.png right.png
+colour stays. Usage: pdm_project_views.py in.glb out.glb front.png left.png back.png right.png [--no-smooth] [--no-align] [--skin-guard]
+--skin-guard: texels that are skin by the views (front and both sides) take no hair pixel and fill only from skin.
 Before projecting, every view is aligned to the mesh: the mesh is drawn with its own generated texture from the view's side
 and the view is moved by the dense optical flow towards that drawing (the mesh differs from the view by a few pixels at the
 nostrils, the mouth corners, the eyelids), so the sharp details land where the geometry has them.
@@ -24,6 +25,8 @@ except ImportError:  # same code, interpreted: correct but slow
     def njit(*a, **k):
         return (lambda f: f) if not a or not callable(a[0]) else a[0]
 
+BIG_FACE = 1200  # texels (or depth pixels): faces with a wider bounding box are skipped as broken. It was 200: the flat neck lid
+# of a 10 k head is a few long triangles (the simplifier keeps a plane in few faces), it was skipped and stayed black
 SHARP = 6  # the view that faces the texel most dominates (power of the weight): blended views ghost the lips and the nose
 NAMES = ("front", "left", "back", "right")
 
@@ -99,6 +102,46 @@ def project(positions, name, view, lo, hi):
     return x0 + t * (x1 - x0), y
 
 
+# skin guard (ours, not from the original): the back view paints the neck under the ponytail with hair (the ponytail of the
+# picture covers the neck, the mesh ponytail is narrower) and the unseen neck takes the ponytail colour from the fill
+SKIN_R, SKIN_RB = 110, 30  # a skin pixel: red above this and red - blue above this (warm and light; hero1 cheek 193 144 111)
+HAIR_MAX = 80  # a hair pixel: no channel above this (hero1 hair 29 25 23, ponytail 17 15 16); the beard (103 76 54) is neither
+LID_Y = 0.08  # share of the height: faces looking down below this are the neck cut
+CUT_ROW = 0.02  # share of the height: the row of the side views the neck cut is looked up in
+SKIN_GROW = 0.004  # share of the view size: the skin of the views grows by this before a point is looked up (the eroded rim)
+
+
+def pixel_classes(f, mask):
+    """0 background, 1 skin, 2 hair, 3 other (beard, lips, eyes, the blend at the rim)."""
+    c = np.full(mask.shape, 3, np.uint8)
+    c[~mask] = 0
+    c[mask & (f[..., 0] > SKIN_R) & (f[..., 0] - f[..., 2] > SKIN_RB)] = 1
+    c[mask & (f.max(2) < HAIR_MAX)] = 2
+    return c
+
+
+def view_classes(views):
+    from scipy.ndimage import binary_dilation, binary_fill_holes
+    out = {}
+    for n, (f, _, _) in views.items():
+        c = pixel_classes(f, binary_fill_holes(f.max(2) > 8))
+        grow = max(2, int(SKIN_GROW * f.shape[0]))
+        out[n] = (c, binary_dilation(c == 1, iterations=grow) & (c != 2), c == 2)
+    return out
+
+
+def skin_points(Q, views, cls, lo, hi):
+    """Points that are skin by the views: skin in the front view and in both side views at their place. The neck under
+    the ponytail is open from the sides (skin there), the ponytail is hair from the sides; the beard and the hairline are
+    not skin in the front view, so their texels keep every view."""
+    ok = np.ones(len(Q), bool)
+    for n in ("front", "left", "right"):
+        x, y = project(Q, n, views[n], lo, hi)
+        s = cls[n][1]
+        ok &= s[np.clip(y.astype(int), 0, s.shape[0] - 1), np.clip(x.astype(int), 0, s.shape[1] - 1)]
+    return ok
+
+
 ZCACHE = {}
 
 
@@ -122,7 +165,7 @@ def _zbuffer(px, py, depth, UV, tris, res):
         ax, ay = int(np.floor(min(x0, x1, x2))), int(np.floor(min(y0, y1, y2)))
         ex, ey = int(np.ceil(max(x0, x1, x2))), int(np.ceil(max(y0, y1, y2)))
         d = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
-        if abs(d) < 1e-9 or max(ex - ax, ey - ay) > 300:
+        if abs(d) < 1e-9 or max(ex - ax, ey - ay) > BIG_FACE:
             continue
         for Y in range(max(ay, 0), min(ey, res - 1) + 1):
             for X in range(max(ax, 0), min(ex, res - 1) + 1):
@@ -235,7 +278,7 @@ def zfacing(zb, view, lo, hi):
     return f.astype(np.float32)
 
 
-def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
+def paint(P, UV, tris, atlas, views, side, step=1, do_align=False, skin=None, hairs=None):
     """Colours of the texels covered by the triangles, per view: ({view: sum of w*colour}, {view: sum of w}, cover)."""
     size = atlas.shape[0]
     lo, hi = P.min(0), P.max(0)
@@ -249,6 +292,8 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
         if do_align:
             views[n] = align(n, views[n], *ZCACHE[(n, dv)], atlas)
     names = list(dirs)
+    if skin is not None and hairs is None:  # the hair of the aligned views (the alignment moves them by a few pixels)
+        hairs = {n: view_classes({n: views[n]})[n][2] for n in names}
     snorm = smooth_normals(P, tris)
     facing = tuple(zfacing(zbufs[n], views[n], lo, hi) for n in names)
     vp = [project(P, n, views[n], lo, hi) for n in names]
@@ -256,12 +301,14 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
                                np.array([dirs[n] for n in names]), np.array([v[0] for v in vp]), np.array([v[1] for v in vp]),
                                tuple(views[n][0].astype(np.float32) for n in names), tuple(views[n][2].astype(np.bool_) for n in names),
                                tuple(zbufs[n] for n in names), facing, size, reach,
-                               OCCLUDED * float((hi - lo).max()), SHARP)
+                               OCCLUDED * float((hi - lo).max()), SHARP,
+                               np.zeros((1, 1), np.uint8) if skin is None else skin,
+                               tuple(np.zeros((1, 1), np.bool_) if hairs is None else hairs[n] for n in names))
     return dict(zip(names, A)), dict(zip(names, W)), cover, used
 
 
 @njit(cache=True)
-def _paint(P, uvs, tris, faces, snorm, dirs, vpx, vpy, imgs, inners, zbufs, facing, size, reach, occ, sharp):
+def _paint(P, uvs, tris, faces, snorm, dirs, vpx, vpy, imgs, inners, zbufs, facing, size, reach, occ, sharp, skin, hairs):
     nv = dirs.shape[0]
     acc = np.zeros((nv, size, size, 3), np.float32)  # per view: sum of w*colour and sum of w
     wsum = np.zeros((nv, size, size), np.float32)
@@ -280,7 +327,7 @@ def _paint(P, uvs, tris, faces, snorm, dirs, vpx, vpy, imgs, inners, zbufs, faci
         u0, u1, u2, v0, v1, v2 = uvs[i0, 0], uvs[i1, 0], uvs[i2, 0], uvs[i0, 1], uvs[i1, 1], uvs[i2, 1]
         ax, ay = int(np.floor(min(u0, u1, u2))), int(np.floor(min(v0, v1, v2)))
         ex, ey = int(np.ceil(max(u0, u1, u2))), int(np.ceil(max(v0, v1, v2)))
-        if max(ex - ax, ey - ay) > 200:
+        if max(ex - ax, ey - ay) > BIG_FACE:
             continue
         d = (v1 - v2) * (u0 - u2) + (u2 - u1) * (v0 - v2)
         if abs(d) < 1e-9:
@@ -301,6 +348,7 @@ def _paint(P, uvs, tris, faces, snorm, dirs, vpx, vpy, imgs, inners, zbufs, faci
                 if l0 < 0 or l1 < 0 or l2 < 0:
                     continue
                 used[Y, X] = True
+                guard = skin.shape[0] > 1 and skin[min(Y, size - 1), min(X, size - 1)] == 1
                 for k in range(nv):
                     if w[k] <= 0:
                         continue
@@ -309,6 +357,8 @@ def _paint(P, uvs, tris, faces, snorm, dirs, vpx, vpy, imgs, inners, zbufs, faci
                     sx = l0 * vpx[k, i0] + l1 * vpx[k, i1] + l2 * vpx[k, i2]
                     sy = l0 * vpy[k, i0] + l1 * vpy[k, i1] + l2 * vpy[k, i2]
                     iy, ix = min(max(int(sy), 0), h - 1), min(max(int(sx), 0), wd - 1)
+                    if guard and hairs[k][iy, ix]:  # a skin texel takes no hair pixel
+                        continue
                     seen = zb[min(max(int(sy / h * zr), 0), zr - 1), min(max(int(sx / wd * zr), 0), zr - 1)]
                     here = l0 * dep[k, 0] + l1 * dep[k, 1] + l2 * dep[k, 2]
                     if here >= seen - reach and inners[k][iy, ix]:
@@ -385,7 +435,7 @@ def _face_sums(uvs, tris, img, mask):
         u0, u1, u2, v0, v1, v2 = uvs[i0, 0], uvs[i1, 0], uvs[i2, 0], uvs[i0, 1], uvs[i1, 1], uvs[i2, 1]
         ax, ay = int(np.floor(min(u0, u1, u2))), int(np.floor(min(v0, v1, v2)))
         ex, ey = int(np.ceil(max(u0, u1, u2))), int(np.ceil(max(v0, v1, v2)))
-        if max(ex - ax, ey - ay) > 200:
+        if max(ex - ax, ey - ay) > BIG_FACE:
             continue
         d = (v1 - v2) * (u0 - u2) + (u2 - u1) * (v0 - v2)
         if abs(d) < 1e-9:
@@ -414,7 +464,7 @@ def _face_image(uvs, tris, vals, size):
         ax, ay = int(np.floor(min(u0, u1, u2))), int(np.floor(min(v0, v1, v2)))
         ex, ey = int(np.ceil(max(u0, u1, u2))), int(np.ceil(max(v0, v1, v2)))
         d = (v1 - v2) * (u0 - u2) + (u2 - u1) * (v0 - v2)
-        if max(ex - ax, ey - ay) > 200 or abs(d) < 1e-9:
+        if max(ex - ax, ey - ay) > BIG_FACE or abs(d) < 1e-9:
             continue
         for Y in range(max(ay, 0), min(ey, size - 1) + 1):
             for X in range(max(ax, 0), min(ex, size - 1) + 1):
@@ -430,7 +480,7 @@ def _face_image(uvs, tris, vals, size):
 BAD_SHARE = 0.5  # faces painted by a view on less than this share of their texels take the colour of the painted faces around (0.2: light shards remain)
 
 
-def fill_faces(P, UV, tris, good, used, out):
+def fill_faces(P, UV, tris, good, used, out, skin=None):
     """Texels no view paints well (a flap under the skin, a sliver edge-on to every view, a strand in a crevice of the hair) take
     the colour of the nearest well painted faces in space: the generated texture has the wrong tone there (orange spots, light
     specks in the hair), and the UV neighbours are other charts."""
@@ -441,14 +491,25 @@ def fill_faces(P, UV, tris, good, used, out):
     ok = (na > 0) & (ng >= 0.5 * na)
     if not ok.any():
         return 0
-    tree = cKDTree(P[tris[ok]].mean(1))
-    col = colsum[ok] / ng[ok][:, None]
     # per texel, not per face: inverse-distance blend of the 12 nearest painted faces, no flat patches
-    pos, ax, ay = _face_texels(P, UV * size, tris, size, used & ~good)
-    dist, k = tree.query(pos, k=12, workers=-1)
-    w = 1 / (dist + 1e-4 * float(np.ptp(P, axis=0).max())) ** 2
-    out[ay, ax] = (col[k] * w[..., None]).sum(1) / w.sum(1, keepdims=True)
-    return len(pos)
+    todo = used & ~good
+    groups = [(todo, ok)]
+    if skin is not None:  # labels of skin_texels: a skin texel takes the colour of painted skin faces only, a hair one of the rest
+        _, ns = _face_sums(UV * size, tris, out[..., :1], (skin == 1) & good)
+        sf = ns >= 0.5 * np.maximum(ng, 1)
+        groups = [(todo & (skin == 0), ok), (todo & (skin == 1), ok & sf), (todo & (skin == 2), ok & ~sf)]
+    n = 0
+    for m, src in groups:
+        if not src.any() or not m.any():
+            continue
+        tree = cKDTree(P[tris[src]].mean(1))
+        col = colsum[src] / ng[src][:, None]
+        pos, ax, ay = _face_texels(P, UV * size, tris, size, m)
+        dist, k = tree.query(pos, k=12, workers=-1)
+        w = 1 / (dist + 1e-4 * float(np.ptp(P, axis=0).max())) ** 2
+        out[ay, ax] = (col[k] * w[..., None]).sum(1) / w.sum(1, keepdims=True)
+        n += len(pos)
+    return n
 
 
 @njit(cache=True)
@@ -465,7 +526,7 @@ def _face_texels(P, uvs, tris, size, mask):
             ax, ay = int(np.floor(min(u0, u1, u2))), int(np.floor(min(v0, v1, v2)))
             ex, ey = int(np.ceil(max(u0, u1, u2))), int(np.ceil(max(v0, v1, v2)))
             d = (v1 - v2) * (u0 - u2) + (u2 - u1) * (v0 - v2)
-            if max(ex - ax, ey - ay) > 200 or abs(d) < 1e-9:
+            if max(ex - ax, ey - ay) > BIG_FACE or abs(d) < 1e-9:
                 continue
             for Y in range(ay, ey + 1):
                 for X in range(ax, ex + 1):
@@ -481,6 +542,32 @@ def _face_texels(P, uvs, tris, size, mask):
                     cnt += 1
     return pos, ox, oy
 
+
+def skin_texels(P, UV, tris, size, views):
+    """Label of every texel: 1 skin (by skin_points), 2 hair (the part of the neck cut under the ponytail), 0 any."""
+    cls = view_classes(views)
+    lo, hi = P.min(0), P.max(0)
+    pos, ax, ay = _face_texels(P.astype(np.float64), UV * size, tris.astype(np.int64), size, np.ones((size, size), np.bool_))
+    lab = np.zeros((size, size), np.uint8)
+    lab[ay, ax] = skin_points(pos, views, cls, lo, hi)
+    # the neck cut (the lid of solidify: faces looking down at the bottom) is never seen; solidify merged the tip of the
+    # ponytail into it. Its texels follow the side views a little above the bottom row (the rim is blended): skin there
+    # is the neck, the rest is the ponytail and fills from hair, not from a mix (streaks of both over the long lid faces)
+    c = P[tris].mean(1)
+    n = np.cross(P[tris[:, 1]] - P[tris[:, 0]], P[tris[:, 2]] - P[tris[:, 0]])
+    n /= np.linalg.norm(n, axis=1, keepdims=True) + 1e-30
+    cut = ((c[:, 1] - lo[1]) / (hi[1] - lo[1]) < LID_Y) & (n[:, 1] < -0.7)
+    cutmap = _face_image(UV * size, tris, cut.astype(np.float32)[:, None], size)[..., 0] > 0.5
+    m = cutmap[ay, ax]
+    q = pos[m].copy()
+    q[:, 1] = lo[1] + CUT_ROW * (hi[1] - lo[1])
+    side = np.ones(len(q), bool)
+    for v in ("left", "right"):
+        x, y = project(q, v, views[v], lo, hi)
+        sk = cls[v][1]
+        side &= sk[np.clip(y.astype(int), 0, sk.shape[0] - 1), np.clip(x.astype(int), 0, sk.shape[1] - 1)]
+    lab[ay[m], ax[m]] = np.where(side, 1, 2)
+    return lab
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -514,11 +601,16 @@ def main():
         print(f"left view sees {'+' if side > 0 else '-'}x: difference {err:.2f}")
         if best is None or err < best[0]:
             best = (err, side)
-    acc, ws, cover, used = paint(P, UV, tris, atlas, views, best[1], do_align="--no-align" not in sys.argv)
+    skin = None
+    if "--skin-guard" in sys.argv:
+        skin = skin_texels(P, UV, tris, atlas.shape[0], views)
+        print(f"skin guard: {int((skin == 1).sum())} skin texels take no hair pixels, {int((skin == 2).sum())} of the neck cut fill from hair")
+    acc, ws, cover, used = paint(P, UV, tris, atlas, views, best[1], do_align="--no-align" not in sys.argv,
+                                 skin=skin)
     painted, w = combine(atlas, acc, ws, P, UV, tris)
     good = (cover > 0.05) & (w > SEEN_W)
     out = np.where(good[..., None], painted, atlas)
-    print(f"{fill_faces(P, UV, tris, good, used, out)} texels without a view filled from their neighbours in space")
+    print(f"{fill_faces(P, UV, tris, good, used, out, skin)} texels without a view filled from their neighbours in space")
     # padding: faces smaller than a texel have no texel centre of their own and sample the neighbours / the generated colour
     from scipy.ndimage import distance_transform_edt
     dist, (py_, px_) = distance_transform_edt(~used, return_indices=True)
