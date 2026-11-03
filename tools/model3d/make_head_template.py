@@ -5,6 +5,8 @@ blog.comfy.org/p/trellis2-and-pixal3d-are-now-native): the graph and its setting
 remesh solid fill 20 smooth 20, 700k faces, pec unwrap, its own texture, normal and AO baked from the high mesh),
 only the input picture is the front view of hero1 and the GLB goes to 3d/hero1_head_tpl.
 
+*_bf16.json: the same graphs on the unquantized weights pixal3d(_multiview)_bf16.safetensors, for an A/B with int8.
+
 pixal3d_head_2views.json: the same graph, but Pixal3D Multi-View Conditioning (multiview weights, FOV 20) gets two
 views, front and back (the back gives the ponytail and the colour of the nape, that one front view does not show).
 The node takes any subset of front / left / back / right at fixed 90 degree steps, so a 3/4 view cannot go there.
@@ -25,6 +27,7 @@ def main():
     nodes[122]["widgets_values"][0] = "hero1_head_front.png"  # LoadImage
     nodes[322]["widgets_values"][0] = "3d/hero1_head_tpl"  # Save3DAdvanced
     json.dump(g, open(HERE / "pixal3d_head_template.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    bf16(g, "pixal3d_bf16.safetensors", "pixal3d_head_template_bf16.json")
     two_views(g)
 
 
@@ -82,6 +85,16 @@ def two_views(g):
     nodes[322]["widgets_values"][0] = "3d/hero1_head_2v"
     g["last_node_id"], g["last_link_id"] = nid, lid
     json.dump(g, open(HERE / "pixal3d_head_2views.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    bf16(g, "pixal3d_multiview_bf16.safetensors", "pixal3d_head_2views_bf16.json")
+
+
+def bf16(g, weights, name):
+    """The same graph on the unquantized Pixal3D weights (11 GB): A/B against int8 with the same seeds."""
+    g = copy.deepcopy(g)
+    nodes = {n["id"]: n for n in g["nodes"]}
+    nodes[319]["widgets_values"][0] = weights
+    nodes[322]["widgets_values"][0] += "_bf16"
+    json.dump(g, open(HERE / name, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 
 if __name__ == "__main__":
