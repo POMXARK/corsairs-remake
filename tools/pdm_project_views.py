@@ -276,6 +276,9 @@ def combine(atlas, acc, wsum):
     return out / np.maximum(tot, 1e-6)[..., None], tot
 
 
+BAD_SHARE = 0.5  # faces painted by a view on less than this share of their texels take the colour of the painted faces around (0.2: light shards remain)
+
+
 def fill_faces(P, UV, tris, good, out):
     """Faces whose texels no view paints well (a flap under the skin, a sliver edge-on to every view) take the mean colour of the
     nearest well painted faces in space: the generated texture has the wrong tone there (orange spots), the UV neighbours are other charts."""
@@ -299,10 +302,10 @@ def fill_faces(P, UV, tris, good, out):
             continue
         ax, ay = np.clip(X[ok], 0, size - 1), np.clip(Y[ok], 0, size - 1)
         share = good[ay, ax].mean()
-        if share >= 0.5:
+        if share >= max(BAD_SHARE, 0.5):
             cen.append(P[f].mean(0))
             col.append(out[ay, ax][good[ay, ax]].mean(0))
-        elif share < 0.2:
+        elif share < BAD_SHARE:
             bad.append((P[f], l0[ok], l1[ok], ax, ay))
     if not bad or not cen:
         return 0
