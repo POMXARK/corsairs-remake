@@ -5,7 +5,9 @@ Console: "C:\\Program Files\\3DCoat-2026\\3DCoatGL64.exe" -script C:\\path\\coat
 from _coat_job.txt next to this script: input .obj, output .obj, log file, mode, seams file. Modes:
   auto   - (or empty) 3DCoat's own Auto Seams;
   seams  - the seams of the file (head_seams.py: 'a b' 0-based vertex pairs of the input .obj) instead;
-  export - only write the UV room as it is (seams and unwrap made by hand).
+  export - only write the UV room as it is (seams and unwrap made by hand);
+  remesh - no UV: the mesh goes into a voxel volume of the Sculpt room (density from job line 6, voxels per
+           scene unit, 0 = 3DCoat's own) and comes back as an even surface of at most N faces (job line 7).
 The mesh is imported for per pixel painting (the import dialog is confirmed by $DialogButton#1), the old seams are
 cleared in the UV room, then the seams, Unwrap (it packs too: Pack UV after it packed worse, fill 0.574 vs 0.611),
 Apply UV; the result is written as .obj with UV and 'done' goes to the log (the runner closes 3DCoat then).
@@ -24,9 +26,30 @@ def press_ok():
     coat.ui.cmd('$DialogButton#1')
 
 
+def remesh(src, dst, dens, faces, say):
+    m = coat.Mesh()
+    say('read', m.Read(src), 'faces', m.facesCount(), 'bounds diagonal', m.getBounds().GetDiagonal())
+    # no toRoom('Sculpt'): it opens a modal 'Getting to Sculpt' message; the volume works from any room
+    el = coat.Scene.sculptRoot().addChild('remesh')
+    if dens > 0:  # before the voxels: the default (about one voxel per unit) gave a 8 face box for a 1 unit head
+        el.density(dens)
+    v = el.Volume()
+    v.toVoxels()
+    m.toVolume(v)
+    coat.io.step(20)
+    say('voxelized', v.isVoxelized())
+    full = coat.Mesh()
+    full.fromVolume(v)
+    say('volume surface faces', full.facesCount())
+    out = coat.Mesh()
+    out.fromVolumeWithMaxPolycount(v, faces)
+    say('reduced faces', out.facesCount())
+    say('write', dst, out.Write(dst))
+
+
 def main():
-    job = [s.strip() for s in open(JOB, encoding='utf-8').read().split('\n')] + ['', '']
-    src, dst, logp, mode, seams = job[:5]
+    job = [s.strip() for s in open(JOB, encoding='utf-8').read().split('\n')] + [''] * 4
+    src, dst, logp, mode, seams, dens, faces = job[:7]
     log = open(logp, 'w', encoding='utf-8')
 
     def say(*a):
@@ -37,6 +60,11 @@ def main():
         return coat.Model.fromUv().islandsCount(0)
 
     try:
+        if mode == 'remesh':
+            remesh(src, dst, float(dens or 0), int(faces or 20000), say)
+            say('done')
+            log.close()
+            return
         if mode != 'export':
             coat.ui.toRoom('Paint', True)
             coat.io.step(10)
