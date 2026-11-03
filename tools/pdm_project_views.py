@@ -68,10 +68,12 @@ def smooth_positions(P, tris, steps=SMOOTH):
 def load_view(path):
     f = np.asarray(Image.open(path).convert("RGB")).astype(np.float32)
     f[..., 1] = np.minimum(f[..., 1], np.maximum(f[..., 0], f[..., 2]))  # green background spill
-    mask = f.max(2) > 8
+    from scipy.ndimage import binary_erosion, binary_fill_holes
+    # holes filled: the black pupil (and the erosion ring around it, the iris) counted as background and took the skin
+    # colour of the neighbours, a skin patch in the eye of ComfyUI_00016
+    mask = binary_fill_holes(f.max(2) > 8)
     ys, xs = np.where(mask)
     # the rim of the figure is blended with the background (dark lines at the temple, the neck, the ear): do not sample it
-    from scipy.ndimage import binary_erosion
     inner = binary_erosion(mask, iterations=max(3, f.shape[0] // 400))
     return f, (xs.min(), xs.max(), ys.min(), ys.max()), inner
 
@@ -234,7 +236,10 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
         used[ay, ax] = True
         for name, dv in dirs.items():
             lim = 0.05  # holes between the views stay with the smeared generated colour: let every view reach far, SHARP keeps the best one on top
-            w = np.clip((nrm @ np.array(dv) - lim) / 0.5, 0, 1)
+            # no cap below 1: with /0.5 every view facing the texel at more than 55 % weighed 1, the front and the side view
+            # met half and half in the eye sockets and on the cheeks (ghost irises, ComfyUI_00016) and SHARP had nothing to sharpen
+            w = np.clip((nrm @ np.array(dv) - lim) / (1 - lim), 0, 1)
+            wc = min(1., w * (1 - lim) / 0.5)  # the cover keeps the old scale: which texels count as seen does not change
             if w <= 0:
                 continue
             px, py = project(pp, name, views[name], lo, hi)
@@ -250,7 +255,7 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
             vis = (here >= seen - reach) & views[name][2][iy, ix]
             acc[name][ay[vis], ax[vis]] += c[vis] * w ** SHARP
             wsum[name][ay[vis], ax[vis]] += w ** SHARP
-            cover[ay[vis], ax[vis]] += w ** 2
+            cover[ay[vis], ax[vis]] += wc ** 2
     return acc, wsum, cover, used
 
 
