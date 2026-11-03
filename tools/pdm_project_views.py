@@ -303,14 +303,16 @@ def fill_faces(P, UV, tris, good, out):
             cen.append(P[f].mean(0))
             col.append(out[ay, ax][good[ay, ax]].mean(0))
         elif share < 0.2:
-            bad.append((P[f].mean(0), ax, ay))
+            bad.append((P[f], l0[ok], l1[ok], ax, ay))
     if not bad or not cen:
         return 0
     tree = cKDTree(np.array(cen))
     col = np.array(col)
-    for c, ax, ay in bad:
-        _, k = tree.query(c, k=8)
-        out[ay, ax] = col[k].mean(0)
+    for pp, b0, b1, ax, ay in bad:  # per texel, not per face: inverse-distance blend of the 12 nearest painted faces, no flat patches
+        pos = b0[:, None] * pp[0] + b1[:, None] * pp[1] + (1 - b0 - b1)[:, None] * pp[2]
+        dist, k = tree.query(pos, k=12)
+        w = 1 / (dist + 1e-4 * float(np.ptp(P, axis=0).max())) ** 2
+        out[ay, ax] = (col[k] * w[..., None]).sum(1) / w.sum(1, keepdims=True)
     return len(bad)
 
 
