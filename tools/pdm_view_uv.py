@@ -20,6 +20,7 @@ from pdm_project_views import (NAMES, accessor, load_view, project, read_glb, sm
                                smooth_positions)
 
 TEX = 4096
+SMOOTH = 3  # Taubin steps: the mesh is clean now, 12 steps smoothed the nostrils, lips and eyelids away
 MIN_FACING = 0.15  # n . direction to the viewer below which a face is edge-on to the view
 REACH = 0.02  # share of the model size: a face deeper than this behind the z-buffer is hidden
 RES = 2048
@@ -64,7 +65,8 @@ def main():
     mat = j["materials"][prim.get("material", 0)]
     bv = j["bufferViews"][j["images"][j["textures"][mat["pbrMetallicRoughness"]["baseColorTexture"]["index"]]["source"]]["bufferView"]]
     atlas0 = np.asarray(Image.open(io.BytesIO(b[bv.get("byteOffset", 0):bv.get("byteOffset", 0) + bv["byteLength"]])).convert("RGB"))
-    P = smooth_positions(P0, T0)
+    steps = int(sys.argv[sys.argv.index("--smooth") + 1]) if "--smooth" in sys.argv else SMOOTH
+    P = smooth_positions(P0, T0, steps)
     lo, hi = P.min(0), P.max(0)
     reach = REACH * float((hi - lo).max())
     sn = smooth_normals(P, T0)
