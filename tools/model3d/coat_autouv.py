@@ -104,10 +104,45 @@ def ops(src, dst, spec, dens, say):
     say('write', dst, m.Write(dst))
 
 
+def uv_room(src, dst, op, args, say):
+    """A probe in the UV room: the scene is cleared, the mesh imported for per pixel painting, then autoseams (Clear,
+    Auto Seams; the seams as vertex pairs to dst + '.seams.txt', Unwrap, Apply) or pack R (the UV of the file packed by
+    uv.pack(0, rotate R, no shuffle), Apply)."""
+    coat.Scene.clearScene(False)
+    coat.io.step(10)
+    coat.ui.toRoom('Paint', True)
+    coat.io.step(10)
+    coat.ui.setFileForFileDialog(src)
+    coat.ui.cmd('$ImportDPMesh', press_ok)
+    coat.io.step(30)
+    coat.ui.toRoom('UV', True)
+    coat.io.step(30)
+    n0 = coat.Model.fromUv().islandsCount(0)
+    if op == 'autoseams':
+        coat.ui.cmd('$ClearEdges', press_ok)
+        coat.io.step(10)
+        coat.ui.cmd('$AutoEdges', press_ok)
+        coat.io.step(10)
+        sm = coat.uv.getSeams()
+        with open(dst + '.seams.txt', 'w') as f:
+            f.write(''.join(f'{sm[i]} {sm[i + 1]}\n' for i in range(0, len(sm) - 1, 2)))
+        coat.ui.cmd('$Unwrap', press_ok)
+        coat.io.step(20)
+    else:
+        coat.uv.pack(0, bool(int(args[0])) if args else True, False)
+        coat.io.step(20)
+    coat.ui.cmd('$ApplyUV', press_ok)
+    coat.io.step(20)
+    u = coat.Model.fromUv()
+    say('probe uv', os.path.basename(src), op, *args, 'islands', n0, '->', u.islandsCount(0),
+        'write', u.getWholeMesh().Write(dst))
+
+
 def probe(listfile, say):
     """Black-box probe of single 3DCoat tools (coat_probe.py makes the list): each line 'in.obj op arg... out.obj'.
     flatten M: uv.flattenSingleIsland(mesh, M, no rotation, scaled to the geometry) - M 0 plane, 1 LSCM, 2 ABF, 3 GU,
-    4 stripe; relax D T C: Mesh.relax(D, tangent T, crease C)."""
+    4 stripe; relax D T C: Mesh.relax(D, tangent T, crease C); ops SPEC [DENS]: the ops mode on the file;
+    autoseams, pack R: uv_room (the UV room jobs go last in the list: they clear the scene)."""
     here = os.path.dirname(listfile)
     for ln in open(listfile, encoding='utf-8'):
         w = ln.split()
@@ -117,6 +152,12 @@ def probe(listfile, say):
         try:
             m = coat.Mesh()
             m.Read(src)
+            if op in ('autoseams', 'pack'):
+                uv_room(src, dst, op, args, say)
+                continue
+            if op == 'ops':  # the ops of the ops mode: volume tools, reduce, weld
+                ops(src, dst, args[0], float(args[1]) if len(args) > 1 else 0., say)
+                continue
             if op == 'flatten':
                 out = coat.uv.flattenSingleIsland(m, int(args[0]), False, True)
             elif op == 'relax':

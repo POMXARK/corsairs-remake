@@ -2,6 +2,8 @@
 """Black-box study of 3DCoat tools: what each one does, measured, and which open algorithm gives the same result.
 
 coat_probe.py make dir [auto_uv.obj]   test meshes and the job list (dir/probe/*.obj, dir/probe.txt)
+coat_probe.py make2 dir [solid.obj [atlas_uv.obj]]  probe 2: ABF / stripe on strips, volume tools, reduce, weld,
+                                       Auto Seams on solids, pack
 coat_probe.py run dir                  3DCoat on the Windows PC runs the list (coat_run.sh ... probe), results back
 coat_probe.py seams auto_uv.obj [parts.npy]  where Auto Seams cut (seams against all edges, islands)
 coat_probe.py analyze dir              compares every result with the open algorithms (table on stdout,
@@ -141,6 +143,125 @@ def make(d, auto_uv=None):
             lines.append(f'probe/{name}.obj relax {dg} {t} {c:g} probe/{name}_r{dg}_{t}_{c:g}.obj')
     open(os.path.join(d, 'probe.txt'), 'w').write('\n'.join(lines) + '\n')
     print(f'{d}: {len(meshes) + 2} meshes, {len(lines)} jobs')
+
+
+def strips():
+    """Strips for ABF / stripe: straight, bent along an arc (developable), twisted half a turn (not developable)."""
+    n, w = 41, 4
+    t, s = np.meshgrid(np.linspace(0, 1, n), np.linspace(-0.5, 0.5, w), indexing='ij')
+    out = {'strip': np.stack([4 * t, 0.4 * s, 0 * t], -1)}
+    a = t * np.pi * 1.2
+    out['arc'] = np.stack([2 * np.cos(a), 0.4 * s, 2 * np.sin(a)], -1)
+    b = t * np.pi
+    out['twist'] = np.stack([4 * t, 0.4 * s * np.cos(b), 0.4 * s * np.sin(b)], -1)
+    return {k: (v.reshape(-1, 3), grid(n, w)) for k, v in out.items()}
+
+
+def solids():
+    """Closed bodies for Auto Seams: prisms with side faces meeting at 120 / 150 / 165 degrees (dihedral turn 60, 30,
+    15), a smooth cylinder, a sphere, a torus, a box."""
+    import trimesh
+    out = {}
+    for k in (3, 6, 12, 24):
+        m = trimesh.creation.cylinder(radius=1, height=2, sections=k)
+        m = m.subdivide().subdivide()
+        out[f'prism{k}'] = m
+    out['sphere3'] = trimesh.creation.icosphere(3)
+    out['torus'] = trimesh.creation.torus(1, 0.35, major_sections=48, minor_sections=16) \
+        if hasattr(trimesh.creation, 'torus') else trimesh.creation.capsule(2, 0.5)
+    b = trimesh.creation.box((2, 1, 0.5))
+    for _ in range(3):
+        b = b.subdivide()
+    out['box'] = b
+    for m in out.values():
+        m.merge_vertices()
+    return {k: (np.asarray(m.vertices), np.asarray(m.faces)) for k, m in out.items()}
+
+
+def write_obj_uv(path, V, F, UVc):
+    key, inv = np.unique(np.round(UVc.reshape(-1, 2), 7), axis=0, return_inverse=True)
+    FT = inv.reshape(-1, 3)
+    with open(path, 'w') as o:
+        o.write(''.join(f'v {x:.6f} {y:.6f} {z:.6f}\n' for x, y, z in V))
+        o.write(''.join(f'vt {u:.6f} {v:.6f}\n' for u, v in key))
+        o.write(''.join(f'f {a + 1}/{d + 1} {b + 1}/{e + 1} {c + 1}/{g + 1}\n' for (a, b, c), (d, e, g) in zip(F, FT)))
+
+
+def rects():
+    """Islands to pack: 24 flat rectangles of known sizes, each its own island, laid in a row in UV."""
+    r = np.random.default_rng(3)
+    V, F, U = [], [], []
+    x0 = 0.
+    for i in range(24):
+        w, h = r.uniform(0.1, 1.0), r.uniform(0.1, 1.0)
+        o = len(V)
+        q = [(0, 0), (w, 0), (w, h), (0, h)]
+        V += [(x0 + a, b, 0.) for a, b in q]
+        F += [(o, o + 1, o + 2), (o, o + 2, o + 3)]
+        U += [[(x0 + q[0][0], q[0][1]), (x0 + q[1][0], q[1][1]), (x0 + q[2][0], q[2][1])],
+              [(x0 + q[0][0], q[0][1]), (x0 + q[2][0], q[2][1]), (x0 + q[3][0], q[3][1])]]
+        x0 += w + 0.2
+    U = np.array(U) / x0
+    return np.array(V), np.array(F), U
+
+
+def holed():
+    """Spheres with a round hole of 10 / 20 / 35 degrees (closeHoles), and a sphere split along its equator with the
+    halves 0.001 / 0.01 apart (weld)."""
+    import trimesh
+    out = {}
+    base = trimesh.creation.icosphere(3)
+    V, F = np.asarray(base.vertices), np.asarray(base.faces)
+    for deg in (10, 20, 35):
+        c = V[F].mean(1)
+        keep = c[:, 2] < np.cos(np.radians(deg))
+        out[f'hole{deg}'] = (V, F[keep])
+    for gap in (0.001, 0.01):
+        c = V[F].mean(1)
+        top = c[:, 2] > 0
+        V2 = np.concatenate([V, V + [0, 0, gap]])
+        F2 = np.concatenate([F[~top], F[top] + len(V)])
+        out[f'split{gap:g}'] = (V2, F2)
+    return out
+
+
+def make2(d, solid=None, atlas=None):
+    """Probe 2: ABF and stripe on strips, volume tools, reduce, weld, then the UV room jobs (Auto Seams on solids and
+    the head, pack of rectangles and of an atlas)."""
+    p = os.path.join(d, 'probe')
+    os.makedirs(p, exist_ok=True)
+    lines = []
+    for name, (V, F) in strips().items():
+        write_obj(os.path.join(p, name + '.obj'), V, F)
+        lines += [f'probe/{name}.obj flatten {m} probe/{name}_f{m}.obj' for m in METHODS]
+    V, F = noisy_sphere()
+    write_obj(os.path.join(p, 'sphere.obj'), V, F)
+    for spec in ('vrelax:0.5', 'vrelax:2', 'voxrelax:3', 'voxrelax:10', 'vfaces:2000', 'reduce:640', 'reduce:200'):
+        lines.append(f'probe/sphere.obj ops {spec} 0 probe/sphere_o{spec.replace(":", "")}.obj')
+    for name, (V, F) in holed().items():
+        write_obj(os.path.join(p, name + '.obj'), V, F)
+        if name.startswith('hole'):
+            for sz in (5, 20, 60):
+                lines.append(f'probe/{name}.obj ops closeholes:{sz} 0 probe/{name}_c{sz}.obj')
+        else:
+            for rel in (0.0001, 0.001, 0.01):
+                lines.append(f'probe/{name}.obj ops weld:{rel} 0 probe/{name}_w{rel:g}.obj')
+    for name, (V, F) in solids().items():
+        write_obj(os.path.join(p, name + '.obj'), V, F)
+        lines.append(f'probe/{name}.obj autoseams probe/{name}_auto.obj')
+    if solid:
+        import shutil
+        shutil.copy(solid, os.path.join(p, 'head.obj'))
+        lines.append('probe/head.obj autoseams probe/head_auto.obj')
+    V, F, U = rects()
+    write_obj_uv(os.path.join(p, 'rects.obj'), V, F, U)
+    lines += ['probe/rects.obj pack 0 probe/rects_p0.obj', 'probe/rects.obj pack 1 probe/rects_p1.obj']
+    if atlas:
+        import shutil
+        shutil.copy(atlas, os.path.join(p, 'atlas.obj'))
+        lines.append('probe/atlas.obj pack 1 probe/atlas_p1.obj')
+    open(os.path.join(d, 'probe.txt'), 'w').write('\n'.join(lines) + '\n')
+    print(f'{d}: {len(lines)} jobs')
 
 
 def run(d):
@@ -429,5 +550,6 @@ def analyze(d):
 if __name__ == '__main__':
     cmd, d = sys.argv[1], sys.argv[2]
     {'make': lambda: make(d, sys.argv[3] if len(sys.argv) > 3 else None), 'run': lambda: run(d),
+     'make2': lambda: make2(d, *(sys.argv[3:5] + [None] * 2)[:2]),
      'analyze': lambda: analyze(d),
      'seams': lambda: seams(d, np.load(sys.argv[3]) if len(sys.argv) > 3 else None)}[cmd]()
