@@ -176,6 +176,8 @@ def align(name, view, zbuf, uvmap, atlas):
 
 
 NORMAL_STEPS = 6  # the weight of a view follows the normal averaged over the neighbours: the raw normals of the generated mesh are noisy
+OCCLUDED = 0.005  # share of the model size: the weight of a view fades by exp(-(depth behind what the view sees / this)^2);
+# REACH lets hidden texels take a view at all, this keeps a view that really sees the texel on top (the nose side took the inner eye corner)
 REACH = 0.05  # share of the model size: a texel deeper than this behind what the view sees is hidden; 1.5 % and 3 % hid the faces under shards of the mesh and left flat patches
 
 
@@ -207,6 +209,32 @@ def vertex_normals(P, tris):
     return vn[inv].astype(np.float32)
 
 
+FACING_EDGE = 1  # pixels of the depth buffer: the facing of a pixel is the worst around it, the outline of an ear seen edge-on included
+FACING_BLUR = 1.5  # pixels: gaussian of the depth before its slope is taken
+
+
+def zfacing(zb, view, lo, hi):
+    """How squarely the surface seen in every pixel of the depth buffer faces the view: cos of the slope of the depth (1 facing,
+    0 edge-on or a depth jump). The weight by the normal does not see it: the averaged normals of a thin ear rim point like the
+    head behind it, and the front view painted the rim with its dark outline (stripes along the helix)."""
+    import cv2
+    from scipy.ndimage import grey_erosion
+    img, (x0, x1, y0, y1), _ = view
+    pix = (hi[1] - lo[1]) / (y1 - y0) * img.shape[0] / zb.shape[0]  # model units per pixel of the depth buffer
+    z = zb.astype(np.float32).copy()
+    bg = z < -1e8
+    z[bg] = z[~bg].min() if (~bg).any() else 0
+    # depth smoothed first: a lone spike of the mesh (a shard in the sideburn) dropped the weight of the view around it and
+    # another view painted a square patch there; the rims of the ear and the nose are wider than the blur
+    z = cv2.GaussianBlur(z, (0, 0), FACING_BLUR)
+    slope = np.hypot(cv2.Sobel(z, cv2.CV_32F, 1, 0, ksize=3), cv2.Sobel(z, cv2.CV_32F, 0, 1, ksize=3)) / (8 * pix)
+    cross = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], bool)  # a square window printed square patches
+    f = 1 / np.sqrt(1 + slope ** 2)
+    for _ in range(FACING_EDGE):
+        f = grey_erosion(f, footprint=cross)
+    return f.astype(np.float32)
+
+
 def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
     """Colours of the texels covered by the triangles, per view: ({view: sum of w*colour}, {view: sum of w}, cover)."""
     size = atlas.shape[0]
@@ -222,16 +250,18 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
             views[n] = align(n, views[n], *ZCACHE[(n, dv)], atlas)
     names = list(dirs)
     snorm = smooth_normals(P, tris)
+    facing = tuple(zfacing(zbufs[n], views[n], lo, hi) for n in names)
     vp = [project(P, n, views[n], lo, hi) for n in names]
     A, W, cover, used = _paint(P, (UV * size).astype(np.float32), tris, np.arange(0, len(tris), step), snorm,
                                np.array([dirs[n] for n in names]), np.array([v[0] for v in vp]), np.array([v[1] for v in vp]),
                                tuple(views[n][0].astype(np.float32) for n in names), tuple(views[n][2].astype(np.bool_) for n in names),
-                               tuple(zbufs[n] for n in names), size, reach, SHARP)
+                               tuple(zbufs[n] for n in names), facing, size, reach,
+                               OCCLUDED * float((hi - lo).max()), SHARP)
     return dict(zip(names, A)), dict(zip(names, W)), cover, used
 
 
 @njit(cache=True)
-def _paint(P, uvs, tris, faces, snorm, dirs, vpx, vpy, imgs, inners, zbufs, size, reach, sharp):
+def _paint(P, uvs, tris, faces, snorm, dirs, vpx, vpy, imgs, inners, zbufs, facing, size, reach, occ, sharp):
     nv = dirs.shape[0]
     acc = np.zeros((nv, size, size, 3), np.float32)  # per view: sum of w*colour and sum of w
     wsum = np.zeros((nv, size, size), np.float32)
@@ -282,7 +312,9 @@ def _paint(P, uvs, tris, faces, snorm, dirs, vpx, vpy, imgs, inners, zbufs, size
                     seen = zb[min(max(int(sy / h * zr), 0), zr - 1), min(max(int(sx / wd * zr), 0), zr - 1)]
                     here = l0 * dep[k, 0] + l1 * dep[k, 1] + l2 * dep[k, 2]
                     if here >= seen - reach and inners[k][iy, ix]:
-                        ws = w[k] ** sharp
+                        zy, zx = min(max(int(sy / h * zr), 0), zr - 1), min(max(int(sx / wd * zr), 0), zr - 1)
+                        hid = max(seen - here, 0.) / occ
+                        ws = (w[k] * facing[k][zy, zx] * np.exp(-hid * hid)) ** sharp
                         for c in range(3):
                             acc[k, Y, X, c] += img[iy, ix, c] * ws
                         wsum[k, Y, X] += ws
@@ -290,6 +322,7 @@ def _paint(P, uvs, tris, faces, snorm, dirs, vpx, vpy, imgs, inners, zbufs, size
     return acc, wsum, cover, used
 
 
+SEEN_W = 1e-20  # a view weight above this counts as seen
 TONE_CELL = 0.02  # share of the model size: the views differ in tone (lighting, colour grading) and the seams between them
 TONE_SIGMA = 0.04  # show; the low frequencies of every view are levelled over cells of the surface this big, blurred this wide
 # in 3D, not in the texture: a gaussian of 40 texels over the 4096 atlas of the bf16 mesh, cut into small UV charts, mixed the
@@ -320,8 +353,8 @@ def combine(atlas, acc, wsum, P, UV, tris):
     ones = np.ones(atlas.shape[:2], np.bool_)
     lows, ws, cols = {}, {}, {}
     for n in acc:
-        m = wsum[n] > 1e-6
-        cols[n] = acc[n] / np.maximum(wsum[n], 1e-6)[..., None]
+        m = wsum[n] > SEEN_W  # the weights are powers (SHARP) of products of fractions: 1e-10 is a real weight
+        cols[n] = acc[n] / np.maximum(wsum[n], 1e-30)[..., None]
         fs, fc = _face_sums(uvs, tris, cols[n], m)
         fw, fa = _face_sums(uvs, tris, (wsum[n] ** (1 / 3))[..., None], ones)  # w**2: a view that faces the texel sets the tone, a grazing one does not
         s, c = per_cell(fs, np.ones(len(fs)))
@@ -337,8 +370,8 @@ def combine(atlas, acc, wsum, P, UV, tris):
     out = np.zeros_like(atlas)
     for n in acc:
         off = _face_image(uvs, tris, ((target - lows[n])[k] * g[..., None]).sum(1).astype(np.float32), size)
-        out += (cols[n] + off * (wsum[n] > 1e-6)[..., None]) * wsum[n][..., None]
-    return out / np.maximum(tot, 1e-6)[..., None], tot
+        out += (cols[n] + off * (wsum[n] > SEEN_W)[..., None]) * wsum[n][..., None]
+    return out / np.maximum(tot, 1e-30)[..., None], tot
 
 
 @njit(cache=True)
@@ -397,53 +430,54 @@ def _face_image(uvs, tris, vals, size):
 BAD_SHARE = 0.5  # faces painted by a view on less than this share of their texels take the colour of the painted faces around (0.2: light shards remain)
 
 
-def fill_faces(P, UV, tris, good, out):
-    """Faces whose texels no view paints well (a flap under the skin, a sliver edge-on to every view) take the mean colour of the
-    nearest well painted faces in space: the generated texture has the wrong tone there (orange spots), the UV neighbours are other charts."""
+def fill_faces(P, UV, tris, good, used, out):
+    """Texels no view paints well (a flap under the skin, a sliver edge-on to every view, a strand in a crevice of the hair) take
+    the colour of the nearest well painted faces in space: the generated texture has the wrong tone there (orange spots, light
+    specks in the hair), and the UV neighbours are other charts."""
     from scipy.spatial import cKDTree
     size = out.shape[0]
     colsum, ng = _face_sums(UV * size, tris, out, good)
     _, na = _face_sums(UV * size, tris, out[..., :1], np.ones(good.shape, np.bool_))
-    share = np.where(na > 0, ng / np.maximum(na, 1), -1.)  # -1: the face has no texel
-    colsum /= np.maximum(ng, 1)[:, None]
-    ok = share >= 0.5
-    bad = (share >= 0) & (share < BAD_SHARE)  # -1: the face has no texel
-    if not bad.any() or not ok.any():
+    ok = (na > 0) & (ng >= 0.5 * na)
+    if not ok.any():
         return 0
     tree = cKDTree(P[tris[ok]].mean(1))
-    col = colsum[ok]
+    col = colsum[ok] / ng[ok][:, None]
     # per texel, not per face: inverse-distance blend of the 12 nearest painted faces, no flat patches
-    pos, ax, ay = _face_texels(P, UV * size, tris, np.where(bad)[0], size)
+    pos, ax, ay = _face_texels(P, UV * size, tris, size, used & ~good)
     dist, k = tree.query(pos, k=12, workers=-1)
     w = 1 / (dist + 1e-4 * float(np.ptp(P, axis=0).max())) ** 2
     out[ay, ax] = (col[k] * w[..., None]).sum(1) / w.sum(1, keepdims=True)
-    return int(bad.sum())
+    return len(pos)
 
 
 @njit(cache=True)
-def _face_texels(P, uvs, tris, faces, size):
-    """Texels of the given faces: their position in space, x and y in the texture."""
+def _face_texels(P, uvs, tris, size, mask):
+    """Texels where mask is set: their position in space (on the face they lie on), x and y in the texture."""
     cnt = 0
     for rep in range(2):  # count, then fill
         if rep:
             pos, ox, oy = np.zeros((cnt, 3)), np.zeros(cnt, np.int64), np.zeros(cnt, np.int64)
             cnt = 0
-        for t in faces:
+        for t in range(tris.shape[0]):
             i0, i1, i2 = tris[t, 0], tris[t, 1], tris[t, 2]
             u0, u1, u2, v0, v1, v2 = uvs[i0, 0], uvs[i1, 0], uvs[i2, 0], uvs[i0, 1], uvs[i1, 1], uvs[i2, 1]
             ax, ay = int(np.floor(min(u0, u1, u2))), int(np.floor(min(v0, v1, v2)))
             ex, ey = int(np.ceil(max(u0, u1, u2))), int(np.ceil(max(v0, v1, v2)))
             d = (v1 - v2) * (u0 - u2) + (u2 - u1) * (v0 - v2)
+            if max(ex - ax, ey - ay) > 200 or abs(d) < 1e-9:
+                continue
             for Y in range(ay, ey + 1):
                 for X in range(ax, ex + 1):
                     l0 = ((v1 - v2) * (X + .5 - u2) + (u2 - u1) * (Y + .5 - v2)) / d
                     l1 = ((v2 - v0) * (X + .5 - u2) + (u0 - u2) * (Y + .5 - v2)) / d
-                    if l0 < 0 or l1 < 0 or l0 + l1 > 1:
+                    yy, xx = min(max(Y, 0), size - 1), min(max(X, 0), size - 1)
+                    if l0 < 0 or l1 < 0 or l0 + l1 > 1 or not mask[yy, xx]:
                         continue
                     if rep:
                         for c in range(3):
                             pos[cnt, c] = l0 * P[i0, c] + l1 * P[i1, c] + (1 - l0 - l1) * P[i2, c]
-                        ox[cnt], oy[cnt] = min(max(X, 0), size - 1), min(max(Y, 0), size - 1)
+                        ox[cnt], oy[cnt] = xx, yy
                     cnt += 1
     return pos, ox, oy
 
@@ -482,23 +516,14 @@ def main():
             best = (err, side)
     acc, ws, cover, used = paint(P, UV, tris, atlas, views, best[1], do_align="--no-align" not in sys.argv)
     painted, w = combine(atlas, acc, ws, P, UV, tris)
-    # texels no view sees well (folded slivers, faces edge-on to every view) keep the generated pattern, but in the tone of the
-    # painted texels around: the generated texture is off in colour and shows there as orange spots
-    import cv2
-    good = cover > 0.05
-    g = good[..., None].astype(np.float32)
-    norm = np.maximum(cv2.GaussianBlur(good.astype(np.float32), (0, 0), 10), 1e-4)[..., None]
-    lowp = cv2.GaussianBlur(painted * g, (0, 0), 10) / norm
-    lowa = cv2.GaussianBlur(atlas * g, (0, 0), 10) / norm
-    near = cv2.GaussianBlur(good.astype(np.float32), (0, 0), 10)[..., None] > 0.01
-    fill = np.where(near, atlas + lowp - lowa, atlas)
-    out = np.where(good[..., None], painted, np.where(used[..., None], fill, atlas))
+    good = (cover > 0.05) & (w > SEEN_W)
+    out = np.where(good[..., None], painted, atlas)
+    print(f"{fill_faces(P, UV, tris, good, used, out)} texels without a view filled from their neighbours in space")
     # padding: faces smaller than a texel have no texel centre of their own and sample the neighbours / the generated colour
     from scipy.ndimage import distance_transform_edt
     dist, (py_, px_) = distance_transform_edt(~used, return_indices=True)
     pad = (~used) & (dist <= 6)
     out[pad] = out[py_[pad], px_[pad]]
-    print(f"{fill_faces(P, UV, tris, good, out)} faces without a view filled from their neighbours in space")
     # the mesh was smoothed (or came without normals): the shading follows the final positions, not a stale or missing NORMAL
     nrm = vertex_normals(P, tris)
     b = b + b"\0" * (-len(b) % 4)
