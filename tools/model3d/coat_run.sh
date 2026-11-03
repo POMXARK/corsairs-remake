@@ -15,7 +15,12 @@ tmp=$(mktemp -d)
 s() { ssh -i "$KEY" "$WIN" "$@"; }
 name=$(basename "$src")
 printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' "$RD/$name" "$RD/coat_out.obj" "$RD/coat_log.txt" "$mode" "$RD/seams.txt" "${DENS:-0}" "${FACES:-20000}" "${OPS:-}" > "$tmp/_coat_job.txt"
-printf '@echo off\r\n"%s" -script %s\\coat_autouv.py\r\n' "$EXE" "${RD//\//\\}" > "$tmp/coat_run.bat"
+# MIN=1: 3DCoat starts minimized (start /min), the window does not take the screen
+if [ "${MIN:-1}" = 1 ]; then
+  printf '@echo off\r\nstart "" /min "%s" -script %s\\coat_autouv.py\r\n' "$EXE" "${RD//\//\\}" > "$tmp/coat_run.bat"
+else
+  printf '@echo off\r\n"%s" -script %s\\coat_autouv.py\r\n' "$EXE" "${RD//\//\\}" > "$tmp/coat_run.bat"
+fi
 files=("$here/coat_autouv.py" "$tmp/_coat_job.txt" "$tmp/coat_run.bat" "$src")
 [ -n "$seams" ] && cp "$seams" "$tmp/seams.txt" && files+=("$tmp/seams.txt")
 s "taskkill /f /im 3DCoatGL64.exe >nul 2>&1 & del ${RD//\//\\}\\coat_log.txt ${RD//\//\\}\\coat_out.obj >nul 2>&1 & exit 0"
