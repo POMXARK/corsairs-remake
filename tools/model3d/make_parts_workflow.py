@@ -150,9 +150,12 @@ def main():
     # RemeshMesh (241) in udf mode wraps the surface in two walls a voxel apart. The head is open at the neck, so both walls
     # are one piece and drop_inverted_components keeps them: ComfyUI_00014 has 51 % of its faces on the inner wall (0.2 % of
     # the size behind the outer one), hence the self-intersections, the folds and the half-empty atlas. "solid" makes one
-    # closed surface (a global inside/outside cut); smooth_iters 20 washed the face out (the tooltip: 2-3).
+    # closed surface (a global inside/outside cut), but with fill 20 the cut follows the shell around the open neck and keeps
+    # it hollow: ComfyUI_00015 is a slab a voxel thick (89 % of the faces have a wall 0.1 % of the size behind them, 45 % face
+    # inwards). fill 0 puts a lid on the neck, the inside becomes solid and the inner wall goes. smooth_iters 20 washed the
+    # face out (the tooltip: 2-3).
     # widgets: resolution, sign_mode, fill, qef, band, project_back, fix_poles, smooth_iters, drop_small, precluster
-    nodes[241]["widgets_values"] = [768, "solid", 20.0, False, 1.0, 0.0, False, 3, 0.01, 20_000_000]
+    nodes[241]["widgets_values"] = [768, "solid", 0.0, False, 1.0, 0.0, False, 3, 0.01, 20_000_000]
     # Pixal3D samplers: a new shape every run (the Qwen views keep their seed: they come out right)
     for i in (3, 12, 18, 23):
         nodes[i]["widgets_values"][1] = "randomize"

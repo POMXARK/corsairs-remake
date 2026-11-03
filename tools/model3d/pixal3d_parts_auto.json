@@ -1,5 +1,5 @@
 {
- "id": "43731653-2fd5-40d0-ac3c-a7c38d48ee26",
+ "id": "48988aa1-cd5c-4897-81f7-50e7b6a8ce7b",
  "revision": 0,
  "last_node_id": 2032,
  "last_link_id": 4850,
@@ -1943,7 +1943,7 @@
    "widgets_values": [
     768,
     "solid",
-    20.0,
+    0.0,
     false,
     1.0,
     0.0,
