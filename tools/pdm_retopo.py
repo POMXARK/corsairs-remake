@@ -23,7 +23,12 @@ def main():
     print(f"resampled: {ms.current_mesh().face_number()} faces")
     ms.meshing_decimation_quadric_edge_collapse(targetfacenum=faces, preserveboundary=True, preservenormal=True, qualitythr=0.5)
     ms.meshing_remove_connected_component_by_face_number(mincomponentsize=50)
-    ms.meshing_re_orient_faces_coherently()
+    ms.meshing_repair_non_manifold_edges(method=0)
+    ms.meshing_repair_non_manifold_vertices()
+    try:
+        ms.meshing_re_orient_faces_coherently()
+    except Exception as e:  # pdm_outer_shell.py fixes the winding by visibility anyway
+        print("orientation skipped:", str(e).splitlines()[-1])
     r = ms.current_mesh()
     out = trimesh.Trimesh(r.vertex_matrix(), r.face_matrix(), process=False)
     out.export(args[1])
