@@ -1,6 +1,7 @@
 #!/bin/bash
 # Run coat_autouv.py in 3DCoat on the Windows PC from Linux, wait and fetch the result.
-# coat_run.sh in.obj out.obj [auto|seams|remesh] [seams.txt]   (remesh: FACES=20000, DENS=voxels per unit, 0 = default)
+# coat_run.sh in.obj out.obj [auto|seams|remesh|ops] [seams.txt]   (remesh: FACES=20000, DENS=voxels per unit, 0 = default;
+# ops: OPS='relax:0.5;weld' - the separate tools of coat_autouv.py, see its docstring)
 # Needs ssh to the PC (WIN, KEY) and 3DCoat 2026 there. 3DCoat is started in the user's desktop session by a
 # scheduled task (/it): a GUI started straight from ssh has no screen. A running 3DCoat is closed first.
 set -e
@@ -13,7 +14,7 @@ here=$(dirname "$(readlink -f "$0")")
 tmp=$(mktemp -d)
 s() { ssh -i "$KEY" "$WIN" "$@"; }
 name=$(basename "$src")
-printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' "$RD/$name" "$RD/coat_out.obj" "$RD/coat_log.txt" "$mode" "$RD/seams.txt" "${DENS:-0}" "${FACES:-20000}" > "$tmp/_coat_job.txt"
+printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' "$RD/$name" "$RD/coat_out.obj" "$RD/coat_log.txt" "$mode" "$RD/seams.txt" "${DENS:-0}" "${FACES:-20000}" "${OPS:-}" > "$tmp/_coat_job.txt"
 printf '@echo off\r\n"%s" -script %s\\coat_autouv.py\r\n' "$EXE" "${RD//\//\\}" > "$tmp/coat_run.bat"
 files=("$here/coat_autouv.py" "$tmp/_coat_job.txt" "$tmp/coat_run.bat" "$src")
 [ -n "$seams" ] && cp "$seams" "$tmp/seams.txt" && files+=("$tmp/seams.txt")

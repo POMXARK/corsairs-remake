@@ -10,7 +10,17 @@ The head looks along +z, y up (Pixal3D/TRELLIS). Variants:
   auto-face+ears - auto-face and the ear rings;
   auto-face - the cuts of 3DCoat's Auto Seams (from auto.obj, the same mesh unwrapped by 3DCoat) except the ones on
            the face: front, between the ears, from the chin to the hairline; the face stays one piece;
-  auto-face+back - auto-face and the back cut.
+  auto-face+back - auto-face and the back cut;
+  parts-game - by the parts of head_parts.py (parts.npy of mesh.obj, 4th argument): the face (face, eyes, mouth, nose,
+           brows) is one island, every ear is one, the rest (scalp, neck, ponytail) opens by the back cut, the lid
+           is its own: the usual layout of a game head, the face gets the most texels in the pack;
+  parts  - one island per part group: face, each ear, neck, scalp (opened by the back cut), ponytail, lid;
+  auto-split - the cuts of Auto Seams (auto.obj) and one more through every island that lies over itself in the UV
+           (a tube of the ponytail and the neck flattened: two places of the head share texels, the ponytail takes
+           the skin of the neck): a plane between the two 3D clusters of the overlapping faces. Run again on the new
+           result while islands still overlap;
+  split  - only the extra cuts of auto-split (for coat_run.sh auto+seams: Auto Seams first, these cuts on top; the
+           seams mode with all cuts given leaves faces without UV in the output).
 The output lists seam edges, one 'a b' pair of 0-based vertex indices of mesh.obj per line.
 """
 import heapq
@@ -24,6 +34,7 @@ from uv_from_obj import read_obj  # noqa: E402
 
 OUT_CORE = 0.012  # share of the size: the ear rim stands this far out of the head skin (about 3 mm on a head)
 OUT_EAR = 0.005  # share of the size: the ear root, the cut goes here
+SMOOTH_STEPS = 6  # majority steps over the part borders of the parts variants (2 of head_parts.py left a zigzag seam)
 
 
 def edges_of(F):
@@ -162,6 +173,63 @@ def auto_seams(path_auto):
     return E[same[cut]]
 
 
+def uv_overlap(T, FT, res=1024):
+    """Faces of every UV island that share texels with another face of the same island (per face flag) and the
+    island of every face."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    e = np.concatenate([FT[:, [0, 1]], FT[:, [1, 2]], FT[:, [2, 0]]])
+    n = len(T)
+    _, vc = connected_components(coo_matrix((np.ones(len(e)), (e[:, 0], e[:, 1])), shape=(n, n)), directed=False)
+    isl = vc[FT[:, 0]]
+    own = np.full((res, res), -1, np.int64)
+    bad = np.zeros(len(FT), bool)
+    for k, t in enumerate(T[FT] * res):
+        x0, y0 = np.floor(t.min(0)).astype(int)
+        x1, y1 = np.ceil(t.max(0)).astype(int)
+        xs, ys = np.meshgrid(np.arange(max(x0, 0), min(x1 + 1, res)) + .5, np.arange(max(y0, 0), min(y1 + 1, res)) + .5)
+        a, b, c = t
+        d = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1])
+        if xs.size == 0 or abs(d) < 1e-12:
+            continue
+        l1 = ((b[1] - c[1]) * (xs - c[0]) + (c[0] - b[0]) * (ys - c[1])) / d
+        l2 = ((c[1] - a[1]) * (xs - c[0]) + (a[0] - c[0]) * (ys - c[1])) / d
+        m = (l1 > 1e-6) & (l2 > 1e-6) & (l1 + l2 < 1 - 1e-6)
+        yy, xx = ys[m].astype(int), xs[m].astype(int)
+        o = own[yy, xx]
+        hit = o >= 0
+        hit[hit] = isl[o[hit]] == isl[k]
+        if hit.any():
+            bad[k] = True
+            bad[o[hit]] = True
+        own[yy, xx] = k
+    return bad, isl
+
+
+def split_folds(V, F, T, FT, min_faces=20):
+    """A cut through every island with overlapping faces: the plane between the two 3D clusters of them (2-means)."""
+    bad, isl = uv_overlap(T, FT)
+    C = V[F].mean(1)
+    cuts, n = [], 0
+    for i in np.unique(isl[bad]):
+        f = np.nonzero(bad & (isl == i))[0]
+        if len(f) < min_faces:
+            continue
+        p = C[f]
+        c0, c1 = p[np.argmin(p[:, 1])], p[np.argmax(p[:, 1])]
+        for _ in range(20):
+            near1 = np.linalg.norm(p - c1, axis=1) < np.linalg.norm(p - c0, axis=1)
+            if near1.all() or not near1.any():
+                break
+            c0, c1 = p[~near1].mean(0), p[near1].mean(0)
+        nrm, mid = c1 - c0, (c0 + c1) / 2
+        side = (isl == i) & ((C - mid) @ nrm > 0)
+        cuts.append(region_border(F, side))
+        n += 1
+    print(f'overlapping faces {int(bad.sum())} in {len(np.unique(isl[bad]))} islands, cut {n}')
+    return cuts
+
+
 def face_zone(V):
     lo, hi = V.min(0), V.max(0)
     rel = (V - lo) / (hi - lo)
@@ -173,7 +241,33 @@ def main():
     V, _, F, _ = read_obj(src)
     ring = region_border(F, lid(V, F))
     parts = []
-    if variant.startswith('auto-face'):
+    if variant.startswith('parts'):
+        lab = np.load(sys.argv[4])
+        if len(lab) != len(F):
+            raise SystemExit(f'parts.npy has {len(lab)} faces, {src} has {len(F)}: head_parts.py {src} --views ...')
+        from head_parts import face_graph
+        G = face_graph(V, F)
+
+        def even(m, steps=SMOOTH_STEPS):  # majority of the face and its neighbours: the zigzag of the part border goes
+            for _ in range(steps):
+                m = (G @ m.astype(np.float32) + 1.5 * m) / (np.asarray(G.sum(1)).ravel() + 1.5) > 0.5
+            return m
+        face = even(np.isin(lab, (1, 2, 3, 4, 5)))
+        ear = even(lab == 6, 2) & ~face
+        idx = np.nonzero(ear)[0]
+        if len(idx):  # every ear on its own (the two ears are not joined anyway, a stray face of 'ears' is dropped)
+            comp = face_components(F[idx])
+            big = np.bincount(comp)
+            for c in np.argsort(-big)[:2]:
+                if big[c] > 20:
+                    parts.append(region_border(F, np.isin(np.arange(len(F)), idx[comp == c])))
+        parts += [region_border(F, face), ring, back_cut(V, F, ring)]
+        if variant == 'parts':
+            parts += [region_border(F, even(lab == 7) & ~face), region_border(F, even(lab == 9))]
+    elif variant in ('auto-split', 'split'):
+        Va, Ta, Fa, FTa = read_obj(sys.argv[4])
+        parts += ([auto_seams(sys.argv[4])] if variant == 'auto-split' else []) + split_folds(Va, Fa, Ta, FTa)
+    elif variant.startswith('auto-face'):
         S = auto_seams(sys.argv[4])
         fz = face_zone(V)
         parts.append(S[~(fz[S[:, 0]] | fz[S[:, 1]])])

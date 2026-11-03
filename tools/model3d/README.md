@@ -344,3 +344,19 @@ ComfyUI_00015 (`solid`, fill 20): самопересечений 3 338, и се�
 - правило «волосы на коже» сначала срабатывало и от сравнения по видам (виски) и советовало `--skin-guard`, хотя он уже включён; теперь это отдельное правило `skin_as_hair_view` (вес 6) с рецептом «смотреть views.png / красить из вида спереди»;
 - гранёность на 20k советовала «20000 вместо 10000»: 33 % острых рёбер на макушке — бороздки прядей. От 15 тыс. граней (`HAIR_FACES`) макушка и хвост не считаются, рецепт — удвоить число граней от текущего;
 - тёмная полоса за завитком уха на 20k — не заливка: `view_source_map.py` показывает боковой вид, складка видна только сбоку, где за ухом волосы.
+
+## Части головы, правка области, агент и окно (head_parts, head_tools, head_agent, head_gui)
+Подробно — `docs/head-model-fix.md`, раздел 9.
+- `head_parts.py model.glb|mesh.obj --views f l b r [--out dir] [--side 1]` — часть каждой грани (лицо, глаза, рот, нос, брови, уши, шея, волосы, хвост, срез) голосованием 4 видов; `parts.npy`, `parts.png`. Модели MediaPipe (Apache 2.0) — в `$MP_MODELS` (по умолчанию `$W/models`):
+  - `selfie_multiclass_256x256.tflite` — storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite;
+  - `face_landmarker.task` — storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task.
+- `head_tools.py in.glb out.glb --views … --parts parts.npy --region 'eyes~2' relax steps=5` — один инструмент на область (`relax`, `membrane`, `push`, `coat_relax`, `repaint`, `hair_to_skin`, `skin_to_hair`, `blur`; `--list`). Край области не двигается.
+- `head_agent.py in.glb out.glb --views … --parts parts.npy --region 'eyes~2' --prompt "глаза странные, сгладить" --passes 6` — выбирает инструменты (UCB), оставляет только улучшения оценки области, учит веса в `head_policy.json`; каждый проход — картинка `work/passes/NNN/pass.png`.
+- `head_gui.py in.glb --views … --parts parts.npy` → http://127.0.0.1:8770: выделение кликом по части или рамкой, промпт, агент, ручные инструменты, отмена, веса и график оценки.
+- `coat_run.sh in.obj out.obj ops` с `OPS='relax:0.5;weld'` — инструменты 3DCoat по отдельности (`relax`, `weld`, `triangulate`, `reduce`, `vrelax`, `voxrelax`, `closeholes`, `vfaces`).
+- `head_seams.py` варианты `parts-game` / `parts` — эталонные разрезы по частям (4-й аргумент `parts.npy`).
+- `uv_unfold.py in_uv.obj out_uv.obj [res]` — острова UV, которые лежат сами на себе (труба «шея + хвост» у Auto Seams 3DCoat, ~4 % текселей), режет плоскостью 2-means, раскатывает своим LSCM и пакует xatlas (`use_input_mesh_uvs`). hero1: 1517 граней в 9 островах → 19 кусков, наложение 15 граней, пятна кожи на хвосте пропали; uv_score 2,4 против 3,97.
+- Тупик: `head_seams.py auto-split` и режим `auto+seams` в `coat_autouv.py` — 3DCoat со своими разрезами оставляет острова без UV (5–20 тыс. граней без `vt`).
+- `pdm_project_views.py … --skin-guard --parts parts.npy` — кожа по частям (нос, уши, шея, срез) не берёт волосы из видов.
+- `solidify.py`: крышка — только шея (пятно у низа, вниз до конца шеи), кончик хвоста ниже шеи больше не срезается.
+- Тупики: `relax` без перекраски тащит белок глаза под веко; `hair_to_skin` без проверки «кожа по видам» стирает бороду и красит грани внутри хвоста; шрифт PIL по умолчанию не пишет кириллицу (нужен DejaVuSans); ухо от щеки сужением маски бокового вида не отделяется.

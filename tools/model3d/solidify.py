@@ -25,7 +25,7 @@ from pdm_project_views import _face_texels, accessor, read_glb, vertex_normals, 
 DILATE = 1  # voxels: the shell is thickened by this to close the tears between faces, the solid is eroded back by it
 SEAL = int(os.environ.get("SEAL", 4))  # voxels: the outside is flooded around a shell this thick (tears up to twice this are closed), then grows back
 LID = 0.06  # share of the height: the neck cut is wavy and open; below this over its lowest point the neck is solid (its
-# outline from below), the bottom stays where it was: pdm_project_views fits the mesh height to the figure in the views
+# outline from below) down to where the neck ends: pdm_project_views fits the mesh height to the figure in the views
 t0 = time.time()
 
 
@@ -73,13 +73,21 @@ def solid(P, tris, vox):
     shell[ijk[:, 0], ijk[:, 1], ijk[:, 2]] = True
     thin = nd.binary_dilation(shell, iterations=DILATE)
     thick = nd.binary_dilation(shell, iterations=SEAL)
-    # lid: the neck cut seen from below, filled, is solid up to LID over the lowest point
+    # lid: the neck cut seen from below, filled, is solid from LID over the lowest point down to the end of the neck.
+    # Only the neck gets it (the biggest patch of the slice): the ponytail hangs as low as the neck and, filled the same
+    # way, became a prism cut flat at the bottom
     bottom = int((P[:, 1].min() - lo[1]) / vox)
     top = bottom + int(LID * np.ptp(P[:, 1]) / vox)
+    lab, _ = nd.label(nd.binary_fill_holes(thin[:, top, :]))
+    size = np.bincount(lab.ravel())
+    size[0] = 0
+    prev = lab == size.argmax()
     # going down, the gaps of the neck ring are closed by the outline of the slice above: the neck goes on straight
-    prev = nd.binary_fill_holes(thin[:, top, :])
     for y in range(top, bottom - 1, -1):
-        cur = nd.binary_fill_holes(thin[:, y, :] | (prev & ~nd.binary_erosion(prev, iterations=2)))
+        near = nd.binary_dilation(prev, iterations=2)
+        if (thin[:, y, :] & near).sum() < 0.05 * prev.sum():  # the neck ended: its last slice above is the lid
+            break
+        cur = nd.binary_fill_holes((thin[:, y, :] & near) | (prev & ~nd.binary_erosion(prev, iterations=2))) & near
         thin[:, y, :] |= cur
         thick[:, y, :] |= cur
         prev = cur

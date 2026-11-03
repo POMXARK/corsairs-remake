@@ -4,7 +4,7 @@
 The Pixal3D/TRELLIS.2 texture is generated per voxel and smears small details (eyes, eyebrows, lips). The views
 (front, left, back, right, orthographic, cropped to the figure) are sharp and the mesh is built to match them, so every
 texel is projected into the views and coloured from the view that faces it; where no view sees the texel the generated
-colour stays. Usage: pdm_project_views.py in.glb out.glb front.png left.png back.png right.png [--no-smooth] [--no-align] [--skin-guard]
+colour stays. Usage: pdm_project_views.py in.glb out.glb front.png left.png back.png right.png [--no-smooth] [--no-align] [--skin-guard] [--parts parts.npy]
 --skin-guard: texels that are skin by the views (front and both sides) take no hair pixel and fill only from skin.
 Before projecting, every view is aligned to the mesh: the mesh is drawn with its own generated texture from the view's side
 and the view is moved by the dense optical flow towards that drawing (the mesh differs from the view by a few pixels at the
@@ -543,8 +543,13 @@ def _face_texels(P, uvs, tris, size, mask):
     return pos, ox, oy
 
 
-def skin_texels(P, UV, tris, size, views):
-    """Label of every texel: 1 skin (by skin_points), 2 hair (the part of the neck cut under the ponytail), 0 any."""
+SKIN_PARTS = (4, 6, 7, 10)  # head_parts.py: nose, ears, neck, neck cut never take hair pixels (the face keeps the beard)
+
+
+def skin_texels(P, UV, tris, size, views, parts=None):
+    """Label of every texel: 1 skin (by skin_points, and the faces of SKIN_PARTS when the parts of head_parts.py are
+    given: the back of the neck under the ponytail is skin by the side views, the front view does not see it),
+    2 hair (the part of the neck cut under the ponytail), 0 any."""
     cls = view_classes(views)
     lo, hi = P.min(0), P.max(0)
     pos, ax, ay = _face_texels(P.astype(np.float64), UV * size, tris.astype(np.int64), size, np.ones((size, size), np.bool_))
@@ -567,10 +572,13 @@ def skin_texels(P, UV, tris, size, views):
         sk = cls[v][1]
         side &= sk[np.clip(y.astype(int), 0, sk.shape[0] - 1), np.clip(x.astype(int), 0, sk.shape[1] - 1)]
     lab[ay[m], ax[m]] = np.where(side, 1, 2)
+    if parts is not None:
+        sk = _face_image(UV * size, tris, np.isin(parts, SKIN_PARTS).astype(np.float32)[:, None], size)[..., 0] > 0.5
+        lab[sk] = 1
     return lab
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    args = [a for i, a in enumerate(sys.argv[1:]) if not a.startswith("--") and sys.argv[i] != "--parts"]
     src, dst = args[:2]
     views = {n: load_view(p) for n, p in zip(NAMES, args[2:6])}
     j, b = read_glb(src)
@@ -602,8 +610,11 @@ def main():
         if best is None or err < best[0]:
             best = (err, side)
     skin = None
-    if "--skin-guard" in sys.argv:
-        skin = skin_texels(P, UV, tris, atlas.shape[0], views)
+    parts = None
+    if "--parts" in sys.argv:  # head_parts.py parts.npy: the skin guard by the parts too
+        parts = np.load(sys.argv[sys.argv.index("--parts") + 1])
+    if "--skin-guard" in sys.argv or parts is not None:
+        skin = skin_texels(P, UV, tris, atlas.shape[0], views, parts)
         print(f"skin guard: {int((skin == 1).sum())} skin texels take no hair pixels, {int((skin == 2).sum())} of the neck cut fill from hair")
     acc, ws, cover, used = paint(P, UV, tris, atlas, views, best[1], do_align="--no-align" not in sys.argv,
                                  skin=skin)
