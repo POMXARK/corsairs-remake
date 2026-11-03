@@ -160,6 +160,7 @@ def align(name, view, zbuf, uvmap, atlas):
 
 
 NORMAL_STEPS = 6  # the weight of a view follows the normal averaged over the neighbours: the raw normals of the generated mesh are noisy
+REACH = 0.05  # share of the model size: a texel deeper than this behind what the view sees is hidden; 1.5 % and 3 % hid the faces under shards of the mesh and left flat patches
 
 
 def smooth_normals(P, tris, steps=NORMAL_STEPS):
@@ -183,7 +184,7 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
     size = atlas.shape[0]
     lo, hi = P.min(0), P.max(0)
     dirs = {"front": (0, 0, 1.), "back": (0, 0, -1.), "left": (side, 0, 0.), "right": (-side, 0, 0.)}
-    reach = 0.05 * float((hi - lo).max())  # a texel deeper than this behind what the view sees is hidden (a ponytail behind the jaw)
+    reach = REACH * float((hi - lo).max())  # a texel deeper than this behind what the view sees is hidden (a ponytail behind the jaw)
     zbufs = {}
     for n, dv in dirs.items():
         if (n, dv) not in ZCACHE:
