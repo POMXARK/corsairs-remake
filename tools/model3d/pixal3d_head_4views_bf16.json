@@ -1,8 +1,8 @@
 {
  "id": "aa77013b-18f1-4679-9678-6d455d3536c5",
  "revision": 0,
- "last_node_id": 327,
- "last_link_id": 1305,
+ "last_node_id": 333,
+ "last_link_id": 1315,
  "nodes": [
   {
    "id": 91,
@@ -291,7 +291,7 @@
      "links": [
       1221,
       1228,
-      1301
+      1297
      ]
     }
    ],
@@ -1084,7 +1084,7 @@
       1241,
       1242,
       1291,
-      1302
+      1298
      ]
     }
    ],
@@ -2135,7 +2135,9 @@
      "type": "BACKGROUND_REMOVAL",
      "links": [
       887,
-      1297
+      1299,
+      1304,
+      1309
      ]
     }
    ],
@@ -2895,7 +2897,7 @@
      "name": "on_false",
      "shape": 7,
      "type": "CONDITIONING",
-     "link": 1304
+     "link": 1314
     },
     {
      "name": "on_true",
@@ -2953,7 +2955,7 @@
      "name": "on_false",
      "shape": 7,
      "type": "CONDITIONING",
-     "link": 1305
+     "link": 1315
     },
     {
      "name": "on_true",
@@ -3155,7 +3157,7 @@
     ]
    },
    "widgets_values": [
-    "pixal3d_multiview_int8_convrot.safetensors",
+    "pixal3d_multiview_bf16.safetensors",
     "default"
    ],
    "widgets_values_named": {
@@ -3230,7 +3232,7 @@
     "ver": "0.33.0"
    },
    "widgets_values": [
-    "3d/hero1_head_2v",
+    "3d/hero1_head_4v_bf16",
     "",
     1024,
     1024
@@ -3320,6 +3322,70 @@
   },
   {
    "id": 324,
+   "type": "Pixal3DMultiViewConditioning",
+   "pos": [
+    -3880,
+    1210
+   ],
+   "size": [
+    300,
+    120
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip_vision_model",
+     "type": "CLIP_VISION",
+     "link": 1297
+    },
+    {
+     "name": "front",
+     "type": "IMAGE",
+     "link": 1298
+    },
+    {
+     "name": "left",
+     "type": "IMAGE",
+     "link": 1303
+    },
+    {
+     "name": "back",
+     "type": "IMAGE",
+     "link": 1308
+    },
+    {
+     "name": "right",
+     "type": "IMAGE",
+     "link": 1313
+    }
+   ],
+   "outputs": [
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "links": [
+      1314
+     ]
+    },
+    {
+     "name": "negative",
+     "type": "CONDITIONING",
+     "links": [
+      1315
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "Pixal3DMultiViewConditioning"
+   },
+   "widgets_values": [
+    20.0
+   ]
+  },
+  {
+   "id": 325,
    "type": "LoadImage",
    "pos": [
     -5080,
@@ -3338,8 +3404,8 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      1298,
-      1299
+      1300,
+      1301
      ]
     },
     {
@@ -3352,12 +3418,12 @@
     "Node name for S&R": "LoadImage"
    },
    "widgets_values": [
-    "hero1_head_back.png",
+    "hero1_head_left.png",
     "image"
    ]
   },
   {
-   "id": 325,
+   "id": 326,
    "type": "RemoveBackground",
    "pos": [
     -4680,
@@ -3374,12 +3440,12 @@
     {
      "name": "bg_removal_model",
      "type": "BACKGROUND_REMOVAL",
-     "link": 1297
+     "link": 1299
     },
     {
      "name": "image",
      "type": "IMAGE",
-     "link": 1298
+     "link": 1300
     }
    ],
    "outputs": [
@@ -3387,7 +3453,7 @@
      "name": "mask",
      "type": "MASK",
      "links": [
-      1300
+      1302
      ]
     }
    ],
@@ -3397,7 +3463,7 @@
    "widgets_values": []
   },
   {
-   "id": 326,
+   "id": 327,
    "type": "ImageCropToMask",
    "pos": [
     -4280,
@@ -3414,12 +3480,12 @@
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 1299
+     "link": 1301
     },
     {
      "name": "masks",
      "type": "MASK",
-     "link": 1300
+     "link": 1302
     }
    ],
    "outputs": [
@@ -3443,11 +3509,49 @@
    ]
   },
   {
-   "id": 327,
-   "type": "Pixal3DMultiViewConditioning",
+   "id": 328,
+   "type": "LoadImage",
    "pos": [
-    -3880,
-    1210
+    -5080,
+    1610
+   ],
+   "size": [
+    300,
+    120
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      1305,
+      1306
+     ]
+    },
+    {
+     "name": "MASK",
+     "type": "MASK",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "hero1_head_back.png",
+    "image"
+   ]
+  },
+  {
+   "id": 329,
+   "type": "RemoveBackground",
+   "pos": [
+    -4680,
+    1610
    ],
    "size": [
     300,
@@ -3458,52 +3562,198 @@
    "mode": 0,
    "inputs": [
     {
-     "name": "clip_vision_model",
-     "type": "CLIP_VISION",
-     "link": 1301
+     "name": "bg_removal_model",
+     "type": "BACKGROUND_REMOVAL",
+     "link": 1304
     },
     {
-     "name": "front",
+     "name": "image",
      "type": "IMAGE",
-     "link": 1302
-    },
-    {
-     "name": "left",
-     "type": "IMAGE",
-     "link": null
-    },
-    {
-     "name": "back",
-     "type": "IMAGE",
-     "link": 1303
-    },
-    {
-     "name": "right",
-     "type": "IMAGE",
-     "link": null
+     "link": 1305
     }
    ],
    "outputs": [
     {
-     "name": "positive",
-     "type": "CONDITIONING",
+     "name": "mask",
+     "type": "MASK",
      "links": [
-      1304
-     ]
-    },
-    {
-     "name": "negative",
-     "type": "CONDITIONING",
-     "links": [
-      1305
+      1307
      ]
     }
    ],
    "properties": {
-    "Node name for S&R": "Pixal3DMultiViewConditioning"
+    "Node name for S&R": "RemoveBackground"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 330,
+   "type": "ImageCropToMask",
+   "pos": [
+    -4280,
+    1610
+   ],
+   "size": [
+    300,
+    120
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 1306
+    },
+    {
+     "name": "masks",
+     "type": "MASK",
+     "link": 1307
+    }
+   ],
+   "outputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "links": [
+      1308
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ImageCropToMask"
    },
    "widgets_values": [
-    20.0
+    1024,
+    1024,
+    1.1,
+    0,
+    "#000000"
+   ]
+  },
+  {
+   "id": 331,
+   "type": "LoadImage",
+   "pos": [
+    -5080,
+    2010
+   ],
+   "size": [
+    300,
+    120
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      1310,
+      1311
+     ]
+    },
+    {
+     "name": "MASK",
+     "type": "MASK",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "hero1_head_right.png",
+    "image"
+   ]
+  },
+  {
+   "id": 332,
+   "type": "RemoveBackground",
+   "pos": [
+    -4680,
+    2010
+   ],
+   "size": [
+    300,
+    120
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "bg_removal_model",
+     "type": "BACKGROUND_REMOVAL",
+     "link": 1309
+    },
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 1310
+    }
+   ],
+   "outputs": [
+    {
+     "name": "mask",
+     "type": "MASK",
+     "links": [
+      1312
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "RemoveBackground"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 333,
+   "type": "ImageCropToMask",
+   "pos": [
+    -4280,
+    2010
+   ],
+   "size": [
+    300,
+    120
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 1311
+    },
+    {
+     "name": "masks",
+     "type": "MASK",
+     "link": 1312
+    }
+   ],
+   "outputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "links": [
+      1313
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ImageCropToMask"
+   },
+   "widgets_values": [
+    1024,
+    1024,
+    1.1,
+    0,
+    "#000000"
    ]
   }
  ],
@@ -4294,27 +4544,27 @@
   ],
   [
    1297,
-   193,
+   15,
    0,
-   325,
+   324,
    0,
-   "BACKGROUND_REMOVAL"
+   "CLIP_VISION"
   ],
   [
    1298,
-   324,
+   302,
    0,
-   325,
+   324,
    1,
    "IMAGE"
   ],
   [
    1299,
-   324,
+   193,
    0,
    326,
    0,
-   "IMAGE"
+   "BACKGROUND_REMOVAL"
   ],
   [
    1300,
@@ -4322,43 +4572,123 @@
    0,
    326,
    1,
-   "MASK"
-  ],
-  [
-   1301,
-   15,
-   0,
-   327,
-   0,
-   "CLIP_VISION"
-  ],
-  [
-   1302,
-   302,
-   0,
-   327,
-   1,
    "IMAGE"
   ],
   [
-   1303,
+   1301,
+   325,
+   0,
+   327,
+   0,
+   "IMAGE"
+  ],
+  [
+   1302,
    326,
    0,
    327,
-   3,
+   1,
+   "MASK"
+  ],
+  [
+   1303,
+   327,
+   0,
+   324,
+   2,
    "IMAGE"
   ],
   [
    1304,
-   327,
+   193,
+   0,
+   329,
+   0,
+   "BACKGROUND_REMOVAL"
+  ],
+  [
+   1305,
+   328,
+   0,
+   329,
+   1,
+   "IMAGE"
+  ],
+  [
+   1306,
+   328,
+   0,
+   330,
+   0,
+   "IMAGE"
+  ],
+  [
+   1307,
+   329,
+   0,
+   330,
+   1,
+   "MASK"
+  ],
+  [
+   1308,
+   330,
+   0,
+   324,
+   3,
+   "IMAGE"
+  ],
+  [
+   1309,
+   193,
+   0,
+   332,
+   0,
+   "BACKGROUND_REMOVAL"
+  ],
+  [
+   1310,
+   331,
+   0,
+   332,
+   1,
+   "IMAGE"
+  ],
+  [
+   1311,
+   331,
+   0,
+   333,
+   0,
+   "IMAGE"
+  ],
+  [
+   1312,
+   332,
+   0,
+   333,
+   1,
+   "MASK"
+  ],
+  [
+   1313,
+   333,
+   0,
+   324,
+   4,
+   "IMAGE"
+  ],
+  [
+   1314,
+   324,
    0,
    314,
    0,
    "CONDITIONING"
   ],
   [
-   1305,
-   327,
+   1315,
+   324,
    1,
    315,
    0,

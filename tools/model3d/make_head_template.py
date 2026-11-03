@@ -7,12 +7,13 @@ only the input picture is the front view of hero1 and the GLB goes to 3d/hero1_h
 
 *_bf16.json: the same graphs on the unquantized weights pixal3d(_multiview)_bf16.safetensors, for an A/B with int8.
 
-pixal3d_head_2views.json: the same graph, but Pixal3D Multi-View Conditioning (multiview weights, FOV 20) gets two
-views, front and back (the back gives the ponytail and the colour of the nape, that one front view does not show).
-The node takes any subset of front / left / back / right at fixed 90 degree steps, so a 3/4 view cannot go there.
+pixal3d_head_4views.json: the same graph, but Pixal3D Multi-View Conditioning (multiview weights, FOV 20) gets the four
+views front / left / back / right (the back gives the ponytail and the nape, that one front view does not show).
+The node takes any subset at fixed 90 degree steps (no 3/4 view), but front + back alone is no use: the two cameras
+look along the same rays, the model cannot tell the depth and grew a second face on the nape; the sides give the depth.
 
-usage: python make_head_template.py     then put despill_view.py of views/hero1_head/{front,back}.png into
-       ComfyUI/input as hero1_head_{front,back}.png
+usage: python make_head_template.py     then put despill_view.py of views/hero1_head/{front,left,back,right}.png into
+       ComfyUI/input as hero1_head_{front,left,back,right}.png
 """
 import copy
 import json
@@ -28,10 +29,10 @@ def main():
     nodes[322]["widgets_values"][0] = "3d/hero1_head_tpl"  # Save3DAdvanced
     json.dump(g, open(HERE / "pixal3d_head_template.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     bf16(g, "pixal3d_bf16.safetensors", "pixal3d_head_template_bf16.json")
-    two_views(g)
+    four_views(g)
 
 
-def two_views(g):
+def four_views(g):
     g = copy.deepcopy(g)
     nodes = {n["id"]: n for n in g["nodes"]}
     links = {l[0]: l for l in g["links"]}
@@ -62,30 +63,31 @@ def two_views(g):
         nodes[l[1]]["outputs"][l[2]]["links"].remove(k)
 
     x, y = nodes[122]["pos"]
-    load = node("LoadImage", [x, y + 700], [], [("IMAGE", "IMAGE"), ("MASK", "MASK")], ["hero1_head_back.png", "image"])
-    rmbg = node("RemoveBackground", [x + 400, y + 700], [("bg_removal_model", "BACKGROUND_REMOVAL"), ("image", "IMAGE")],
-                [("mask", "MASK")], [])
-    rmbg["inputs"][0]["type"] = nodes[192]["inputs"][0]["type"]
-    crop = node("ImageCropToMask", [x + 800, y + 700], [("images", "IMAGE"), ("masks", "MASK")], [("images", "IMAGE")],
-                list(nodes[312]["widgets_values"]))
     mv = node("Pixal3DMultiViewConditioning", [x + 1200, y + 700],
               [("clip_vision_model", "CLIP_VISION"), ("front", "IMAGE"), ("left", "IMAGE"), ("back", "IMAGE"), ("right", "IMAGE")],
               [("positive", "CONDITIONING"), ("negative", "CONDITIONING")], [20.0])
-    link(nodes[193], 0, rmbg, 0)
-    link(load, 0, rmbg, 1)
-    link(load, 0, crop, 0)
-    link(rmbg, 0, crop, 1)
     link(nodes[15], 0, mv, 0)
     link(nodes[302], 0, mv, 1)  # the front view after background removal and crop
-    link(crop, 0, mv, 3)
+    for i, side in enumerate(("left", "back", "right")):
+        dy = y + 700 + 400 * i
+        load = node("LoadImage", [x, dy], [], [("IMAGE", "IMAGE"), ("MASK", "MASK")], [f"hero1_head_{side}.png", "image"])
+        rmbg = node("RemoveBackground", [x + 400, dy], [("bg_removal_model", nodes[192]["inputs"][0]["type"]), ("image", "IMAGE")],
+                    [("mask", "MASK")], [])
+        crop = node("ImageCropToMask", [x + 800, dy], [("images", "IMAGE"), ("masks", "MASK")], [("images", "IMAGE")],
+                    list(nodes[312]["widgets_values"]))
+        link(nodes[193], 0, rmbg, 0)
+        link(load, 0, rmbg, 1)
+        link(load, 0, crop, 0)
+        link(rmbg, 0, crop, 1)
+        link(crop, 0, mv, 2 + i)
     for k, out, sw in ((1277, 0, 314), (1280, 1, 315)):  # Pixal3D conditioning -> the Pixal3D / TRELLIS.2 switches
         unlink(k)
         link(mv, out, nodes[sw], 0)
     nodes[319]["widgets_values"][0] = "pixal3d_multiview_int8_convrot.safetensors"
-    nodes[322]["widgets_values"][0] = "3d/hero1_head_2v"
+    nodes[322]["widgets_values"][0] = "3d/hero1_head_4v"
     g["last_node_id"], g["last_link_id"] = nid, lid
-    json.dump(g, open(HERE / "pixal3d_head_2views.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    bf16(g, "pixal3d_multiview_bf16.safetensors", "pixal3d_head_2views_bf16.json")
+    json.dump(g, open(HERE / "pixal3d_head_4views.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    bf16(g, "pixal3d_multiview_bf16.safetensors", "pixal3d_head_4views_bf16.json")
 
 
 def bf16(g, weights, name):
