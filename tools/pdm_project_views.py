@@ -159,6 +159,25 @@ def align(name, view, zbuf, uvmap, atlas):
     return warped, bbox, mask
 
 
+NORMAL_STEPS = 6  # the weight of a view follows the normal averaged over the neighbours: the raw normals of the generated mesh are noisy
+
+
+def smooth_normals(P, tris, steps=NORMAL_STEPS):
+    """Per-face normals averaged over the neighbouring faces (through the welded vertices), `steps` times."""
+    _, inv = np.unique(np.round(P, 5), axis=0, return_inverse=True)
+    inv = inv.reshape(-1)
+    t = inv[tris]
+    n = np.cross(P[tris[:, 1]] - P[tris[:, 0]], P[tris[:, 2]] - P[tris[:, 0]])
+    nv = len(inv)
+    for _ in range(steps):
+        vn = np.zeros((inv.max() + 1, 3))
+        for k in range(3):
+            np.add.at(vn, t[:, k], n)
+        n = vn[t[:, 0]] + vn[t[:, 1]] + vn[t[:, 2]]
+        n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-12)
+    return n
+
+
 def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
     """Colours of the texels covered by the triangles, per view: ({view: sum of w*colour}, {view: sum of w}, cover)."""
     size = atlas.shape[0]
@@ -176,13 +195,13 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
     wsum = {n: np.zeros(atlas.shape[:2], np.float32) for n in dirs}
     cover = np.zeros(atlas.shape[:2], np.float32)
     used = np.zeros(atlas.shape[:2], bool)  # texels some triangle lies on
-    for f in tris[::step]:
+    snorm = smooth_normals(P, tris)
+    for fi in range(0, len(tris), step):
+        f = tris[fi]
         pp = P[f]
-        nrm = np.cross(pp[1] - pp[0], pp[2] - pp[0])
-        ln = np.linalg.norm(nrm)
-        if ln < 1e-12:
+        if np.linalg.norm(np.cross(pp[1] - pp[0], pp[2] - pp[0])) < 1e-12:
             continue
-        nrm /= ln
+        nrm = snorm[fi]
         uv = UV[f] * size
         a = np.floor(uv.min(0)).astype(int)
         e = np.ceil(uv.max(0)).astype(int)
