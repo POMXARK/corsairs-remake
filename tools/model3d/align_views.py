@@ -8,7 +8,7 @@ features are the dark bands of it. The side profile is matched to the front one 
 face band; outside the band the mapping goes linearly back to the crown and the neck, so the outline and therefore
 the crop of ImageCropToMask stay as they were.
 
-usage: python align_views.py front.png side.png left|right out.png [--check check.png]
+usage: python align_views.py front.png side.png left|right|back out.png [--width ref.png] [--check check.png]
 """
 import argparse
 
@@ -86,6 +86,38 @@ def ears(a, m, box):
     return np.mean(res, axis=0)
 
 
+def widths(m, box):
+    x0, y0, x1, y1 = box
+    w = np.zeros(N)
+    for i, y in enumerate(np.linspace(y0, y1, N).astype(int)):
+        xs = np.nonzero(m[y])[0]
+        if len(xs):
+            w[i] = xs.max() - xs.min()
+    return w
+
+
+def stretch_x(res, m, ref):
+    """Horizontal scale about the centre of the outline so that its row widths match the reference view (the back to
+    the front, one side to the other). The height is larger than the width, so the square crop does not change."""
+    rm = binary_fill_holes(ref.max(2) > 8)
+    ys, xs = np.nonzero(rm)
+    wr = widths(rm, (xs.min(), ys.min(), xs.max(), ys.max()))
+    ys, xs = np.nonzero(m)
+    box = (xs.min(), ys.min(), xs.max(), ys.max())
+    ws = widths(m, box)
+    sel = slice(int(0.1 * N), int(0.9 * N))
+    ok = (wr[sel] > 0) & (ws[sel] > 0)
+    s = float(np.median(wr[sel][ok] / ws[sel][ok]))
+    cx = (box[0] + box[2]) / 2
+    src = cx + (np.arange(res.shape[1], dtype=np.float32) - cx) / s
+    j0 = np.clip(np.floor(src).astype(int), 0, res.shape[1] - 1)
+    j1 = np.clip(j0 + 1, 0, res.shape[1] - 1)
+    k = (src - np.floor(src))[None, :, None]
+    out = res[:, j0] * (1 - k) + res[:, j1] * k
+    out[:, (src < 0) | (src > res.shape[1] - 1)] = 0
+    return out, s
+
+
 def check(front, side, out, labels):
     strips = []
     for img, lab in zip((front, side), labels):
@@ -115,6 +147,8 @@ def main():
     ap.add_argument("facing", choices=("left", "right", "back"))
     ap.add_argument("out")
     ap.add_argument("--check")
+    ap.add_argument("--width", help="match the row widths of the outline to this view (the back to the front, "
+                                    "the right side to the aligned left one)")
     o = ap.parse_args()
     fa, fm, fbox = load(o.front)
     sa, sm, sbox = load(o.side)
@@ -144,6 +178,10 @@ def main():
     im = Image.open(o.side)
     raw = np.asarray(im.convert("RGBA") if im.mode == "RGBA" else im.convert("RGB")).astype(np.float32)
     res = raw[i0] * (1 - k) + raw[i1] * k
+    if o.width:
+        res, sx = stretch_x(res, binary_fill_holes(res[..., :3].max(2) > 8),
+                            np.asarray(Image.open(o.width).convert("RGB")))
+        print(f"{o.side}: width x{sx:.3f} to {o.width}")
     Image.fromarray(np.clip(res + 0.5, 0, 255).astype(np.uint8)).save(o.out)
     if o.facing != "back":
         shift = [(BAND[j] - ((BAND[j] - b) / a)) * (y1 - y0) / sa.shape[0] * 1024 for j in (0, 1)]
