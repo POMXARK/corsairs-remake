@@ -302,7 +302,7 @@ def fill_faces(P, UV, tris, good, out):
             continue
         ax, ay = np.clip(X[ok], 0, size - 1), np.clip(Y[ok], 0, size - 1)
         share = good[ay, ax].mean()
-        if share >= max(BAD_SHARE, 0.5):
+        if share >= 0.5:
             cen.append(P[f].mean(0))
             col.append(out[ay, ax][good[ay, ax]].mean(0))
         elif share < BAD_SHARE:
