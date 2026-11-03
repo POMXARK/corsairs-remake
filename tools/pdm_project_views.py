@@ -8,7 +8,8 @@ colour stays. Usage: pdm_project_views.py in.glb out.glb front.png left.png back
 Before projecting, every view is aligned to the mesh: the mesh is drawn with its own generated texture from the view's side
 and the view is moved by the dense optical flow towards that drawing (the mesh differs from the view by a few pixels at the
 nostrils, the mouth corners, the eyelids), so the sharp details land where the geometry has them.
-Needs numpy, Pillow, scipy and OpenCV (opencv-python-headless)."""
+Needs numpy, Pillow, scipy, OpenCV (opencv-python-headless) and numba (the rasterizers: per-face Python loops took hours on
+the 700 000 faces of the bf16 mesh, compiled they take seconds; without numba the same loops run as plain Python)."""
 import io
 import json
 import struct
@@ -16,6 +17,12 @@ import sys
 
 import numpy as np
 from PIL import Image
+
+try:
+    from numba import njit
+except ImportError:  # same code, interpreted: correct but slow
+    def njit(*a, **k):
+        return (lambda f: f) if not a or not callable(a[0]) else a[0]
 
 SHARP = 6  # the view that faces the texel most dominates (power of the weight): blended views ghost the lips and the nose
 NAMES = ("front", "left", "back", "right")
@@ -102,26 +109,33 @@ def zbuffer(P, tris, name, dv, view, lo, hi, UV, res=1024):
     px, py = project(P, name, view, lo, hi)
     px, py = px / img.shape[1] * res, py / img.shape[0] * res
     depth = P @ np.array(dv)
+    return _zbuffer(px, py, depth, UV, tris, res)
+
+
+@njit(cache=True)
+def _zbuffer(px, py, depth, UV, tris, res):
     buf = np.full((res, res), -1e9, np.float32)
     uvmap = np.zeros((res, res, 2), np.float32)
-    for f in tris:
-        x, y, z = px[f], py[f], depth[f]
-        a = np.floor([x.min(), y.min()]).astype(int)
-        e = np.ceil([x.max(), y.max()]).astype(int)
-        d = (y[1] - y[2]) * (x[0] - x[2]) + (x[2] - x[1]) * (y[0] - y[2])
-        if abs(d) < 1e-9 or (e - a).max() > 300:
+    for t in range(tris.shape[0]):
+        i0, i1, i2 = tris[t, 0], tris[t, 1], tris[t, 2]
+        x0, x1, x2, y0, y1, y2 = px[i0], px[i1], px[i2], py[i0], py[i1], py[i2]
+        ax, ay = int(np.floor(min(x0, x1, x2))), int(np.floor(min(y0, y1, y2)))
+        ex, ey = int(np.ceil(max(x0, x1, x2))), int(np.ceil(max(y0, y1, y2)))
+        d = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+        if abs(d) < 1e-9 or max(ex - ax, ey - ay) > 300:
             continue
-        X, Y = np.meshgrid(np.arange(a[0], e[0] + 1), np.arange(a[1], e[1] + 1))
-        l0 = ((y[1] - y[2]) * (X + .5 - x[2]) + (x[2] - x[1]) * (Y + .5 - y[2])) / d
-        l1 = ((y[2] - y[0]) * (X + .5 - x[2]) + (x[0] - x[2]) * (Y + .5 - y[2])) / d
-        l2 = 1 - l0 - l1
-        ok = (l0 >= -.02) & (l1 >= -.02) & (l2 >= -.02) & (X >= 0) & (X < res) & (Y >= 0) & (Y < res)
-        if ok.any():
-            xs, ys, zz = X[ok], Y[ok], (l0 * z[0] + l1 * z[1] + l2 * z[2])[ok]
-            win = zz > buf[ys, xs]
-            buf[ys[win], xs[win]] = zz[win]
-            for k in range(2):
-                uvmap[ys[win], xs[win], k] = (l0 * UV[f[0], k] + l1 * UV[f[1], k] + l2 * UV[f[2], k])[ok][win]
+        for Y in range(max(ay, 0), min(ey, res - 1) + 1):
+            for X in range(max(ax, 0), min(ex, res - 1) + 1):
+                l0 = ((y1 - y2) * (X + .5 - x2) + (x2 - x1) * (Y + .5 - y2)) / d
+                l1 = ((y2 - y0) * (X + .5 - x2) + (x0 - x2) * (Y + .5 - y2)) / d
+                l2 = 1 - l0 - l1
+                if l0 < -.02 or l1 < -.02 or l2 < -.02:
+                    continue
+                z = l0 * depth[i0] + l1 * depth[i1] + l2 * depth[i2]
+                if z > buf[Y, X]:
+                    buf[Y, X] = z
+                    for k in range(2):
+                        uvmap[Y, X, k] = l0 * UV[i0, k] + l1 * UV[i1, k] + l2 * UV[i2, k]
     return buf, uvmap
 
 
@@ -206,79 +220,178 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
         zbufs[n] = ZCACHE[(n, dv)][0]
         if do_align:
             views[n] = align(n, views[n], *ZCACHE[(n, dv)], atlas)
-    acc = {n: np.zeros_like(atlas) for n in dirs}  # per view: sum of w*colour and sum of w
-    wsum = {n: np.zeros(atlas.shape[:2], np.float32) for n in dirs}
-    cover = np.zeros(atlas.shape[:2], np.float32)
-    used = np.zeros(atlas.shape[:2], bool)  # texels some triangle lies on
+    names = list(dirs)
     snorm = smooth_normals(P, tris)
-    for fi in range(0, len(tris), step):
-        f = tris[fi]
-        pp = P[f]
-        if np.linalg.norm(np.cross(pp[1] - pp[0], pp[2] - pp[0])) < 1e-12:
+    vp = [project(P, n, views[n], lo, hi) for n in names]
+    A, W, cover, used = _paint(P, (UV * size).astype(np.float32), tris, np.arange(0, len(tris), step), snorm,
+                               np.array([dirs[n] for n in names]), np.array([v[0] for v in vp]), np.array([v[1] for v in vp]),
+                               tuple(views[n][0].astype(np.float32) for n in names), tuple(views[n][2].astype(np.bool_) for n in names),
+                               tuple(zbufs[n] for n in names), size, reach, SHARP)
+    return dict(zip(names, A)), dict(zip(names, W)), cover, used
+
+
+@njit(cache=True)
+def _paint(P, uvs, tris, faces, snorm, dirs, vpx, vpy, imgs, inners, zbufs, size, reach, sharp):
+    nv = dirs.shape[0]
+    acc = np.zeros((nv, size, size, 3), np.float32)  # per view: sum of w*colour and sum of w
+    wsum = np.zeros((nv, size, size), np.float32)
+    cover = np.zeros((size, size), np.float32)
+    used = np.zeros((size, size), np.bool_)  # texels some triangle lies on
+    lim = 0.05  # holes between the views stay with the smeared generated colour: let every view reach far, SHARP keeps the best one on top
+    w = np.zeros(nv)
+    wc = np.zeros(nv)
+    dep = np.zeros((nv, 3))
+    for fi in faces:
+        i0, i1, i2 = tris[fi, 0], tris[fi, 1], tris[fi, 2]
+        e1, e2 = P[i1] - P[i0], P[i2] - P[i0]
+        cx, cy, cz = e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]
+        if np.sqrt(cx * cx + cy * cy + cz * cz) < 1e-12:
             continue
-        nrm = snorm[fi]
-        uv = UV[f] * size
-        a = np.floor(uv.min(0)).astype(int)
-        e = np.ceil(uv.max(0)).astype(int)
-        if (e - a).max() > 200:
+        u0, u1, u2, v0, v1, v2 = uvs[i0, 0], uvs[i1, 0], uvs[i2, 0], uvs[i0, 1], uvs[i1, 1], uvs[i2, 1]
+        ax, ay = int(np.floor(min(u0, u1, u2))), int(np.floor(min(v0, v1, v2)))
+        ex, ey = int(np.ceil(max(u0, u1, u2))), int(np.ceil(max(v0, v1, v2)))
+        if max(ex - ax, ey - ay) > 200:
             continue
-        d = (uv[1, 1] - uv[2, 1]) * (uv[0, 0] - uv[2, 0]) + (uv[2, 0] - uv[1, 0]) * (uv[0, 1] - uv[2, 1])
+        d = (v1 - v2) * (u0 - u2) + (u2 - u1) * (v0 - v2)
         if abs(d) < 1e-9:
             continue
-        X, Y = np.meshgrid(np.arange(a[0], e[0] + 1), np.arange(a[1], e[1] + 1))
-        l0 = ((uv[1, 1] - uv[2, 1]) * (X + .5 - uv[2, 0]) + (uv[2, 0] - uv[1, 0]) * (Y + .5 - uv[2, 1])) / d
-        l1 = ((uv[2, 1] - uv[0, 1]) * (X + .5 - uv[2, 0]) + (uv[0, 0] - uv[2, 0]) * (Y + .5 - uv[2, 1])) / d
-        l2 = 1 - l0 - l1
-        ok = (l0 >= 0) & (l1 >= 0) & (l2 >= 0)
-        if not ok.any():
-            continue
-        ax, ay = X[ok], Y[ok]
-        used[ay, ax] = True
-        for name, dv in dirs.items():
-            lim = 0.05  # holes between the views stay with the smeared generated colour: let every view reach far, SHARP keeps the best one on top
+        for k in range(nv):
             # no cap below 1: with /0.5 every view facing the texel at more than 55 % weighed 1, the front and the side view
             # met half and half in the eye sockets and on the cheeks (ghost irises, ComfyUI_00016) and SHARP had nothing to sharpen
-            w = np.clip((nrm @ np.array(dv) - lim) / (1 - lim), 0, 1)
-            wc = min(1., w * (1 - lim) / 0.5)  # the cover keeps the old scale: which texels count as seen does not change
-            if w <= 0:
-                continue
-            px, py = project(pp, name, views[name], lo, hi)
-            sx = (l0 * px[0] + l1 * px[1] + l2 * px[2])[ok]
-            sy = (l0 * py[0] + l1 * py[1] + l2 * py[2])[ok]
-            img = views[name][0]
-            c = img[np.clip(sy.astype(int), 0, img.shape[0] - 1), np.clip(sx.astype(int), 0, img.shape[1] - 1)]
-            zr = zbufs[name].shape[0]
-            seen = zbufs[name][np.clip((sy / img.shape[0] * zr).astype(int), 0, zr - 1),
-                               np.clip((sx / img.shape[1] * zr).astype(int), 0, zr - 1)]
-            here = (l0[ok] * (pp[0] @ np.array(dv)) + l1[ok] * (pp[1] @ np.array(dv)) + l2[ok] * (pp[2] @ np.array(dv)))
-            iy, ix = np.clip(sy.astype(int), 0, img.shape[0] - 1), np.clip(sx.astype(int), 0, img.shape[1] - 1)
-            vis = (here >= seen - reach) & views[name][2][iy, ix]
-            acc[name][ay[vis], ax[vis]] += c[vis] * w ** SHARP
-            wsum[name][ay[vis], ax[vis]] += w ** SHARP
-            cover[ay[vis], ax[vis]] += wc ** 2
+            w[k] = min(max((snorm[fi, 0] * dirs[k, 0] + snorm[fi, 1] * dirs[k, 1] + snorm[fi, 2] * dirs[k, 2] - lim) / (1 - lim), 0.), 1.)
+            wc[k] = min(1., w[k] * (1 - lim) / 0.5)  # the cover keeps the old scale: which texels count as seen does not change
+            for j in range(3):
+                q = tris[fi, j]
+                dep[k, j] = P[q, 0] * dirs[k, 0] + P[q, 1] * dirs[k, 1] + P[q, 2] * dirs[k, 2]
+        for Y in range(ay, ey + 1):
+            for X in range(ax, ex + 1):
+                l0 = ((v1 - v2) * (X + .5 - u2) + (u2 - u1) * (Y + .5 - v2)) / d
+                l1 = ((v2 - v0) * (X + .5 - u2) + (u0 - u2) * (Y + .5 - v2)) / d
+                l2 = 1 - l0 - l1
+                if l0 < 0 or l1 < 0 or l2 < 0:
+                    continue
+                used[Y, X] = True
+                for k in range(nv):
+                    if w[k] <= 0:
+                        continue
+                    img, zb = imgs[k], zbufs[k]
+                    h, wd, zr = img.shape[0], img.shape[1], zb.shape[0]
+                    sx = l0 * vpx[k, i0] + l1 * vpx[k, i1] + l2 * vpx[k, i2]
+                    sy = l0 * vpy[k, i0] + l1 * vpy[k, i1] + l2 * vpy[k, i2]
+                    iy, ix = min(max(int(sy), 0), h - 1), min(max(int(sx), 0), wd - 1)
+                    seen = zb[min(max(int(sy / h * zr), 0), zr - 1), min(max(int(sx / wd * zr), 0), zr - 1)]
+                    here = l0 * dep[k, 0] + l1 * dep[k, 1] + l2 * dep[k, 2]
+                    if here >= seen - reach and inners[k][iy, ix]:
+                        ws = w[k] ** sharp
+                        for c in range(3):
+                            acc[k, Y, X, c] += img[iy, ix, c] * ws
+                        wsum[k, Y, X] += ws
+                        cover[Y, X] += wc[k] ** 2
     return acc, wsum, cover, used
 
 
-TONE_SIGMA = 40  # texels: the views differ in tone (lighting, colour grading) and the seams between them show; level the low frequencies
+TONE_CELL = 0.02  # share of the model size: the views differ in tone (lighting, colour grading) and the seams between them
+TONE_SIGMA = 0.04  # show; the low frequencies of every view are levelled over cells of the surface this big, blurred this wide
+# in 3D, not in the texture: a gaussian of 40 texels over the 4096 atlas of the bf16 mesh, cut into small UV charts, mixed the
+# colours of unrelated neighbouring charts (hair into the nose) and printed sharp-edged light and dark patches along the charts
 
 
-def combine(atlas, acc, wsum):
+def combine(atlas, acc, wsum, P, UV, tris):
     """Blend the views; the low frequencies (tone) of every view are levelled to the weighted mean of all views around the
-    texel, so the seams between the views vanish, its own detail stays. The generated texture is not used: its colour is off."""
-    import cv2
+    texel on the surface, so the seams between the views vanish, its own detail stays. The generated texture is not used: its colour is off."""
+    from scipy.spatial import cKDTree
+    size = atlas.shape[0]
+    uvs = UV * size
+    ext = float(np.ptp(P, axis=0).max())
+    cen = P[tris].mean(1)
+    _, cell = np.unique(np.floor(cen / (TONE_CELL * ext)).astype(np.int64), axis=0, return_inverse=True)
+    cell = cell.reshape(-1)
+    nc = cell.max() + 1
+
+    def per_cell(v, w):  # sums over the faces of every cell
+        return np.stack([np.bincount(cell, v[:, k] * w, nc) for k in range(v.shape[1])], 1), np.bincount(cell, w, nc)
+
+    cc, cn = per_cell(cen, np.ones(len(cen)))
+    cc /= cn[:, None]
+    tree = cKDTree(cc)
+    d, k = tree.query(cc, k=min(64, nc), workers=-1)
+    g = np.exp(-(d / (TONE_SIGMA * ext)) ** 2)  # cell to cell blur
     tot = sum(wsum.values())
-    cols, lows, ws = {}, {}, {}
+    ones = np.ones(atlas.shape[:2], np.bool_)
+    lows, ws, cols = {}, {}, {}
     for n in acc:
-        m = (wsum[n] > 1e-6).astype(np.float32)
+        m = wsum[n] > 1e-6
         cols[n] = acc[n] / np.maximum(wsum[n], 1e-6)[..., None]
-        norm = np.maximum(cv2.GaussianBlur(m, (0, 0), TONE_SIGMA), 1e-4)[..., None]
-        lows[n] = cv2.GaussianBlur(cols[n] * m[..., None], (0, 0), TONE_SIGMA) / norm
-        ws[n] = cv2.GaussianBlur(wsum[n] ** (1 / 3), (0, 0), TONE_SIGMA)[..., None]  # w**2: a view that faces the texel sets the tone, a grazing one does not
-    target = sum(lows[n] * ws[n] for n in acc) / np.maximum(sum(ws.values()), 1e-6)
+        fs, fc = _face_sums(uvs, tris, cols[n], m)
+        fw, fa = _face_sums(uvs, tris, (wsum[n] ** (1 / 3))[..., None], ones)  # w**2: a view that faces the texel sets the tone, a grazing one does not
+        s, c = per_cell(fs, np.ones(len(fs)))
+        s, c = s[:, :3], np.bincount(cell, fc, nc)
+        ww, wa = np.bincount(cell, fw[:, 0], nc), np.bincount(cell, fa, nc)
+        lows[n] = (g[..., None] * s[k]).sum(1) / np.maximum((g * c[k]).sum(1), 1e-6)[:, None]
+        ws[n] = (g * ww[k]).sum(1) / np.maximum((g * wa[k]).sum(1), 1e-6)
+    target = sum(lows[n] * ws[n][:, None] for n in acc) / np.maximum(sum(ws.values()), 1e-6)[:, None]
+    # cells to faces: gaussian over the nearest cells, no steps at the cell borders
+    d, k = tree.query(cen, k=min(8, nc), workers=-1)
+    g = np.exp(-(d / (TONE_CELL * ext)) ** 2) + 1e-12
+    g /= g.sum(1, keepdims=True)
     out = np.zeros_like(atlas)
     for n in acc:
-        out += (cols[n] + (target - lows[n]) * (wsum[n] > 1e-6)[..., None]) * wsum[n][..., None]
+        off = _face_image(uvs, tris, ((target - lows[n])[k] * g[..., None]).sum(1).astype(np.float32), size)
+        out += (cols[n] + off * (wsum[n] > 1e-6)[..., None]) * wsum[n][..., None]
     return out / np.maximum(tot, 1e-6)[..., None], tot
+
+
+@njit(cache=True)
+def _face_sums(uvs, tris, img, mask):
+    """Per face: the sum of img over its texels where mask is set, and their number."""
+    size = img.shape[0]
+    s = np.zeros((tris.shape[0], img.shape[2]))
+    c = np.zeros(tris.shape[0])
+    for t in range(tris.shape[0]):
+        i0, i1, i2 = tris[t, 0], tris[t, 1], tris[t, 2]
+        u0, u1, u2, v0, v1, v2 = uvs[i0, 0], uvs[i1, 0], uvs[i2, 0], uvs[i0, 1], uvs[i1, 1], uvs[i2, 1]
+        ax, ay = int(np.floor(min(u0, u1, u2))), int(np.floor(min(v0, v1, v2)))
+        ex, ey = int(np.ceil(max(u0, u1, u2))), int(np.ceil(max(v0, v1, v2)))
+        if max(ex - ax, ey - ay) > 200:
+            continue
+        d = (v1 - v2) * (u0 - u2) + (u2 - u1) * (v0 - v2)
+        if abs(d) < 1e-9:
+            continue
+        for Y in range(ay, ey + 1):
+            for X in range(ax, ex + 1):
+                l0 = ((v1 - v2) * (X + .5 - u2) + (u2 - u1) * (Y + .5 - v2)) / d
+                l1 = ((v2 - v0) * (X + .5 - u2) + (u0 - u2) * (Y + .5 - v2)) / d
+                if l0 < 0 or l1 < 0 or l0 + l1 > 1:
+                    continue
+                yy, xx = min(max(Y, 0), size - 1), min(max(X, 0), size - 1)
+                if mask[yy, xx]:
+                    c[t] += 1
+                    for k in range(img.shape[2]):
+                        s[t, k] += img[yy, xx, k]
+    return s, c
+
+
+@njit(cache=True)
+def _face_image(uvs, tris, vals, size):
+    """Texture with every texel set to the value of the face it lies on."""
+    out = np.zeros((size, size, vals.shape[1]), np.float32)
+    for t in range(tris.shape[0]):
+        i0, i1, i2 = tris[t, 0], tris[t, 1], tris[t, 2]
+        u0, u1, u2, v0, v1, v2 = uvs[i0, 0], uvs[i1, 0], uvs[i2, 0], uvs[i0, 1], uvs[i1, 1], uvs[i2, 1]
+        ax, ay = int(np.floor(min(u0, u1, u2))), int(np.floor(min(v0, v1, v2)))
+        ex, ey = int(np.ceil(max(u0, u1, u2))), int(np.ceil(max(v0, v1, v2)))
+        d = (v1 - v2) * (u0 - u2) + (u2 - u1) * (v0 - v2)
+        if max(ex - ax, ey - ay) > 200 or abs(d) < 1e-9:
+            continue
+        for Y in range(max(ay, 0), min(ey, size - 1) + 1):
+            for X in range(max(ax, 0), min(ex, size - 1) + 1):
+                l0 = ((v1 - v2) * (X + .5 - u2) + (u2 - u1) * (Y + .5 - v2)) / d
+                l1 = ((v2 - v0) * (X + .5 - u2) + (u0 - u2) * (Y + .5 - v2)) / d
+                if l0 < 0 or l1 < 0 or l0 + l1 > 1:
+                    continue
+                for k in range(vals.shape[1]):
+                    out[Y, X, k] = vals[t, k]
+    return out
 
 
 BAD_SHARE = 0.5  # faces painted by a view on less than this share of their texels take the colour of the painted faces around (0.2: light shards remain)
@@ -289,39 +402,50 @@ def fill_faces(P, UV, tris, good, out):
     nearest well painted faces in space: the generated texture has the wrong tone there (orange spots), the UV neighbours are other charts."""
     from scipy.spatial import cKDTree
     size = out.shape[0]
-    cen, col, bad = [], [], []
-    for i, f in enumerate(tris):
-        uv = UV[f] * size
-        a = np.floor(uv.min(0)).astype(int)
-        e = np.ceil(uv.max(0)).astype(int)
-        if (e - a).max() > 200:
-            continue
-        d = (uv[1, 1] - uv[2, 1]) * (uv[0, 0] - uv[2, 0]) + (uv[2, 0] - uv[1, 0]) * (uv[0, 1] - uv[2, 1])
-        if abs(d) < 1e-9:
-            continue
-        X, Y = np.meshgrid(np.arange(a[0], e[0] + 1), np.arange(a[1], e[1] + 1))
-        l0 = ((uv[1, 1] - uv[2, 1]) * (X + .5 - uv[2, 0]) + (uv[2, 0] - uv[1, 0]) * (Y + .5 - uv[2, 1])) / d
-        l1 = ((uv[2, 1] - uv[0, 1]) * (X + .5 - uv[2, 0]) + (uv[0, 0] - uv[2, 0]) * (Y + .5 - uv[2, 1])) / d
-        ok = (l0 >= 0) & (l1 >= 0) & (l0 + l1 <= 1)
-        if not ok.any():
-            continue
-        ax, ay = np.clip(X[ok], 0, size - 1), np.clip(Y[ok], 0, size - 1)
-        share = good[ay, ax].mean()
-        if share >= 0.5:
-            cen.append(P[f].mean(0))
-            col.append(out[ay, ax][good[ay, ax]].mean(0))
-        elif share < BAD_SHARE:
-            bad.append((P[f], l0[ok], l1[ok], ax, ay))
-    if not bad or not cen:
+    colsum, ng = _face_sums(UV * size, tris, out, good)
+    _, na = _face_sums(UV * size, tris, out[..., :1], np.ones(good.shape, np.bool_))
+    share = np.where(na > 0, ng / np.maximum(na, 1), -1.)  # -1: the face has no texel
+    colsum /= np.maximum(ng, 1)[:, None]
+    ok = share >= 0.5
+    bad = (share >= 0) & (share < BAD_SHARE)  # -1: the face has no texel
+    if not bad.any() or not ok.any():
         return 0
-    tree = cKDTree(np.array(cen))
-    col = np.array(col)
-    for pp, b0, b1, ax, ay in bad:  # per texel, not per face: inverse-distance blend of the 12 nearest painted faces, no flat patches
-        pos = b0[:, None] * pp[0] + b1[:, None] * pp[1] + (1 - b0 - b1)[:, None] * pp[2]
-        dist, k = tree.query(pos, k=12)
-        w = 1 / (dist + 1e-4 * float(np.ptp(P, axis=0).max())) ** 2
-        out[ay, ax] = (col[k] * w[..., None]).sum(1) / w.sum(1, keepdims=True)
-    return len(bad)
+    tree = cKDTree(P[tris[ok]].mean(1))
+    col = colsum[ok]
+    # per texel, not per face: inverse-distance blend of the 12 nearest painted faces, no flat patches
+    pos, ax, ay = _face_texels(P, UV * size, tris, np.where(bad)[0], size)
+    dist, k = tree.query(pos, k=12, workers=-1)
+    w = 1 / (dist + 1e-4 * float(np.ptp(P, axis=0).max())) ** 2
+    out[ay, ax] = (col[k] * w[..., None]).sum(1) / w.sum(1, keepdims=True)
+    return int(bad.sum())
+
+
+@njit(cache=True)
+def _face_texels(P, uvs, tris, faces, size):
+    """Texels of the given faces: their position in space, x and y in the texture."""
+    cnt = 0
+    for rep in range(2):  # count, then fill
+        if rep:
+            pos, ox, oy = np.zeros((cnt, 3)), np.zeros(cnt, np.int64), np.zeros(cnt, np.int64)
+            cnt = 0
+        for t in faces:
+            i0, i1, i2 = tris[t, 0], tris[t, 1], tris[t, 2]
+            u0, u1, u2, v0, v1, v2 = uvs[i0, 0], uvs[i1, 0], uvs[i2, 0], uvs[i0, 1], uvs[i1, 1], uvs[i2, 1]
+            ax, ay = int(np.floor(min(u0, u1, u2))), int(np.floor(min(v0, v1, v2)))
+            ex, ey = int(np.ceil(max(u0, u1, u2))), int(np.ceil(max(v0, v1, v2)))
+            d = (v1 - v2) * (u0 - u2) + (u2 - u1) * (v0 - v2)
+            for Y in range(ay, ey + 1):
+                for X in range(ax, ex + 1):
+                    l0 = ((v1 - v2) * (X + .5 - u2) + (u2 - u1) * (Y + .5 - v2)) / d
+                    l1 = ((v2 - v0) * (X + .5 - u2) + (u0 - u2) * (Y + .5 - v2)) / d
+                    if l0 < 0 or l1 < 0 or l0 + l1 > 1:
+                        continue
+                    if rep:
+                        for c in range(3):
+                            pos[cnt, c] = l0 * P[i0, c] + l1 * P[i1, c] + (1 - l0 - l1) * P[i2, c]
+                        ox[cnt], oy[cnt] = min(max(X, 0), size - 1), min(max(Y, 0), size - 1)
+                    cnt += 1
+    return pos, ox, oy
 
 
 def main():
@@ -357,7 +481,7 @@ def main():
         if best is None or err < best[0]:
             best = (err, side)
     acc, ws, cover, used = paint(P, UV, tris, atlas, views, best[1], do_align="--no-align" not in sys.argv)
-    painted, w = combine(atlas, acc, ws)
+    painted, w = combine(atlas, acc, ws, P, UV, tris)
     # texels no view sees well (folded slivers, faces edge-on to every view) keep the generated pattern, but in the tone of the
     # painted texels around: the generated texture is off in colour and shows there as orange spots
     import cv2
