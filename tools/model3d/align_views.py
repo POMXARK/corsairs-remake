@@ -59,6 +59,33 @@ def corr(f, s, a, b):
     return float((vf * vs).sum() / (np.linalg.norm(vf) * np.linalg.norm(vs) + 1e-9))
 
 
+def ears(a, m, box):
+    """Top and bottom of the ears in parts of the outline height, the mean of both sides.
+
+    Top: the first row from the upper quarter where the edge of the outline turns from hair to skin. Bottom: the
+    largest jump of the edge inwards below it (under the lobe the outline goes back to the jaw or the neck)."""
+    x0, y0, x1, y1 = box
+    h, w = y1 - y0, x1 - x0
+    res = []
+    for side in (0, 1):
+        edge, skin = np.zeros(N), np.zeros(N, bool)
+        for i, y in enumerate(np.linspace(y0, y1, N).astype(int)):
+            xs = np.nonzero(m[y])[0]
+            if not len(xs):
+                continue
+            e = xs.min() if side == 0 else xs.max()
+            edge[i] = e - x0 if side == 0 else x1 - e
+            k = int(0.015 * w)
+            c = a[y, e + k:e + 3 * k].mean(0) if side == 0 else a[y, e - 3 * k:e - k].mean(0)
+            skin[i] = c.mean() > 70 and c[0] - c[2] > 20
+        i0 = int(0.25 * N) + int(np.argmax(skin[int(0.25 * N):int(0.6 * N)]))
+        d = np.diff(gaussian_filter1d(edge, 1))
+        lo, hi = i0 + int(0.03 * N), i0 + int(0.2 * N)
+        i1 = lo + int(np.argmax(d[lo:hi]))
+        res.append((i0 / N, i1 / N))
+    return np.mean(res, axis=0)
+
+
 def check(front, side, out, labels):
     strips = []
     for img, lab in zip((front, side), labels):
@@ -85,19 +112,26 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("front")
     ap.add_argument("side")
-    ap.add_argument("facing", choices=("left", "right"))
+    ap.add_argument("facing", choices=("left", "right", "back"))
     ap.add_argument("out")
     ap.add_argument("--check")
     o = ap.parse_args()
     fa, fm, fbox = load(o.front)
     sa, sm, sbox = load(o.side)
-    f = profile(fa, fm, fbox, "front")
-    s = profile(sa, sm, sbox, o.facing)
-    best = max(((corr(f, s, a, b), a, b) for a in np.arange(0.90, 1.12, 0.005) for b in np.arange(-0.08, 0.08, 0.001)))
-    c, a, b = best
-    # side row for every output row: identity at the crown and the neck, the fitted affine over the face band
-    tf = np.array([0.0, BAND[0], BAND[1], 1.0])
-    ts = np.array([0.0, (BAND[0] - b) / a, (BAND[1] - b) / a, 1.0])
+    if o.facing == "back":  # no face on the back: the ears are the only common marks
+        ef, es = ears(fa, fm, fbox), ears(sa, sm, sbox)
+        tf, ts = np.array([0.0, *ef, 1.0]), np.array([0.0, *es, 1.0])
+        h = (sbox[3] - sbox[1]) / sa.shape[0] * 1024
+        print(f"{o.side}: ears {es[0]:.3f}..{es[1]:.3f}, front {ef[0]:.3f}..{ef[1]:.3f}; "
+              f"top moved {(ef[0] - es[0]) * h:+.0f} px, bottom {(ef[1] - es[1]) * h:+.0f} px of 1024")
+    else:
+        f = profile(fa, fm, fbox, "front")
+        s = profile(sa, sm, sbox, o.facing)
+        best = max(((corr(f, s, a, b), a, b) for a in np.arange(0.90, 1.12, 0.005) for b in np.arange(-0.08, 0.08, 0.001)))
+        c, a, b = best
+        # side row for every output row: identity at the crown and the neck, the fitted affine over the face band
+        tf = np.array([0.0, BAND[0], BAND[1], 1.0])
+        ts = np.array([0.0, (BAND[0] - b) / a, (BAND[1] - b) / a, 1.0])
     y0, y1 = sbox[1], sbox[3]
     rows = np.arange(sa.shape[0], dtype=np.float32)
     t = (rows - y0) / (y1 - y0)
@@ -111,9 +145,10 @@ def main():
     raw = np.asarray(im.convert("RGBA") if im.mode == "RGBA" else im.convert("RGB")).astype(np.float32)
     res = raw[i0] * (1 - k) + raw[i1] * k
     Image.fromarray(np.clip(res + 0.5, 0, 255).astype(np.uint8)).save(o.out)
-    shift = [(BAND[j] - ((BAND[j] - b) / a)) * (y1 - y0) / sa.shape[0] * 1024 for j in (0, 1)]
-    print(f"{o.side}: scale {a:.3f}, shift {b:+.3f}; brows moved {shift[0]:+.0f} px, mouth {shift[1]:+.0f} px of 1024; "
-          f"match {corr(f, s, 1, 0):.2f} -> {c:.2f}")
+    if o.facing != "back":
+        shift = [(BAND[j] - ((BAND[j] - b) / a)) * (y1 - y0) / sa.shape[0] * 1024 for j in (0, 1)]
+        print(f"{o.side}: scale {a:.3f}, shift {b:+.3f}; brows moved {shift[0]:+.0f} px, mouth {shift[1]:+.0f} px "
+              f"of 1024; match {corr(f, s, 1, 0):.2f} -> {c:.2f}")
     if o.check:
         check(Image.open(o.front).convert("RGB"), Image.open(o.out).convert("RGB"), o.check, ("front", o.facing + " aligned"))
 
