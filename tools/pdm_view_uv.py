@@ -13,7 +13,7 @@ import sys
 import numpy as np
 from PIL import Image
 
-sys.path.insert(0, __file__.rsplit("/", 1)[0])
+sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 from pdm_mesh_clean import carry_colour
 from pdm_outer_shell import visible_faces  # noqa: E402
 from pdm_project_views import (NAMES, accessor, load_view, project, read_glb, smooth_normals,  # noqa: E402

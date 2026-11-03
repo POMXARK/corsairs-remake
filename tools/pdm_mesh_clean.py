@@ -12,7 +12,7 @@ import sys
 import numpy as np
 from PIL import Image
 
-sys.path.insert(0, __file__.rsplit("/", 1)[0])
+sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 from pdm_project_views import accessor, read_glb  # noqa: E402
 
 TEX = 4096
