@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from pdm_project_views import _face_texels, accessor, read_glb, vertex_normals, write_glb  # noqa: E402
 
 DILATE = 1  # voxels: the shell is thickened by this to close the tears between faces, the solid is eroded back by it
-SEAL = 4  # voxels: the outside is flooded around a shell this thick (tears up to twice this are closed), then grows back
+SEAL = int(os.environ.get("SEAL", 4))  # voxels: the outside is flooded around a shell this thick (tears up to twice this are closed), then grows back
 LID = 0.06  # share of the height: the neck cut is wavy and open; below this over its lowest point the neck is solid (its
 # outline from below), the bottom stays where it was: pdm_project_views fits the mesh height to the figure in the views
 t0 = time.time()

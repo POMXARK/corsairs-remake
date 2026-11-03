@@ -44,6 +44,9 @@ def remesh(src, dst, dens, faces, say):
     out = coat.Mesh()
     out.fromVolumeWithMaxPolycount(v, faces)
     say('reduced faces', out.facesCount())
+    if out.facesCount() > faces * 1.05:  # fromVolumeWithMaxPolycount stops early on detailed heads (79 k for 10 k)
+        out.reduceToPolycount(faces)
+        say('reduceToPolycount', out.facesCount())
     say('write', dst, out.Write(dst))
 
 
