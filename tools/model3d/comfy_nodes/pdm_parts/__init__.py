@@ -57,7 +57,7 @@ def sheet_prompt(part):
             "the face is not visible. A flat bright green background in all four cells.")
 
 
-PIP = ["numpy", "Pillow", "scipy", "trimesh", "rtree", "fast-simplification", "opencv-python-headless"]
+PIP = ["numpy", "Pillow", "scipy", "trimesh", "rtree", "fast-simplification", "opencv-python-headless", "pymeshlab", "xatlas"]
 
 
 def run(cmd, cwd, log):
@@ -255,10 +255,18 @@ class PDMPartSave:
                 paths.append(pth)
             try:
                 import shutil
+                base = src  # the mesh the views are projected onto: cleaned of shards and unwrapped anew, the generated one if that fails
+                clean = Path(src).with_name(Path(src).stem + "_clean.glb")
+                try:
+                    run([python, Path(repo) / "tools" / "pdm_mesh_clean.py", src, clean], repo, log)
+                    base = clean
+                    log.append(f"mesh cleaned and unwrapped anew: {clean}")
+                except RuntimeError as e:
+                    log.append("MESH CLEANUP FAILED, the generated mesh stays: " + str(e)[-300:])
                 plain = Path(src).with_name(Path(src).stem + "_projected.glb")  # views projected as they are, without the fit to the mesh
-                run([python, Path(repo) / "tools" / "pdm_project_views.py", src, plain, *paths, "--no-align"], repo, log)
+                run([python, Path(repo) / "tools" / "pdm_project_views.py", base, plain, *paths, "--no-align"], repo, log)
                 log.append(f"projected without alignment: {plain}")
-                run([python, Path(repo) / "tools" / "pdm_project_views.py", src, glb / f"{name}.glb", *paths], repo, log)
+                run([python, Path(repo) / "tools" / "pdm_project_views.py", base, glb / f"{name}.glb", *paths], repo, log)
                 painted = Path(src).with_name(Path(src).stem + "_painted.glb")  # the raw ComfyUI GLB has the smeared generated texture
                 shutil.copyfile(glb / f"{name}.glb", painted)
                 log.append(f"painted from the views: {painted}")
