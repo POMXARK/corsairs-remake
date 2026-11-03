@@ -1,5 +1,5 @@
 {
- "id": "afcb1989-8595-4edc-81a7-b2bfd5ad31b3",
+ "id": "43731653-2fd5-40d0-ac3c-a7c38d48ee26",
  "revision": 0,
  "last_node_id": 2032,
  "last_link_id": 4850,
@@ -61,7 +61,7 @@
    },
    "widgets_values": [
     60,
-    "fixed",
+    "randomize",
     12,
     7.5,
     "euler",
@@ -186,7 +186,7 @@
    },
    "widgets_values": [
     43,
-    "fixed",
+    "randomize",
     12,
     1,
     "euler",
@@ -310,7 +310,7 @@
    },
    "widgets_values": [
     47,
-    "fixed",
+    "randomize",
     20,
     7.5,
     "euler",
@@ -385,7 +385,7 @@
    },
    "widgets_values": [
     44,
-    "fixed",
+    "randomize",
     12,
     7.5,
     "euler",
@@ -1942,12 +1942,11 @@
    },
    "widgets_values": [
     768,
-    "udf",
+    "solid",
+    20.0,
     false,
-    true,
-    true,
-    1,
-    0,
+    1.0,
+    0.0,
     false,
     3,
     0.01,

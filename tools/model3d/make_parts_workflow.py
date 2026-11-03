@@ -147,11 +147,15 @@ def main():
     # DecimateMesh (186) 700000 faces -> UnwrapMesh cut them into 10 358 tiny charts, the 4096 atlas was confetti
     # (the log of the first run). 60000 faces unwrap into big charts; the detail comes from reference_mesh / normal map.
     nodes[186]["widgets_values"][0] = 60000
-    # RemeshMesh (241) in udf mode wraps the surface in two shells, the inner one inverted; with both drops off it stays and
-    # gives the self-intersections, the inconsistent winding and the folds of ComfyUI_00013 (825 self-intersecting faces,
-    # 19 pieces). Drop the inner shell and the enclosed bits; smooth_iters 20 washed the face out (the tooltip: 2-3).
-    rm = nodes[241]["widgets_values"]  # resolution, sign_mode, qef, drop_inverted, drop_enclosed, band, project_back, fix_poles, smooth_iters, ...
-    rm[3], rm[4], rm[8] = True, True, 3
+    # RemeshMesh (241) in udf mode wraps the surface in two walls a voxel apart. The head is open at the neck, so both walls
+    # are one piece and drop_inverted_components keeps them: ComfyUI_00014 has 51 % of its faces on the inner wall (0.2 % of
+    # the size behind the outer one), hence the self-intersections, the folds and the half-empty atlas. "solid" makes one
+    # closed surface (a global inside/outside cut); smooth_iters 20 washed the face out (the tooltip: 2-3).
+    # widgets: resolution, sign_mode, fill, qef, band, project_back, fix_poles, smooth_iters, drop_small, precluster
+    nodes[241]["widgets_values"] = [768, "solid", 20.0, False, 1.0, 0.0, False, 3, 0.01, 20_000_000]
+    # Pixal3D samplers: a new shape every run (the Qwen views keep their seed: they come out right)
+    for i in (3, 12, 18, 23):
+        nodes[i]["widgets_values"][1] = "randomize"
     # UnwrapMesh (196): "pec" cuts the dense voxel-born mesh into hundreds of small charts (the atlas of ComfyUI_00007 is
     # confetti); "adaptive" (CPU) is slower and should give fewer, bigger charts. Not checked in ComfyUI yet.
     nodes[196]["widgets_values"][0] = "adaptive"
