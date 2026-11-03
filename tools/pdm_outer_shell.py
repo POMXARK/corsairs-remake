@@ -16,7 +16,7 @@ def sphere_dirs(n):
     return np.stack([np.cos(th) * np.sin(phi), np.cos(phi), np.sin(th) * np.sin(phi)], 1)
 
 
-def visible_faces(V, F, ndir=66, res=1536):
+def visible_faces(V, F, ndir=66, res=1536, dirs=None):
     import open3d as o3d
     scene = o3d.t.geometry.RaycastingScene()
     scene.add_triangles(o3d.core.Tensor(V.astype(np.float32)), o3d.core.Tensor(F.astype(np.uint32)))
@@ -25,7 +25,7 @@ def visible_faces(V, F, ndir=66, res=1536):
     g = (np.arange(res) + 0.5) / res * 2 * r - r
     gx, gy = np.meshgrid(g, g)
     seen = np.zeros(len(F), bool)
-    for d in sphere_dirs(ndir):
+    for d in (sphere_dirs(ndir) if dirs is None else np.asarray(dirs, float)):
         up = np.array([0, 1., 0]) if abs(d[1]) < 0.99 else np.array([1., 0, 0])
         a = np.cross(up, d)
         a /= np.linalg.norm(a)

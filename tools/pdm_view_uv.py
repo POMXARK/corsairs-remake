@@ -14,7 +14,8 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
-from pdm_mesh_clean import carry_colour  # noqa: E402
+from pdm_mesh_clean import carry_colour
+from pdm_outer_shell import visible_faces  # noqa: E402
 from pdm_project_views import (NAMES, accessor, load_view, project, read_glb, smooth_normals,  # noqa: E402
                                smooth_positions)
 
@@ -73,9 +74,7 @@ def main():
         dirs = {"front": (0, 0, 1.), "back": (0, 0, -1.), "left": (side, 0, 0.), "right": (-side, 0, 0.)}
         score = np.full((len(T0), 4), -1.0, np.float32)
         for k, n in enumerate(NAMES):
-            buf, ids = face_depth_ids(P, T0, n, dirs[n], views[n], lo, hi)
-            vis = np.zeros(len(T0), bool)
-            vis[np.unique(ids[ids >= 0])] = True
+            vis = visible_faces(P, T0, res=RES, dirs=[dirs[n]])  # a parallel bundle of rays along the view
             facing = sn @ np.array(dirs[n])
             ok = vis & (facing > MIN_FACING)
             score[ok, k] = facing[ok]
