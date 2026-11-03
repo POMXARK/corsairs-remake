@@ -179,6 +179,18 @@ def smooth_normals(P, tris, steps=NORMAL_STEPS):
     return n
 
 
+def vertex_normals(P, tris):
+    """Smooth vertex normals: area-weighted over the faces around each welded position (the UV seams do not break the shading)."""
+    _, inv = np.unique(np.round(P, 5), axis=0, return_inverse=True)
+    inv = inv.reshape(-1)
+    n = np.cross(P[tris[:, 1]] - P[tris[:, 0]], P[tris[:, 2]] - P[tris[:, 0]])
+    vn = np.zeros((inv.max() + 1, 3))
+    for k in range(3):
+        np.add.at(vn, inv[tris[:, k]], n)
+    vn /= np.maximum(np.linalg.norm(vn, axis=1, keepdims=True), 1e-12)
+    return vn[inv].astype(np.float32)
+
+
 def paint(P, UV, tris, atlas, views, side, step=1, do_align=False):
     """Colours of the texels covered by the triangles, per view: ({view: sum of w*colour}, {view: sum of w}, cover)."""
     size = atlas.shape[0]
@@ -353,6 +365,21 @@ def main():
     pad = (~used) & (dist <= 6)
     out[pad] = out[py_[pad], px_[pad]]
     print(f"{fill_faces(P, UV, tris, good, out)} faces without a view filled from their neighbours in space")
+    # the mesh was smoothed (or came without normals): the shading follows the final positions, not a stale or missing NORMAL
+    nrm = vertex_normals(P, tris)
+    b = b + b"\0" * (-len(b) % 4)
+    if "NORMAL" in prim["attributes"]:
+        na = j["accessors"][prim["attributes"]["NORMAL"]]
+        nv = j["bufferViews"][na["bufferView"]]
+        if nv.get("byteStride", 12) == 12 and nv["byteLength"] >= nrm.nbytes:
+            off = nv.get("byteOffset", 0) + na.get("byteOffset", 0)
+            b = b[:off] + nrm.tobytes() + b[off + nrm.nbytes:]
+    else:
+        j["bufferViews"].append({"buffer": 0, "byteOffset": len(b), "byteLength": nrm.nbytes, "target": 34962})
+        j["accessors"].append({"bufferView": len(j["bufferViews"]) - 1, "componentType": 5126, "count": len(nrm), "type": "VEC3"})
+        prim["attributes"]["NORMAL"] = len(j["accessors"]) - 1
+        b += nrm.tobytes()
+    prim["attributes"].pop("TANGENT", None)  # stale after the smoothing
     buf = io.BytesIO()
     Image.fromarray(out.clip(0, 255).astype(np.uint8)).save(buf, format="PNG")
     b = b + b"\0" * (-len(b) % 4)
