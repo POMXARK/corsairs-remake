@@ -60,11 +60,16 @@ def main():
     j, b = read_glb(src)
     prim = j["meshes"][0]["primitives"][0]
     P0 = accessor(j, b, prim["attributes"]["POSITION"])
-    UV0 = accessor(j, b, prim["attributes"]["TEXCOORD_0"])
     T0 = accessor(j, b, prim["indices"]).reshape(-1, 3)
-    mat = j["materials"][prim.get("material", 0)]
-    bv = j["bufferViews"][j["images"][j["textures"][mat["pbrMetallicRoughness"]["baseColorTexture"]["index"]]["source"]]["bufferView"]]
-    atlas0 = np.asarray(Image.open(io.BytesIO(b[bv.get("byteOffset", 0):bv.get("byteOffset", 0) + bv["byteLength"]])).convert("RGB"))
+    cpath = sys.argv[sys.argv.index("--colour") + 1] if "--colour" in sys.argv else None
+    # the colour source: the mesh itself, or --colour <painted.glb> when src is a light retopo mesh without texture
+    cj, cb = (read_glb(cpath) if cpath else (j, b))
+    cp = cj["meshes"][0]["primitives"][0]
+    CP, CUV, CT = (accessor(cj, cb, cp["attributes"]["POSITION"]), accessor(cj, cb, cp["attributes"]["TEXCOORD_0"]),
+                   accessor(cj, cb, cp["indices"]).reshape(-1, 3))
+    cm = cj["materials"][cp.get("material", 0)]
+    cbv = cj["bufferViews"][cj["images"][cj["textures"][cm["pbrMetallicRoughness"]["baseColorTexture"]["index"]]["source"]]["bufferView"]]
+    catlas = np.asarray(Image.open(io.BytesIO(cb[cbv.get("byteOffset", 0):cbv.get("byteOffset", 0) + cbv["byteLength"]])).convert("RGB"))
     steps = int(sys.argv[sys.argv.index("--smooth") + 1]) if "--smooth" in sys.argv else SMOOTH
     P = smooth_positions(P0, T0, steps)
     lo, hi = P.min(0), P.max(0)
@@ -130,7 +135,7 @@ def main():
     UVn = np.zeros((len(uk), 2), np.float32)
     UVn[inv] = UV.reshape(-1, 2)
     print(f"charts: {len(set(owner.tolist()))} (views and rest), vertices {len(P)} -> {len(uk)}")
-    colour = carry_colour(P0, UV0, T0, atlas0, Pn, UVn, Tn, tex)
+    colour = carry_colour(CP, CUV, CT, catlas, Pn, UVn, Tn, tex)
     import trimesh
     from trimesh.visual import TextureVisuals
     from trimesh.visual.material import PBRMaterial
