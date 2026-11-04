@@ -37,7 +37,7 @@ ARMS = [
     ('push', {'amount': 0.002}), ('push', {'amount': -0.002}),
     ('repaint', {'views': 'all'}), ('repaint', {'views': 'front'}), ('repaint', {'views': 'sides'}),
     ('repaint', {'views': 'back'}),
-    ('hair_to_skin', {}), ('skin_to_hair', {}), ('blur', {'sigma': 1.0}), ('blur', {'sigma': 3.0}),
+    ('hair_to_skin', {}), ('skin_to_hair', {}), ('blur', {'sigma': 1.0}), ('blur', {'sigma': 3.0}), ('lama', {'grow': 1}), ('lama', {'grow': 3}),
     # against the reference shape (head_views.py, --ref): the twelve silhouettes and the surface of the original
     ('hull', {'blend': 0.5}), ('hull', {'blend': 1.0}), ('snap', {'blend': 0.3}), ('snap', {'blend': 0.6}),
     ('mirror', {'blend': 0.5}), ('mirror', {'blend': 1.0}), ('despike', {}), ('orient', {}),
@@ -71,8 +71,8 @@ INTENT_TOOLS = {  # intent -> tools (priors, score points)
     'shape': {'membrane': 4, 'relax': 2, 'push': 1},
     'inflate': {'push': 5}, 'deflate': {'push': 5},
     'hair_off': {'hair_to_skin': 5, 'repaint': 3},
-    'colour': {'repaint': 4, 'blur': 1},
-    'denoise': {'blur': 4, 'repaint': 2, 'skin_to_hair': 2},
+    'colour': {'repaint': 4, 'blur': 1, 'lama': 2},
+    'denoise': {'blur': 4, 'repaint': 2, 'skin_to_hair': 2, 'lama': 3},
     'skin_off': {'skin_to_hair': 5, 'blur': 1},
     # the defects head_views.py finds (head_auto.py), and the prompt words above
     'outside': {'hull': 5, 'snap': 3, 'relax': 1},

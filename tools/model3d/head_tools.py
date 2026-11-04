@@ -289,6 +289,35 @@ def blur(h, mask, sigma=2.0):
     return f'blur: {int(t.sum())} texels, sigma {sigma}'
 
 
+_LAMA = []
+
+
+def lama(h, mask, grow=1, context=96):
+    """LaMa (open source neural inpaint, $W/lama) over the region texels: the specks, seams and patches are filled from
+    the texture around them (ours, as in head-wrap-ai/lama_patch.py). Only region texels change."""
+    from scipy import ndimage as ndi
+    from PIL import Image
+    t = texels(h, mask)
+    if not t.any():
+        return 'lama: no texels'
+    if not _LAMA:
+        W = os.environ.get('W', '/media/roman/383be9ee-c114-4bf8-8956-66b985661cb4/home/remake-linux')
+        os.environ.setdefault('LAMA_MODEL', W + '/lama/big-lama.pt')
+        sys.path.insert(0, W + '/lama/pkg')
+        from simple_lama_inpainting import SimpleLama
+        _LAMA.append(SimpleLama())
+    m = ndi.binary_dilation(t, iterations=int(grow)) if grow else t
+    ys, xs = np.where(m)
+    H, Wd = m.shape
+    y0, y1, x0, x1 = max(ys.min() - context, 0), min(ys.max() + context + 1, H), max(xs.min() - context, 0), min(xs.max() + context + 1, Wd)
+    crop = h.img[y0:y1, x0:x1].clip(0, 255).astype(np.uint8)
+    res = np.array(_LAMA[0](Image.fromarray(crop), Image.fromarray((m[y0:y1, x0:x1] * 255).astype(np.uint8))))
+    res = res[:y1 - y0, :x1 - x0].astype(np.float32)
+    sub = m[y0:y1, x0:x1]
+    h.img[y0:y1, x0:x1][sub] = res[sub]
+    return f'lama: {int(sub.sum())} texels, box {x0},{y0}-{x1},{y1}'
+
+
 # ---------- tools against the reference shape (head_views.py: h.ref, h.fit; ours) ----------
 
 def _need_ref(h, name):
@@ -433,6 +462,7 @@ TOOLS = {
     'hair_to_skin': (hair_to_skin, {}, 'тёмные (волосы) текселы области → ближайшая кожа', 'texture'),
     'skin_to_hair': (skin_to_hair, {}, 'светлые (кожа) текселы волос и хвоста области → ближайшие волосы', 'texture'),
     'blur': (blur, {'sigma': 2.0}, 'размыть текстуру области', 'texture'),
+    'lama': (lama, {'grow': 1}, 'LaMa (нейросеть) закрасить текселы области по окружению', 'texture'),
 }
 
 
