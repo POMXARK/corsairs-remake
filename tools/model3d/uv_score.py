@@ -5,14 +5,15 @@ uv_score.py model.(obj|glb) [more models...] [--json out.json]
 
 Numbers (all area-weighted over the 3D surface):
   islands, tiny  - charts and the share of the surface in charts under 50 faces (crumbs: bleed and seams);
-  fill           - share of the UV square covered by triangles (packing);
-  stretch        - mean of s1/s2 of the 3D->UV Jacobian, 1 = no shear (conformal);
+  fill           - share of the UV square covered by triangles, each texel once (packing);
+  overlap        - share of the surface on faces that share texels with another face (folds, stacked islands);
+  stretch        - mean of s1/s2 of the 3D->UV Jacobian (each face capped at 10), 1 = no shear (conformal);
   scale          - std of log texel density over the surface, 0 = every mm gets the same texels;
   face_density   - texels per unit area on the face zone (|x| < 0.6 of half width, front 0.25..0.75 of height,
                    normal facing +z) relative to an ideal atlas where the whole UV square is spread evenly;
   seam_front     - length of cuts on the front half (normal z > 0.3) per unit of head height: seams in sight;
   seam_total     - all cut length per unit of head height.
-score = 100 * fill * face_density_share / stretch * exp(-scale) * (1 - tiny) / (1 + seam_front / 4)
+score = 100 * fill * face_density_share / stretch * exp(-scale) * (1 - tiny) * (1 - overlap) / (1 + seam_front / 4)
 (higher is better; it is a ranking for runs on one mesh, not an absolute grade).
 The head looks along +z with y up, as Pixal3D/TRELLIS write it.
 """
@@ -73,6 +74,36 @@ def charts(F, UV):
     return lab, o, seam
 
 
+STRETCH_CAP = 10.
+
+
+def coverage(UV, res=1024):
+    """Texel coverage of the atlas: the share of the triangles' texels that no other face covers (union / sum) and
+    a per face flag 'shares texels with another face' (any island: folds and islands packed over each other)."""
+    own = np.full((res, res), -1, np.int64)
+    bad = np.zeros(len(UV), bool)
+    total = 0
+    for k, t in enumerate(UV * res):
+        x0, y0 = np.floor(t.min(0)).astype(int)
+        x1, y1 = np.ceil(t.max(0)).astype(int)
+        xs, ys = np.meshgrid(np.arange(max(x0, 0), min(x1 + 1, res)) + .5, np.arange(max(y0, 0), min(y1 + 1, res)) + .5)
+        a, b, c = t
+        d = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1])
+        if xs.size == 0 or abs(d) < 1e-12:
+            continue
+        l1 = ((b[1] - c[1]) * (xs - c[0]) + (c[0] - b[0]) * (ys - c[1])) / d
+        l2 = ((c[1] - a[1]) * (xs - c[0]) + (a[0] - c[0]) * (ys - c[1])) / d
+        m = (l1 > 1e-6) & (l2 > 1e-6) & (l1 + l2 < 1 - 1e-6)
+        yy, xx = ys[m].astype(int), xs[m].astype(int)
+        total += len(yy)
+        o = own[yy, xx]
+        if (o >= 0).any():
+            bad[k] = True
+            bad[o[o >= 0]] = True
+        own[yy, xx] = k
+    return ((own >= 0).sum() / max(total, 1)), bad
+
+
 def score(path):
     V, F, UV = load(path)
     p0, p1, p2 = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
@@ -95,11 +126,16 @@ def score(path):
     s = np.linalg.svd(J, compute_uv=False)
     w = a3 * ok
     W = w.sum()
-    stretch = float((w * s[:, 0] / np.maximum(s[:, 1], 1e-30)).sum() / W)
+    # s1/s2 capped at 10: a near-degenerate UV face (0.1 % of the area) gave 1e20 and the mean followed the rounding of
+    # the last digits (3DCoat atlas 1.29, the same atlas repacked 2.6); capped, both are 1.28
+    stretch = float((w * np.minimum(s[:, 0] / np.maximum(s[:, 1], 1e-30), STRETCH_CAP)).sum() / W)
     dens = np.log(np.maximum(auv, 1e-30) / np.maximum(a3, 1e-30))
     mu = (w * dens).sum() / W
     scale = float(np.sqrt((w * (dens - mu) ** 2).sum() / W))
-    fill = float(auv.sum())  # overlaps would count twice; the packers here do not overlap
+    # fill counts a texel once: an LSCM fold or islands packed over each other gave fill 1.36 and the best score
+    uni, over = coverage(UV)
+    fill = float(auv.sum() * uni)
+    overlap = float(w[over].sum() / W)
     lab, o, is_seam = charts(F, UV)
     cnt = np.bincount(lab)
     tiny = float(w[cnt[lab] < 50].sum() / W)
@@ -116,8 +152,8 @@ def score(path):
     L = np.linalg.norm(V[E[:, 0]] - V[E[:, 1]], axis=1) * is_seam * 0.5
     seam_total = float(L.sum() / hgt)
     seam_front = float((L * (n[sf, 2] > 0.3)).sum() / hgt)
-    sc = 100 * fill * min(face_density, 2.0) / 2.0 / stretch * np.exp(-scale) * (1 - tiny) / (1 + seam_front / 4)
-    return dict(model=os.path.basename(path), faces=int(len(F)), islands=int(len(cnt)), tiny=round(tiny, 4),
+    sc = 100 * fill * min(face_density, 2.0) / 2.0 / stretch * np.exp(-scale) * (1 - tiny) * (1 - overlap) / (1 + seam_front / 4)
+    return dict(model=os.path.basename(path), faces=int(len(F)), islands=int(len(cnt)), tiny=round(tiny, 4), overlap=round(overlap, 4),
                 fill=round(fill, 3), stretch=round(stretch, 3), scale=round(scale, 3),
                 face_density=round(face_density, 3), seam_front=round(seam_front, 2),
                 seam_total=round(seam_total, 2), score=round(float(sc), 2))

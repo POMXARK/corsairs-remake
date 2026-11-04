@@ -16,6 +16,8 @@ from _coat_job.txt next to this script: input .obj, output .obj, log file, mode,
            (Mesh.weld), triangulate, reduce:faces (reduceToPolycount). Volume tools give a new surface: vrelax:degree
            (surface volume, Volume.relaxSurface), voxrelax:steps (voxels, relaxVoxels), closeholes:size (voxels,
            Volume.closeHoles), vfaces:N (back from the volume with at most N faces, else fromVolume);
+  uvcmd  - the UV of the input kept, then UV room commands of job line 8 in turn (uvcmd(): $ID commands, options,
+           the islands distance), e.g. '$RemoveUVIntr;$JoinAllClusters' - 3DCoat's own fixes of an atlas;
   probe  - the input is a list made by coat_probe.py: single tools on small test meshes (flattenSingleIsland with
            each of its methods, Mesh.relax), each result written next to the list (black-box study of the tools).
 The mesh is imported for per pixel painting (the import dialog is confirmed by $DialogButton#1), the old seams are
@@ -138,6 +140,40 @@ def uv_room(src, dst, op, args, say):
         'write', u.getWholeMesh().Write(dst))
 
 
+def uvcmd(src, dst, spec, say):
+    """The mesh with its UV imported for per pixel painting, then the UV room steps of `spec` (';' between them):
+    $Command - a UI command by its ID (data/Languages/English.xml: AutoEdges, Unwrap, RemoveUVIntr, JoinAllClusters,
+    AutoSc, AutoMap, PackUV...); opt:ID=value - coat.ui.setOption; slider:ID=value - coat.ui.setSliderValue; dist:value -
+    coat.uv.setUnwrapIslandsDistance. The islands are logged after every step; the result written as in auto."""
+    coat.ui.toRoom('Paint', True)
+    coat.io.step(10)
+    coat.ui.setFileForFileDialog(src)
+    say('import', coat.ui.cmd('$ImportDPMesh', press_ok))
+    coat.io.step(30)
+    coat.ui.toRoom('UV', True)
+    coat.io.step(30)
+    say('islands', coat.Model.fromUv().islandsCount(0), 'islands distance', coat.uv.getUnwrapIslandsDistance())
+    for st in [x.strip() for x in spec.split(';') if x.strip()]:
+        if st.startswith('$'):
+            r = coat.ui.cmd(st, press_ok)
+        elif st.startswith('dist:'):
+            r = coat.uv.setUnwrapIslandsDistance(float(st[5:]))
+        else:
+            kind, kv = st.split(':', 1)
+            k, v = kv.split('=', 1)
+            val = {'true': True, 'false': False}.get(v.lower(), None)
+            if val is None:
+                try:
+                    val = float(v)
+                except ValueError:
+                    val = v
+            r = coat.ui.setOption(k, val) if kind == 'opt' else coat.ui.setSliderValue(k, float(val))
+        coat.io.step(20)
+        say('step', st, r, 'islands', coat.Model.fromUv().islandsCount(0))
+    u = coat.Model.fromUv()
+    say('uv faces', u.facesCount(), 'islands', u.islandsCount(0), 'write', dst, u.getWholeMesh().Write(dst))
+
+
 def probe(listfile, say):
     """Black-box probe of single 3DCoat tools (coat_probe.py makes the list): each line 'in.obj op arg... out.obj'.
     flatten M: uv.flattenSingleIsland(mesh, M, no rotation, scaled to the geometry) - M 0 plane, 1 LSCM, 2 ABF, 3 GU,
@@ -187,6 +223,11 @@ def main():
         if mode == 'probe':
             probe(src, say)
             open(dst, 'w').write('# probe: the results lie next to the list\n')  # coat_run.sh fetches dst
+            say('done')
+            log.close()
+            return
+        if mode == 'uvcmd':
+            uvcmd(src, dst, opspec, say)
             say('done')
             log.close()
             return

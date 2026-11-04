@@ -391,24 +391,11 @@ def charts(V, F, sharp=60., it=15):
 
 
 def pack(V, F, UVc, res=2048, rotate=True):
-    """uv.pack(0, rotate): the islands of the per-corner UV packed into 0..1 at one texel density. Open copy: xatlas with
-    the given islands, brute force, padding 2 of 2048 - fill 0.673 on the hero1 atlas (3DCoat 0.670), 0.843 on 24 rects
-    (3DCoat 0.81 with rotation, 0.772 without; xatlas without rotation 0.778). Returns the new per-corner UV."""
-    import xatlas
-    key = np.concatenate([F.reshape(-1, 1).astype(np.float64), np.round(UVc.reshape(-1, 2), 7)], 1)
-    uk, inv = np.unique(key, axis=0, return_inverse=True)
-    uv = uk[:, 1:]
-    uv = (uv - uv.min(0)) / (uv.max() - uv.min() + 1e-30)
-    at = xatlas.Atlas()
-    at.add_mesh(V[uk[:, 0].astype(int)].astype(np.float32), inv.ravel().reshape(-1, 3).astype(np.uint32), None,
-                uv.astype(np.float32))
-    co = xatlas.ChartOptions()
-    co.use_input_mesh_uvs = True
-    po = xatlas.PackOptions()
-    po.resolution, po.padding, po.bilinear, po.rotate_charts, po.bruteForce = res, 2, True, rotate, True
-    at.generate(co, po)
-    _, idx, uvs = at[0]
-    return uvs[idx]
+    """uv.pack(0, rotate): the islands of the per-corner UV packed into the unit square at one texel density. Open copy:
+    uv_unfold.pack_square (xatlas add_uv_mesh, brute force, block align, the density searched for one square sheet).
+    Returns the new per-corner UV."""
+    from uv_unfold import pack_square
+    return pack_square(UVc, res, rotate=rotate)[0]
 
 
 def verify(d):
