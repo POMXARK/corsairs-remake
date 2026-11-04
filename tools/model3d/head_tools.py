@@ -213,15 +213,30 @@ def open_relax(h, mask, degree=0.5, tangent=0, crease=180.):
 
 # ---------- texture tools ----------
 
+def ensure_aligned(h):
+    """The four views moved onto the mesh by optical flow, once for the head h (h.aligned). Every repaint of a try used to
+    do it again (4 s) and to find the hair classes of the new images (5 s); a local change of a region does not move the
+    flow, so the tries share the views aligned to the head they were made from. head_auto resets h.aligned after a kept try."""
+    if getattr(h, 'aligned', None) is None:
+        V = dict(h.views)
+        pv.ZCACHE.clear()
+        P, UV, T = h.P.astype(np.float32), h.UV.astype(np.float32), h.tris.astype(np.uint32)
+        pv.paint(P, UV, T, h.img, V, h.side, do_align=True)  # fills V with the aligned views
+        pv.ZCACHE.clear()
+        h.aligned = V
+    return h.aligned
+
+
 def repaint(h, mask, views='all', align=1):
     """The texels of the region painted again from the views (all, front, sides, back or one name), with the skin guard by
     the parts: eyes from the front only, the neck from the sides only."""
     sel = {'all': pv.NAMES, 'sides': ('left', 'right')}.get(views, tuple(views.split('+')))
     pv.ZCACHE.clear()
     P, UV, T = h.P.astype(np.float32), h.UV.astype(np.float32), h.tris.astype(np.uint32)
-    V = dict(h.views)
+    pre = getattr(h, 'aligned', None) if int(align) else None  # aligned once for the head (ensure_aligned)
+    V = dict(pre) if pre is not None else dict(h.views)
     skin = pv.skin_texels(P, UV, T, h.img.shape[0], V, h.parts)
-    acc, ws, cover, used = pv.paint(P, UV, T, h.img, V, h.side, do_align=bool(int(align)), skin=skin)
+    acc, ws, cover, used = pv.paint(P, UV, T, h.img, V, h.side, do_align=bool(int(align)) and pre is None, skin=skin)
     acc = {n: acc[n] for n in sel}
     ws = {n: ws[n] for n in sel}
     col, w = pv.combine(h.img, acc, ws, P, UV, T)

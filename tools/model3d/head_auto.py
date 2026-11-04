@@ -40,6 +40,9 @@ import head_views as hv  # noqa: E402
 ACCEPT = 0.05  # twelve-view score points: a smaller gain of the whole head is noise
 GUARD = 1.0  # region score points (the four Qwen views) a kept try may lose
 SMALL = 0.01  # a smaller gain of the whole head is kept too when the region looks better against Qwen by QWEN_GAIN
+EARLY_MARGIN = 0.02  # the repaint changed the twelve-view score by 0.01 at most (18 tries on hero1)
+ALIGN_ONCE = True  # --no-align-once: align the views in every try (the old behaviour)
+EARLY = True  # --no-early: repaint every geometry try (slower, the old behaviour)
 QWEN_GAIN = 2.0  # (a small region cannot move the twelve-view score of the whole head by ACCEPT)
 
 
@@ -59,12 +62,20 @@ def arms_for(kind):
     return [a for a in ha.ARMS if a[0] in tools]
 
 
-def try_arm(h, arm, mask):
+def try_arm(h, arm, mask, base=None):
+    """A copy of h with the arm applied. A geometry arm is scored on the shape first (1 s); when the shape alone is
+    not better than SMALL (the repaint moves the score by 0.01 at most) the repaint (13 s of the 15 s of a try) is skipped: such a try cannot be kept
+    (accepted() needs a gain above SMALL). Returns (trial, note, early report or None)."""
     trial = h.copy()
     note = ht.apply(trial, arm[0], mask, **arm[1])
+    pre = None
     if ht.TOOLS[arm[0]][3] == 'geometry':  # the texture follows the new shape
+        if base is not None and EARLY:
+            pre = hv.evaluate(trial, h.ref)
+            if pre[0]['score'] - base + EARLY_MARGIN <= SMALL:
+                return trial, note + '; shape gain too small, no repaint', pre
         note += '; ' + ht.apply(trial, 'repaint', ht.grow(trial, mask, 1), views='all')
-    return trial, note
+    return trial, note, None
 
 
 _JOB = {}  # the head, the region and the arms of the tries run in parallel (inherited by the forked workers)
@@ -74,17 +85,17 @@ def _score_try(i):
     """One try in a worker: only what changed goes back (the views of the head are hundreds of MB)."""
     h, mask, arm = _JOB['h'], _JOB['mask'], _JOB['arms'][i]
     t0 = time.time()
-    trial, note = try_arm(h, arm, mask)
-    r2, f2 = hv.evaluate(trial, h.ref)
+    trial, note, pre = try_arm(h, arm, mask, _JOB.get('base'))
+    r2, f2 = pre if pre is not None else hv.evaluate(trial, h.ref)
     q2 = guard_score(ht.region_score(trial, mask))
     return trial.P, trial.img, trial.tris, note, r2, f2, q2, time.time() - t0
 
 
-def run_tries(h, mask, arms, jobs):
+def run_tries(h, mask, arms, jobs, base=None):
     """[(trial, note, report, faces, guard score, seconds)] of every arm on a copy of h; the tries of a region are
     independent, so up to `jobs` run at once in forked processes (a try is ~13 s, mostly the repaint)."""
     import multiprocessing as mp
-    _JOB.update(h=h, mask=mask, arms=arms)
+    _JOB.update(h=h, mask=mask, arms=arms, base=base)
     if jobs > 1 and len(arms) > 1:
         with mp.get_context('fork').Pool(min(jobs, len(arms))) as pool:
             res = pool.map(_score_try, range(len(arms)))
@@ -113,9 +124,14 @@ def main():
     ap.add_argument('--tries', type=int, default=3)
     ap.add_argument('--work')
     ap.add_argument('--policy', default=ha.POLICY)
-    ap.add_argument('--jobs', type=int, default=0, help='tries run at once (default: --tries, at most 4)')
+    ap.add_argument('--jobs', type=int, default=0, help='tries run at once (default: --tries, at most 6 and half of the cores)')
+    ap.add_argument('--no-early', action='store_true', help='repaint every geometry try, even when the shape got worse')
+    ap.add_argument('--no-align-once', action='store_true', help='align the views in every try')
     a = ap.parse_args()
-    jobs = a.jobs or min(a.tries, 4)
+    global EARLY, ALIGN_ONCE
+    EARLY = not a.no_early
+    ALIGN_ONCE = not a.no_align_once
+    jobs = a.jobs or min(a.tries, 6, max(1, (os.cpu_count() or 4) // 2))
     work = a.work or os.path.splitext(a.dst)[0] + '_auto'
     os.makedirs(os.path.join(work, 'passes'), exist_ok=True)
     log = lambda s: print(s, flush=True)
@@ -145,9 +161,11 @@ def main():
                            key=lambda x: -est[ha.arm_id(x)][0])[:a.tries]
             if not order:
                 continue
+            if ALIGN_ONCE:
+                ht.ensure_aligned(h)
             base_r = guard_score(ht.region_score(h, mask))
             best = None
-            for arm, (trial, note, r2, f2, q2, sec) in zip(order, run_tries(h, mask, order, jobs)):
+            for arm, (trial, note, r2, f2, q2, sec) in zip(order, run_tries(h, mask, order, jobs, rep['score'])):
                 aid = ha.arm_id(arm)
                 gain = r2['score'] - rep['score']
                 ok = accepted(gain, base_r, q2)
@@ -175,6 +193,7 @@ def main():
                     best = (gain, trial, r2, f2, rec)
             if best:
                 _, h, rep, faces, rec = best
+                h.aligned = None  # the shape changed: align the views again for the next region
                 rec['kept'] = True
                 fixed += 1
                 h.save(os.path.join(work, 'current.glb'))
