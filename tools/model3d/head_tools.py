@@ -223,6 +223,7 @@ def ensure_aligned(h):
         P, UV, T = h.P.astype(np.float32), h.UV.astype(np.float32), h.tris.astype(np.uint32)
         pv.paint(P, UV, T, h.img, V, h.side, do_align=True)  # fills V with the aligned views
         pv.ZCACHE.clear()
+        pv.view_classes(V)  # classes of the aligned views with the grown skin, in the cache the forked tries inherit
         h.aligned = V
     return h.aligned
 

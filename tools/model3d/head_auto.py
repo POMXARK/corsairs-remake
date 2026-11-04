@@ -87,7 +87,7 @@ def _score_try(i):
     t0 = time.time()
     trial, note, pre = try_arm(h, arm, mask, _JOB.get('base'))
     r2, f2 = pre if pre is not None else hv.evaluate(trial, h.ref)
-    q2 = guard_score(ht.region_score(trial, mask))
+    q2 = None if pre is not None else guard_score(ht.region_score(trial, mask))  # no repaint: nothing to guard
     return trial.P, trial.img, trial.tris, note, r2, f2, q2, time.time() - t0
 
 
@@ -95,7 +95,7 @@ def run_tries(h, mask, arms, jobs, base=None):
     """[(trial, note, report, faces, guard score, seconds)] of every arm on a copy of h; the tries of a region are
     independent, so up to `jobs` run at once in forked processes (a try is ~13 s, mostly the repaint)."""
     import multiprocessing as mp
-    _JOB.update(h=h, mask=mask, arms=arms, base=base)
+    _JOB.update(h=h, mask=mask, arms=arms, base=base, workers=jobs > 1 and len(arms) > 1)
     if jobs > 1 and len(arms) > 1:
         with mp.get_context('fork').Pool(min(jobs, len(arms))) as pool:
             res = pool.map(_score_try, range(len(arms)))
@@ -131,6 +131,9 @@ def main():
     global EARLY, ALIGN_ONCE
     EARLY = not a.no_early
     ALIGN_ONCE = not a.no_align_once
+    if (a.jobs or min(a.tries, 6, 4)) > 1:  # tries run at once: one OpenCV thread each (set here, not in a forked worker: it hangs there)
+        import cv2
+        cv2.setNumThreads(1)
     jobs = a.jobs or min(a.tries, 6, max(1, (os.cpu_count() or 4) // 2))
     work = a.work or os.path.splitext(a.dst)[0] + '_auto'
     os.makedirs(os.path.join(work, 'passes'), exist_ok=True)
@@ -168,6 +171,8 @@ def main():
             for arm, (trial, note, r2, f2, q2, sec) in zip(order, run_tries(h, mask, order, jobs, rep['score'])):
                 aid = ha.arm_id(arm)
                 gain = r2['score'] - rep['score']
+                if q2 is None:  # rejected on the shape, not repainted: the guard has nothing to say
+                    q2 = base_r
                 ok = accepted(gain, base_r, q2)
                 if not ok:
                     failed.add(key + (aid,))
