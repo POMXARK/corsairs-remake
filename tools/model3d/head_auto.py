@@ -2,7 +2,7 @@
 """The head improves itself: twelve views of the original find the defects, the tools fix them one by one (ours).
 
 head_auto.py in.glb out.glb --views f.png l.png b.png r.png --parts parts.npy --ref ref12/ [--game pdm-game]
-             [--model hero1] [--rounds 3] [--tries 3] [--work dir] [--policy head_policy.json]
+             [--model hero1] [--rounds 3] [--tries 3] [--jobs N] [--work dir] [--policy head_policy.json]
 
 A round: head_views.evaluate scores the whole head against the twelve reference views of the original (silhouettes,
 the visual hull, the reference surface, symmetry, skin/hair classes, the mesh) and head_views.defects joins the bad
@@ -19,6 +19,7 @@ each on a copy of the head. A try is kept when
 the best kept try of a region is taken, the others are rolled back. An arm rolled back on a region is not tried on
 the same region (kind, parts, size) in the next rounds. The gain is the reward of the arm in the policy file
 (the same one head_agent.py and head_gui.py learn in). After a geometry tool the region is repainted from the four views.
+The tries of a region run at once in forked processes (--jobs, default --tries up to 4).
 The rounds stop when no region was fixed. work/: before.png and after.png (the twelve views sheets), passes/NNN.png
 (every try: the region before | after | the view), report.json (every try with its scores).
 """
@@ -66,6 +67,39 @@ def try_arm(h, arm, mask):
     return trial, note
 
 
+_JOB = {}  # the head, the region and the arms of the tries run in parallel (inherited by the forked workers)
+
+
+def _score_try(i):
+    """One try in a worker: only what changed goes back (the views of the head are hundreds of MB)."""
+    h, mask, arm = _JOB['h'], _JOB['mask'], _JOB['arms'][i]
+    t0 = time.time()
+    trial, note = try_arm(h, arm, mask)
+    r2, f2 = hv.evaluate(trial, h.ref)
+    q2 = guard_score(ht.region_score(trial, mask))
+    return trial.P, trial.img, trial.tris, note, r2, f2, q2, time.time() - t0
+
+
+def run_tries(h, mask, arms, jobs):
+    """[(trial, note, report, faces, guard score, seconds)] of every arm on a copy of h; the tries of a region are
+    independent, so up to `jobs` run at once in forked processes (a try is ~13 s, mostly the repaint)."""
+    import multiprocessing as mp
+    _JOB.update(h=h, mask=mask, arms=arms)
+    if jobs > 1 and len(arms) > 1:
+        with mp.get_context('fork').Pool(min(jobs, len(arms))) as pool:
+            res = pool.map(_score_try, range(len(arms)))
+    else:
+        res = [_score_try(i) for i in range(len(arms))]
+    out = []
+    for P, img, tris, note, r2, f2, q2, sec in res:
+        trial = h.copy()
+        trial.P, trial.img = P, img
+        if tris is not h.tris and not np.array_equal(tris, h.tris):  # orient turned faces
+            trial.tris, trial._weld = tris, None
+        out.append((trial, note, r2, f2, q2, sec))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(usage=__doc__)
     ap.add_argument('src')
@@ -79,7 +113,9 @@ def main():
     ap.add_argument('--tries', type=int, default=3)
     ap.add_argument('--work')
     ap.add_argument('--policy', default=ha.POLICY)
+    ap.add_argument('--jobs', type=int, default=0, help='tries run at once (default: --tries, at most 4)')
     a = ap.parse_args()
+    jobs = a.jobs or min(a.tries, 4)
     work = a.work or os.path.splitext(a.dst)[0] + '_auto'
     os.makedirs(os.path.join(work, 'passes'), exist_ok=True)
     log = lambda s: print(s, flush=True)
@@ -111,12 +147,8 @@ def main():
                 continue
             base_r = guard_score(ht.region_score(h, mask))
             best = None
-            for arm in order:
-                t0 = time.time()
+            for arm, (trial, note, r2, f2, q2, sec) in zip(order, run_tries(h, mask, order, jobs)):
                 aid = ha.arm_id(arm)
-                trial, note = try_arm(h, arm, mask)
-                r2, f2 = hv.evaluate(trial, h.ref)
-                q2 = guard_score(ht.region_score(trial, mask))
                 gain = r2['score'] - rep['score']
                 ok = accepted(gain, base_r, q2)
                 if not ok:
@@ -136,7 +168,7 @@ def main():
                                 os.path.join(work, 'passes', f'{n:03d}.png'), label)
                 rec = {'n': n, 'round': rnd + 1, 'kind': kind, 'parts': names, 'faces': size, 'arm': aid, 'note': note,
                        'score': [rep['score'], r2['score']], 'qwen_region': [base_r, q2],
-                       'ok': bool(ok), 'seconds': round(time.time() - t0, 1)}
+                       'ok': bool(ok), 'seconds': round(sec, 1)}
                 report['tries'].append(rec)
                 log(f"  {label}; {note} ({rec['seconds']} s)")
                 if ok and (best is None or gain > best[0]):

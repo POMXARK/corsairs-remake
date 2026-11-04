@@ -78,13 +78,12 @@ def smooth_positions(P, tris, steps=SMOOTH):
 def load_view(path):
     f = np.asarray(Image.open(path).convert("RGB")).astype(np.float32)
     f[..., 1] = np.minimum(f[..., 1], np.maximum(f[..., 0], f[..., 2]))  # green background spill
-    from scipy.ndimage import binary_erosion, binary_fill_holes
     # holes filled: the black pupil (and the erosion ring around it, the iris) counted as background and took the skin
     # colour of the neighbours, a skin patch in the eye of ComfyUI_00016
-    mask = binary_fill_holes(f.max(2) > 8)
+    mask = _fill_holes(f.max(2) > 8)
     ys, xs = np.where(mask)
     # the rim of the figure is blended with the background (dark lines at the temple, the neck, the ear): do not sample it
-    inner = binary_erosion(mask, iterations=max(3, f.shape[0] // 400))
+    inner = _diamond_erode(mask, max(3, f.shape[0] // 400))
     return f, (xs.min(), xs.max(), ys.min(), ys.max()), inner
 
 
@@ -111,22 +110,60 @@ CUT_ROW = 0.02  # share of the height: the row of the side views the neck cut is
 SKIN_GROW = 0.004  # share of the view size: the skin of the views grows by this before a point is looked up (the eroded rim)
 
 
-def pixel_classes(f, mask):
-    """0 background, 1 skin, 2 hair, 3 other (beard, lips, eyes, the blend at the rim)."""
+def pixel_classes(f, mask, mx=None):
+    """0 background, 1 skin, 2 hair, 3 other (beard, lips, eyes, the blend at the rim). mx: f.max(2) when known."""
     c = np.full(mask.shape, 3, np.uint8)
     c[~mask] = 0
     c[mask & (f[..., 0] > SKIN_R) & (f[..., 0] - f[..., 2] > SKIN_RB)] = 1
-    c[mask & (f.max(2) < HAIR_MAX)] = 2
+    c[mask & ((f.max(2) if mx is None else mx) < HAIR_MAX)] = 2
     return c
 
 
-def view_classes(views):
-    from scipy.ndimage import binary_dilation, binary_fill_holes
+def _diamond_dilate(m, r):
+    """binary_dilation(m, iterations=r) with the cross structure (a diamond of radius r) in one cv2 pass: the same
+    pixels, ~20x faster on a 4096 view."""
+    import cv2
+    k = (np.abs(np.arange(-r, r + 1))[:, None] + np.abs(np.arange(-r, r + 1))[None]) <= r
+    return cv2.dilate(m.view(np.uint8), k.astype(np.uint8)).astype(bool)
+
+
+def _fill_holes(m):
+    """binary_fill_holes(m) (4-connected background, as scipy) by one cv2.floodFill from the padded border."""
+    import cv2
+    bg = np.pad(~m, 1, constant_values=True).view(np.uint8) * 255
+    cv2.floodFill(bg, np.zeros((bg.shape[0] + 2, bg.shape[1] + 2), np.uint8), (0, 0), 128, flags=4)
+    return bg[1:-1, 1:-1] != 128
+
+
+def _diamond_erode(m, r):
+    """binary_erosion(m, iterations=r) (cross structure, outside the image is background) in one cv2 pass."""
+    import cv2
+    k = (np.abs(np.arange(-r, r + 1))[:, None] + np.abs(np.arange(-r, r + 1))[None]) <= r
+    return cv2.erode(m.view(np.uint8), k.astype(np.uint8), borderType=cv2.BORDER_CONSTANT, borderValue=0).astype(bool)
+
+
+def _view_hair_classes(f):
+    mx = f.max(2)
+    return pixel_classes(f, _fill_holes(mx > 8), mx)
+
+
+_VCACHE = {}  # id of a view image -> (the image, its classes): the views do not change between the repaints of head_tools
+
+
+def view_classes(views, skin=True):
+    """{view: (classes, skin grown by SKIN_GROW without hair, hair)}; skin=False: the grown skin is not computed (None)."""
     out = {}
     for n, (f, _, _) in views.items():
-        c = pixel_classes(f, binary_fill_holes(f.max(2) > 8))
-        grow = max(2, int(SKIN_GROW * f.shape[0]))
-        out[n] = (c, binary_dilation(c == 1, iterations=grow) & (c != 2), c == 2)
+        hit = _VCACHE.get(id(f))
+        if hit is not None and hit[0] is f and (hit[1][1] is not None or not skin):
+            out[n] = hit[1]
+            continue
+        c = _view_hair_classes(f)
+        sk = _diamond_dilate(c == 1, max(2, int(SKIN_GROW * f.shape[0]))) & (c != 2) if skin else None
+        out[n] = (c, sk, c == 2)
+        if len(_VCACHE) > 16:
+            _VCACHE.clear()
+        _VCACHE[id(f)] = (f, out[n])  # the image is kept, so its id is not reused while cached
     return out
 
 
@@ -293,7 +330,7 @@ def paint(P, UV, tris, atlas, views, side, step=1, do_align=False, skin=None, ha
             views[n] = align(n, views[n], *ZCACHE[(n, dv)], atlas)
     names = list(dirs)
     if skin is not None and hairs is None:  # the hair of the aligned views (the alignment moves them by a few pixels)
-        hairs = {n: view_classes({n: views[n]})[n][2] for n in names}
+        hairs = {n: view_classes({n: views[n]}, skin=False)[n][2] for n in names}
     snorm = smooth_normals(P, tris)
     facing = tuple(zfacing(zbufs[n], views[n], lo, hi) for n in names)
     vp = [project(P, n, views[n], lo, hi) for n in names]
