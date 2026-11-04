@@ -22,6 +22,7 @@ TEX = 256.0
 RAMP = 3.0
 DENSITY = 2.0  # texels: the longest edge of the mesh over an eye
 GAZE = 1.0  # the darts of the look (key `gaze` of eyes.ini; 0 — the eyes only blink)
+AI_RAMP = 3.0  # texels: the patch of an AI head has a vertex every 2 texels
 RAMPS = {}
 
 
@@ -36,6 +37,13 @@ def key(texture):
 
 # the eye of the hero was set by hand on his dense mesh (window 40..80 x 129..143, skin row 145)
 HERO = {"hero_head": [{"cx": 60.0, "cy": 136.0, "rx": 11.0, "ry": 3.0, "skin": 145.0}]}
+
+
+def load_ai():
+    """tools/eyes_ai.json (head-wrap-ai export.py, ours): {texture key: [[x0, x1, y0, y1, skin], ...]}, the windows of the
+    eye patches of an AI head, already in texels of the 256x256 atlas (the patch has its own dense grid)."""
+    path = TOOLS / "eyes_ai.json"
+    return json.loads(path.read_text()) if path.exists() else {}
 
 
 def load():
@@ -126,6 +134,9 @@ def write_ini(out):
         lines += ["", f"[{name}]", f"mirror = {1 if len(eyes) == 1 else 0}", f"ramp = {ramp(name):g}", f"gaze = {GAZE:g}"]
         for e in eyes:
             lines.append("eye = " + ", ".join(f"{v:.1f}" for v in window(e)))
+    for name, windows in sorted(load_ai().items()):
+        lines += ["", f"[{name}]", "mirror = 0", f"ramp = {AI_RAMP:g}", f"gaze = {GAZE:g}"]
+        lines += ["eye = " + ", ".join(f"{v:.1f}" for v in w) for w in windows]
     path = Path(out) / "ini" / "eyes.ini"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="ascii")

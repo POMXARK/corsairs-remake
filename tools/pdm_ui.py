@@ -309,6 +309,7 @@ class Converter:
                 strings.setdefault(key.strip(), value.strip().replace('"', "'"))
         # the voices of the characters, a row of [Options] the original has not got (ours)
         strings.setdefault("OptVoices", "Голоса NPC")
+        strings.setdefault("OptBlink", "Моргание глаз")
         return strings
 
     def ttf(self, face):
@@ -519,23 +520,23 @@ class Converter:
 
     def options_volume(self):
         """The volume of [Options] (ours): a row "- 80% +" beside the check of the effects, of the music and of the
-        voices of the characters, and the check of the voices (LB_VOICEON) the original has not got. A click on - or +
+        voices of the characters, and the checks of the voices (LB_VOICEON) and of the blink of the eyes (LB_BLINKON) the original has not got. A click on - or +
         changes the volume by a step, the scripts (options.c) show the value."""
         group = "PDM_MENU_CHECK"
         tex, tw, th, _, (w, h) = self.pictures[group]
         big = self.font("logbook,27,0")
         small = "pdm_logbook_italic_18"
         nodes, lines = [], []
-        # the check of the voices under the music, as the ones of the sound
-        y = 255
-        nodes += [("TEXTBUTTON", "LB_VOICEON"), ("PICTURE", "LB_VOICEON_OFF")]
-        lines += ["[LB_VOICEON]", f"position = 264,{y},{264 + w},{y + h}", f"group = {group}", f"font = {big}",
-                  f"fontScale = {1 / FONT_OVERSAMPLE:.3f}", "strOffset = 4", "fontColor = 255,255,255,255",
-                  "fontColorSelected = 255,255,255,255", "fontColorPressed = 255,255,255,255",
-                  "unselectableFontColor = 255,128,128,128", "command = click", "command = activate",
-                  "command = deactivate", "",
-                  "[LB_VOICEON_OFF]", f"position = 264,{y},{264 + w},{y + h}", f"textureName = {tex}",
-                  f"textureRect = 0,{(h + 2) / th:g},{w / tw:g},{(2 * h + 2) / th:g}", "bNotUse = 1", ""]
+        # the checks of the voices and of the blink of the eyes under the music, as the ones of the sound
+        for check, y in (("LB_VOICEON", 255), ("LB_BLINKON", 305)):
+            nodes += [("TEXTBUTTON", check), ("PICTURE", check + "_OFF")]
+            lines += [f"[{check}]", f"position = 264,{y},{264 + w},{y + h}", f"group = {group}", f"font = {big}",
+                      f"fontScale = {1 / FONT_OVERSAMPLE:.3f}", "strOffset = 4", "fontColor = 255,255,255,255",
+                      "fontColorSelected = 255,255,255,255", "fontColorPressed = 255,255,255,255",
+                      "unselectableFontColor = 255,128,128,128", "command = click", "command = activate",
+                      "command = deactivate", "",
+                      f"[{check}_OFF]", f"position = 264,{y},{264 + w},{y + h}", f"textureName = {tex}",
+                      f"textureRect = 0,{(h + 2) / th:g},{w / tw:g},{(2 * h + 2) / th:g}", "bNotUse = 1", ""]
         for name, row in (("FX", 130), ("MUSIC", 205), ("VOICE", 255)):
             cy = row + h // 2 - 8
             for node, x0, x1, font, align, text in ((f"LB_{name}DOWN", 336, 358, small, "center", "-"),
@@ -546,10 +547,11 @@ class Converter:
                           f"fontScale = {1 / FONT_OVERSAMPLE:.3f}", f"lineSpace = {round(self.fonts[font][2])}",
                           "color = 255,255,255,255", f"alignment = {align}"]
                 lines += ["command = click", ""] if node != f"LB_{name}VAL" else [""]
-        nodes.append(("FORMATEDTEXT", "LB_VOICELABEL"))
-        lines += ["[LB_VOICELABEL]", f"position = 70,{255 + 7},230,{255 + 25}", f"font = {small}",
-                  f"fontScale = {1 / FONT_OVERSAMPLE:.3f}", f"lineSpace = {round(self.fonts[small][2])}",
-                  "color = 255,255,255,255", "alignment = right", "string = OptVoices", ""]
+        for label, y, text in (("LB_VOICELABEL", 255, "OptVoices"), ("LB_BLINKLABEL", 305, "OptBlink")):
+            nodes.append(("FORMATEDTEXT", label))
+            lines += [f"[{label}]", f"position = 70,{y + 7},230,{y + 25}", f"font = {small}",
+                      f"fontScale = {1 / FONT_OVERSAMPLE:.3f}", f"lineSpace = {round(self.fonts[small][2])}",
+                      "color = 255,255,255,255", "alignment = right", f"string = {text}", ""]
         return nodes, lines
 
     # ---------- a screen ----------

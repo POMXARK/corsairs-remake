@@ -32,6 +32,7 @@
 | `town-tavern` / `town-talk` / `town-quest` | таверна, разговор с NPC, взятие квеста в городе | `PDM town: autotest done` |
 | `town-land` | высадка и ходьба по городу Highrock, последний шаг — выход в море (маркер пишется до него) | `PDM town: autotest done` |
 | `town-face` | лица NPC при разговоре (камера на лицо) | `PDM face: autotest done` |
+| `eye-blink` | опция «Моргание глаз» (eye_blink в settings.ini → SetEyeBlink), голова с окнами eyes.ini | `PDM options: eye blink 1` |
 | `sea-out` / `sea-port` / `sea-map` | выход в море, возврат в порт, переход на карту мира | `PDM: sea …` |
 | `map-date` | дата на карте мира идёт при ходе (12 → 14 Июнь) | `PDM map date: …` |
 | `map-anchor` | якорь «На день» (TOWN_AUTO=27): дата 12 → 13 Июнь, якорь поднят | `PDM map anchor: weighed` |

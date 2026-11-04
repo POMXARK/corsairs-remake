@@ -20,7 +20,7 @@
 # GDB=1 runs the engine under gdb and writes the backtrace of a crash into crash-bt.txt (BT=<file> changes it).
 # The window (docs/build.md): FULLSCREEN=1 the full screen, FULLSCREEN=0 a window with a frame, SCREEN=1920x1080 its size;
 # by default engine.ini (a window of 1280x720). The engine options --fullscreen, --windowed, --size WxH do the same.
-# VOLUME_FX, VOLUME_MUSIC, VOLUME_VOICE (0..100) and NPC_VOICE=0|1 set the sound of the page "Настройки" at the start, as
+# VOLUME_FX, VOLUME_MUSIC, VOLUME_VOICE (0..100) and NPC_VOICE=0|1 and EYE_BLINK=0|1 set the sound of the page "Настройки" at the start, as
 # settings.ini does (the variable wins).
 # SOUND_FX_ONLY=1 mutes the music and the ambience of the locations, to hear the steps and the effects.
 set -euo pipefail
@@ -68,7 +68,7 @@ fi
 [ -f "$DIR/resource/textures/loading/progress.tga.tx" ] || python3 -I "$TOOLS/pdm_loading.py" "$PDM" "$DIR/resource"
 # the screens of the interface (INI/menu.ini, the world map of INI/map.ini), their pictures, texts and fonts, the dialog window and the voices;
 # again for a map made before its fog
-grep -qs 'MSGSCROLL' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'ISLSCROLL' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'LB_VOICEON_OFF' "$DIR/resource/ini/interfaces/options.ini" && grep -qs 'PDM_HUD_18' "$DIR/resource/ini/fonts.ini" && grep -qs 'PdmScreens.trade.t.exporting' "$DIR/program/data/pdm_screens.c" && grep -qs 'PdmScreens.ships' "$DIR/program/data/pdm_screens.c" && grep -qs 'PdmScreens.pointer.map' "$DIR/program/data/pdm_screens.c" && grep -qs 'PdmScreens.recordlines' "$DIR/program/data/pdm_screens.c" && grep -qs 'PdmScreens.shipexchange.t.crew' "$DIR/program/data/pdm_screens.c" && grep -qs 'S_TYPE1' "$DIR/resource/ini/interfaces/shipexchange.ini" && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
+grep -qs 'MSGSCROLL' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'fogStamp' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'ISLSCROLL' "$DIR/resource/ini/interfaces/mainmap.ini" && grep -qs 'LB_BLINKON_OFF' "$DIR/resource/ini/interfaces/options.ini" && grep -qs 'LB_VOICEON_OFF' "$DIR/resource/ini/interfaces/options.ini" && grep -qs 'PDM_HUD_18' "$DIR/resource/ini/fonts.ini" && grep -qs 'PdmScreens.trade.t.exporting' "$DIR/program/data/pdm_screens.c" && grep -qs 'PdmScreens.ships' "$DIR/program/data/pdm_screens.c" && grep -qs 'PdmScreens.pointer.map' "$DIR/program/data/pdm_screens.c" && grep -qs 'PdmScreens.recordlines' "$DIR/program/data/pdm_screens.c" && grep -qs 'PdmScreens.shipexchange.t.crew' "$DIR/program/data/pdm_screens.c" && grep -qs 'S_TYPE1' "$DIR/resource/ini/interfaces/shipexchange.ini" && [ -f "$DIR/program/data/pdm_screens.c" ] && [ -f "$DIR/program/data/pdm_voices.c" ] || python3 -I "$TOOLS/pdm_ui.py" "$PDM" "$DIR"
 # the towns and interiors (WORLDS/locations/*.loc), their patches and the characters with animation
 # eyes.ini comes with the eye grid of the heads (the blink): the characters of an older world are converted again alone (pdm_character.py all), and the boarding after them
 WORLD_NEW=0
@@ -122,6 +122,7 @@ echo "int StartVolFx = $(setting VOLUME_FX volume_fx 80);" >> "$DIR/program/data
 echo "int StartVolMusic = $(setting VOLUME_MUSIC volume_music 70);" >> "$DIR/program/data/start.c"
 echo "int StartVolVoice = $(setting VOLUME_VOICE volume_voice 100);" >> "$DIR/program/data/start.c"
 echo "int StartNpcVoice = $(setting NPC_VOICE npc_voice 1);" >> "$DIR/program/data/start.c"
+echo "int StartEyeBlink = $(setting EYE_BLINK eye_blink 1);" >> "$DIR/program/data/start.c"
 # the keys the player rebound on the page "Управление": key_<control> = <code> of settings.ini, then of save/settings.ini (it wins)
 { echo "void Keys_Init()"; echo "{"; for f in "$DIR/settings.ini" "$DIR/save/settings.ini"; do
     sed -n 's/^key_\([A-Za-z0-9_]*\)[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\tPdmKeys.\1 = \2;/p' "$f" 2>/dev/null || true; done; echo "}"; } >> "$DIR/program/data/start.c"

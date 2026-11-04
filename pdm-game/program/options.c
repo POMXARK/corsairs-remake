@@ -23,6 +23,8 @@ int optionsVolFx = 80;
 int optionsVolMusic = 70;
 int optionsVolVoice = 100;
 #define OPTIONS_VOLUME_STEP 10
+// the blink and the glances of the characters' eyes (eyes.ini, Character::UpdateEyeBlink of the engine)
+bool optionsBlink = true;
 // the save when the ship leaves a town (save.c)
 bool optionsAutosave = true;
 
@@ -33,6 +35,9 @@ void Options_Init()
 	optionsVolMusic = StartVolMusic;
 	optionsVolVoice = StartVolVoice;
 	optionsVoice = StartNpcVoice != 0;
+	optionsBlink = StartEyeBlink != 0;
+	SetEyeBlink(optionsBlink);
+	Trace("PDM options: eye blink " + optionsBlink);
 	SetEventHandler("Options_Reopen", "Options_Reopen", 0);
 }
 
@@ -89,6 +94,7 @@ void Options_Fill()
 	Options_Check("LB_SOUNDON", optionsFx);
 	Options_Check("LB_MUSICON", optionsMusic);
 	Options_Check("LB_VOICEON", optionsVoice);
+	Options_Check("LB_BLINKON", optionsBlink);
 	Options_Check("LB_AUTOSAVE", optionsAutosave);
 	Options_Volumes();
 	Options_Off("LB_SWAPMOUSEX");
@@ -114,7 +120,9 @@ void Options_SaveSettings()
 {
 	int voice = 0;
 	if (optionsVoice) { voice = 1; }
-	WriteTextFile(RUN_SAVEDIR + "/settings.ini", "volume_fx = " + optionsVolFx + "\nvolume_music = " + optionsVolMusic + "\nvolume_voice = " + optionsVolVoice + "\nnpc_voice = " + voice + "\n" + Keys_Lines());
+	int blink = 0;
+	if (optionsBlink) { blink = 1; }
+	WriteTextFile(RUN_SAVEDIR + "/settings.ini", "volume_fx = " + optionsVolFx + "\nvolume_music = " + optionsVolMusic + "\nvolume_voice = " + optionsVolVoice + "\nnpc_voice = " + voice + "\neye_blink = " + blink + "\n" + Keys_Lines());
 }
 
 void Options_Volumes()
@@ -166,6 +174,15 @@ bool Options_Click(string node)
 	if (node == "LB_SOUNDON") { optionsFx = !optionsFx; Options_Check(node, optionsFx); Sound_Volume(); return true; }
 	if (node == "LB_MUSICON") { optionsMusic = !optionsMusic; Options_Check(node, optionsMusic); Sound_Volume(); return true; }
 	if (node == "LB_VOICEON") { optionsVoice = !optionsVoice; Options_Check(node, optionsVoice); Options_SaveSettings(); return true; }
+	if (node == "LB_BLINKON")
+	{
+		optionsBlink = !optionsBlink;
+		Options_Check(node, optionsBlink);
+		SetEyeBlink(optionsBlink);
+		Trace("PDM options: eye blink " + optionsBlink);
+		Options_SaveSettings();
+		return true;
+	}
 	if (Options_Slider(node)) { return true; }
 	if (node == "LB_AUTOSAVE") { optionsAutosave = !optionsAutosave; Options_Check(node, optionsAutosave); return true; }
 	if (node == "LB_APPLY") { Options_Apply(); return true; }

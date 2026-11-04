@@ -10,6 +10,7 @@
 native int NativeFindCharacter(ref chr, string id);
 native int NativeFindLocation(ref loc, string id);
 native int NativeFindLoadCharacter();
+native void SetEyeBlink(int on);
 native void SetReloadProgressBackImage(string name);
 native void SetReloadNextTipsImage();
 native void ReloadProgressStart();

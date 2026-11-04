@@ -37,6 +37,7 @@ TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS))
 sys.path.insert(0, str(TOOLS.parent / "engine" / "demos" / "common"))
 from pdm_model_views import PARTS, find_model, part_objects, parts_of, read_gm, texture_index, texture_of  # noqa: E402
+import pdm_eyes  # noqa: E402
 from storm_formats import Mesh, write_gm, write_tx  # noqa: E402
 
 SAMPLE = 3000  # points of each model compared to find the turn
@@ -293,6 +294,8 @@ def main():
         if only and not only <= set(PARTS):
             sys.exit(f"pdm_glb2gm: no group {', '.join(sorted(only - set(PARTS)))}, there are {', '.join(PARTS)}")
         print(convert(a.game, name, glbs, a.tex, a.parts or only is not None, only), flush=True)
+    if not a.restore and pdm_eyes.load_ai():  # the windows of the eye patches (tools/eyes_ai.json): the blink of the engine
+        print(pdm_eyes.write_ini(a.game / "resource"))
 
 
 if __name__ == "__main__":
