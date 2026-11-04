@@ -41,6 +41,7 @@ ACCEPT = 0.05  # twelve-view score points: a smaller gain of the whole head is n
 GUARD = 1.0  # region score points (the four Qwen views) a kept try may lose
 SMALL = 0.01  # a smaller gain of the whole head is kept too when the region looks better against Qwen by QWEN_GAIN
 EARLY_MARGIN = 0.02  # the repaint changed the twelve-view score by 0.01 at most (18 tries on hero1)
+TONE = False  # --tone: colour defects are looked for
 ALIGN_ONCE = True  # --no-align-once: align the views in every try (the old behaviour)
 EARLY = True  # --no-early: repaint every geometry try (slower, the old behaviour)
 QWEN_GAIN = 2.0  # (a small region cannot move the twelve-view score of the whole head by ACCEPT)
@@ -126,11 +127,13 @@ def main():
     ap.add_argument('--policy', default=ha.POLICY)
     ap.add_argument('--jobs', type=int, default=0, help='tries run at once (default: --tries, at most 6 and half of the cores)')
     ap.add_argument('--no-early', action='store_true', help='repaint every geometry try, even when the shape got worse')
+    ap.add_argument('--tone', action='store_true', help='also look for colour defects (tone): slow, LaMa tries take 40-60 s')
     ap.add_argument('--no-align-once', action='store_true', help='align the views in every try')
     a = ap.parse_args()
-    global EARLY, ALIGN_ONCE
+    global EARLY, ALIGN_ONCE, TONE
     EARLY = not a.no_early
     ALIGN_ONCE = not a.no_align_once
+    TONE = a.tone
     if (a.jobs or min(a.tries, 6, 4)) > 1:  # tries run at once: one OpenCV thread each (set here, not in a forked worker: it hangs there)
         import cv2
         cv2.setNumThreads(1)
@@ -154,7 +157,7 @@ def main():
     failed = set()  # (kind, parts, faces, arm) rolled back
     for rnd in range(a.rounds):
         fixed = 0
-        dl = hv.defects(h, faces)
+        dl = hv.defects(h, faces if TONE else {k: w for k, w in faces.items() if k != 'tone'})
         log(f"round {rnd + 1}: {len(dl)} defects: " + ', '.join(f"{k} {s} {'+'.join(p)}" for k, _, s, p in dl))
         for kind, mask, size, names in dl:
             intent = hv.INTENT[kind]

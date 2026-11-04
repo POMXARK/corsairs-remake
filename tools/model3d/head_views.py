@@ -32,6 +32,7 @@ import os
 import sys
 
 import numpy as np
+import cv2
 from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -375,6 +376,7 @@ def evaluate(h, ref, fit=None, out=None):
     outside = np.zeros(nF)  # model pixels outside the reference silhouettes, per face
     seen = np.zeros(nF)
     cls_bad = np.zeros(nF)  # pixels of the face whose class (skin/hair) is not the reference's
+    tone_bad = np.zeros(nF)
     hull = np.zeros(len(X))  # the largest distance (share of the height) of a vertex outside a silhouette
     hull_v = np.zeros((len(X), 3))  # and the step back to the silhouette (original frame) for hull()
     per, pics = [], []
@@ -404,6 +406,8 @@ def evaluate(h, ref, fit=None, out=None):
         np.add.at(seen, fid[sil], 1)
         np.add.at(outside, fid[s2 & ~o2], 1)
         np.add.at(cls_bad, fid[wrong], 1)
+        off = both & (tone_diff(col, v['img']) > TONE_DE)  # the colour of the generated head far from the Qwen picture
+        np.add.at(tone_bad, fid[off], 1)
         # vertices outside the silhouette (the visual hull)
         px, py, _ = ref.project(X, v)
         ix, iy = np.clip(px.astype(int), 0, RES - 1), np.clip(py.astype(int), 0, RES - 1)
@@ -432,7 +436,7 @@ def evaluate(h, ref, fit=None, out=None):
     stats, mfaces = mesh_stats(h)
     pid, F = h.weld()
     fv = lambda a: a[h.tris].max(1)  # a vertex value per face
-    faces = {'outside': outside / np.maximum(seen, 1), 'class': cls_bad / np.maximum(seen, 1),
+    faces = {'outside': outside / np.maximum(seen, 1), 'class': cls_bad / np.maximum(seen, 1), 'tone': tone_bad / np.maximum(seen, 1),
              'bulge': fv(hull) > HULL_TOL, 'blob': fv(sd) > REF_FAR, 'asym': fv(asym) > ASYM_TOL}
     for kname, ids in mfaces.items():
         m = np.zeros(nF, bool)
@@ -510,9 +514,19 @@ def sheet(pics, per, path, cols=6, tile=192):
 
 # ---------- the defect regions ----------
 
-DEFECT_MIN = {'bulge': 8, 'blob': 8, 'asym': 30, 'outside': 8, 'class': 15, 'flip': 1, 'spike': 1, 'fold': 3,
+TONE_DE = 18.  # Lab distance of the blurred pictures (the detail is not a colour defect)
+
+
+def tone_diff(a, b):
+    """Lab distance of two RGB pictures after a blur of 4 px."""
+    from skimage import color
+    f = lambda x: color.rgb2lab(cv2.GaussianBlur(np.asarray(x)[..., :3].astype(np.uint8), (0, 0), 4) / 255.0)
+    return np.linalg.norm(f(a) - f(b), axis=-1)
+
+
+DEFECT_MIN = {'tone': 15, 'bulge': 8, 'blob': 8, 'asym': 30, 'outside': 8, 'class': 15, 'flip': 1, 'spike': 1, 'fold': 3,
               'sliver': 3, 'piece': 1, 'open': 1, 'nonmanifold': 1}
-INTENT = {'bulge': 'outside', 'blob': 'outside', 'outside': 'outside', 'asym': 'asym', 'class': 'wrong_class',
+INTENT = {'tone': 'colour', 'bulge': 'outside', 'blob': 'outside', 'outside': 'outside', 'asym': 'asym', 'class': 'wrong_class',
           'flip': 'flip', 'spike': 'spike', 'fold': 'fold', 'sliver': 'spike', 'piece': 'spike',
           'open': 'shape', 'nonmanifold': 'shape'}
 
