@@ -80,7 +80,7 @@ INTENT_TOOLS = {  # intent -> tools (priors, score points)
     'spike': {'despike': 5, 'relax': 3},
     'fold': {'relax': 4, 'membrane': 2, 'despike': 1},
     'flip': {'orient': 5},
-    'wrong_class': {'skin_to_hair': 4, 'hair_to_skin': 4, 'repaint': 2},
+    'wrong_class': {'skin_to_hair': 4, 'hair_to_skin': 4, 'repaint': 2, 'lama': 2},
 }
 PART_TOOLS = {  # what usually helps a part before anything is learned
     'eyes': {'membrane': 2, 'relax': 2, 'repaint': 1}, 'mouth': {'relax': 1, 'repaint': 1}, 'nose': {'relax': 1},
