@@ -171,14 +171,16 @@ def main():
             for arm, (trial, note, r2, f2, q2, sec) in zip(order, run_tries(h, mask, order, jobs, rep['score'])):
                 aid = ha.arm_id(arm)
                 gain = r2['score'] - rep['score']
-                if q2 is None:  # rejected on the shape, not repainted: the guard has nothing to say
+                early = q2 is None  # rejected on the shape, not repainted: the guard has nothing to say
+                if early:
                     q2 = base_r
                 ok = accepted(gain, base_r, q2)
                 if not ok:
                     failed.add(key + (aid,))
                 n += 1
                 ck = '|'.join(ha.context(names, [intent]))
-                reward = float(np.clip(gain + 0.02 * (q2 - base_r) if q2 >= base_r - GUARD else min(gain, 0) - 1,
+                reward = float(np.clip(min(gain, 0) - 1 if early else gain + 0.02 * (q2 - base_r) if q2 >= base_r - GUARD
+                                       else min(gain, 0) - 1,
                                        -20, 20))
                 pol['ctx'].setdefault(ck, {})[aid] = ha.update(pol['ctx'].get(ck, {}).get(aid, [0, 0.]), reward)
                 for p in names:
