@@ -203,6 +203,20 @@ def build(glb: Path, stem_base: str, ref_pos, ref_bone, skinned, tex_dir, prefix
     return meshes, total, yaw, k, err
 
 
+def without_neck(objs):
+    """The original torso carries a low neck tube (the scarf texture) that rises into the new head and shows behind
+    and in front of its neck (ours): its triangles in the top 14 cm of the torso within 8 cm of the axis are dropped."""
+    top = max(float(o[2][:, 1].max()) for o in objs)
+    out = []
+    for o in objs:
+        p = o[2]
+        near = (p[:, 1] > top - 0.14) & (np.abs(p[:, 0]) < 0.08)
+        tris = np.asarray(o[6])
+        keep = ~near[tris].all(axis=1) if len(tris) else np.zeros(0, bool)
+        out.append(o[:6] + (tris[keep],))
+    return out
+
+
 def convert(game: Path, name: str, glbs: Path, tex_size: int, by_part: bool = False, only=None):
     model = find_model(game, name)
     rel = model.relative_to(game / "resource" / "models")
@@ -231,6 +245,8 @@ def convert(game: Path, name: str, glbs: Path, tex_size: int, by_part: bool = Fa
             from pdm_gm2glb import build as gm2glb  # noqa: E402
             glb = game / "data" / "ai_models" / "glb_keep" / f"{name}_{part}.glb"
             glb.parent.mkdir(parents=True, exist_ok=True)
+            if part == "torso" and "head" in only:
+                objs = without_neck(objs)
             glb.write_bytes(gm2glb({"objects": objs}, textures))
         if not glb.exists():
             sys.exit(f"pdm_glb2gm: no {glb} (comfy_model_batch.py)")
