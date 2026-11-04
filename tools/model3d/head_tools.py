@@ -289,7 +289,141 @@ def blur(h, mask, sigma=2.0):
     return f'blur: {int(t.sum())} texels, sigma {sigma}'
 
 
+# ---------- tools against the reference shape (head_views.py: h.ref, h.fit; ours) ----------
+
+def _need_ref(h, name):
+    return None if getattr(h, 'ref', None) is not None and getattr(h, 'fit', None) is not None else \
+        f'{name}: no reference (head_auto.py / head_views.Reference)'
+
+
+def _smooth_field(D, A, Dinv, move, steps=4):
+    """A displacement spread over the region: a vertex moves as its neighbours do, so the surface does not tear."""
+    for _ in range(steps):
+        D = np.where(move[:, None], 0.5 * D + 0.5 * (Dinv @ (A @ D)), D)
+    return D
+
+
+def hull(h, mask, blend=1.0, rounds=4):
+    """The region is pulled back inside the twelve silhouettes of the original (the visual hull): every vertex outside
+    a view by more than head_views.HULL_TOL steps to the silhouette in that view, the steps spread over the region."""
+    import head_views as hv
+    if _need_ref(h, 'hull'):
+        return _need_ref(h, 'hull')
+    pid, F, W = _welded(h)
+    A, Dinv = laplacian(F, len(W))
+    move = inner_vertices(h, mask)
+    tol = hv.HULL_TOL * h.ref.height / h.fit[1]
+    n0 = None
+    for _ in range(int(rounds)):
+        h.P = W[pid]
+        out, step = hv.hull_steps(h, h.ref)
+        D = np.zeros_like(W)
+        D[pid] = step
+        o = np.zeros(len(W))
+        o[pid] = out
+        far = move & (o > hv.HULL_TOL)
+        n0 = int(far.sum()) if n0 is None else n0
+        if not far.any():
+            break
+        L = np.linalg.norm(D, axis=1, keepdims=True) + 1e-30
+        D = np.where(far[:, None], D * np.maximum(L - 0.5 * tol, 0) / L, 0.)  # to just inside the tolerance
+        W += float(blend) * _smooth_field(D, A, Dinv, move)
+    h.P = W[pid]
+    return f'hull: {n0} vertices outside, {int(rounds)} rounds, blend {blend}'
+
+
+def snap(h, mask, blend=0.3, far=0.0):
+    """The region moves toward the surface of the original (the nearest point), by blend; only the vertices further
+    than far (share of the height) from it: a blob the generator added melts into the reference shape."""
+    import head_views as hv
+    if _need_ref(h, 'snap'):
+        return _need_ref(h, 'snap')
+    pid, F, W = _welded(h)
+    A, Dinv = laplacian(F, len(W))
+    move = inner_vertices(h, mask)
+    X = hv.to_ref(W, h.fit)
+    d, k = h.ref.tree.query(X)
+    D = np.where((move & (d / h.ref.height > float(far)))[:, None], h.ref.S[k] - X, 0.)
+    W += float(blend) * hv.from_ref_vec(_smooth_field(D, A, Dinv, move), h.fit)
+    h.P = W[pid]
+    return f'snap: {int(move.sum())} vertices, blend {blend}'
+
+
+def mirror(h, mask, blend=1.0):
+    """The region takes the shape of its mirror (the symmetry plane of the original): every vertex goes to the mirror of
+    the surface of the other side, from the vertices outside the region if there are enough (the good side), else from
+    both sides (the region is symmetrised)."""
+    import head_views as hv
+    from scipy.spatial import cKDTree
+    if _need_ref(h, 'mirror'):
+        return _need_ref(h, 'mirror')
+    pid, F, W = _welded(h)
+    A, Dinv = laplacian(F, len(W))
+    move = inner_vertices(h, mask)
+    X = hv.to_ref(W, h.fit)
+    Xm = X.copy()
+    Xm[:, 0] = 2 * h.ref.sym_x - Xm[:, 0]
+    src = ~move
+    if src.sum() < 50:
+        src = np.ones(len(W), bool)
+    idx = np.where(src)[0]
+    _, k = cKDTree(Xm[idx]).query(X[move])
+    D = np.zeros_like(X)
+    D[move] = Xm[idx[k]] - X[move]
+    if src.all():
+        D *= 0.5
+    W += float(blend) * hv.from_ref_vec(_smooth_field(D, A, Dinv, move, 2), h.fit)
+    h.P = W[pid]
+    return f'mirror: {int(move.sum())} vertices, blend {blend}'
+
+
+def despike(h, mask, k=1.2, rounds=3):
+    """Vertices standing out of their neighbours by more than k mean edge lengths (spikes, shards of the generator) go
+    to the mean of the neighbours."""
+    pid, F, W = _welded(h)
+    A, Dinv = laplacian(F, len(W))
+    move = inner_vertices(h, mask)
+    e = np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]])
+    n = 0
+    for _ in range(int(rounds)):
+        L = np.linalg.norm(W[e[:, 0]] - W[e[:, 1]], axis=1)
+        el = np.zeros(len(W))
+        np.add.at(el, e[:, 0], L)
+        cnt = np.bincount(e[:, 0], minlength=len(W))
+        el /= np.maximum(cnt, 1)
+        M = Dinv @ (A @ W)
+        sp = move & (np.linalg.norm(W - M, axis=1) > float(k) * el)
+        n += int(sp.sum())
+        if not sp.any():
+            break
+        W[sp] = M[sp]
+    h.P = W[pid]
+    return f'despike: {n} moves'
+
+
+def orient(h, mask):
+    """Faces of the region wound against their neighbours (the normal looks inside) are turned over: the winding is made
+    consistent over every piece, outward (trimesh.repair.fix_winding / fix_normals of the welded mesh)."""
+    import trimesh
+    pid, F, W = _welded(h)
+    m = trimesh.Trimesh(W, F.copy(), process=False)
+    trimesh.repair.fix_normals(m, multibody=True)
+    G = m.faces
+    # a face turned over by trimesh has its corners in the other cycle; only the region may change
+    same = (G == F).all(1) | (np.roll(G, 1, 1) == F).all(1) | (np.roll(G, -1, 1) == F).all(1)
+    turned = ~same & mask
+    t = h.tris.copy()
+    t[turned] = t[turned][:, ::-1]
+    h.tris, h._weld = t, None
+    return f'orient: {int(turned.sum())} faces turned over'
+
+
 TOOLS = {
+    'hull': (hull, {'blend': 1.0, 'rounds': 4}, 'втянуть область внутрь силуэтов 12 видов оригинала', 'geometry'),
+    'snap': (snap, {'blend': 0.3, 'far': 0.0}, 'притянуть область к поверхности оригинала', 'geometry'),
+    'mirror': (mirror, {'blend': 1.0}, 'отразить форму с другой стороны (плоскость симметрии оригинала)', 'geometry'),
+    'despike': (despike, {'k': 1.2, 'rounds': 3}, 'убрать шипы и осколки (вершина далеко от соседей)', 'geometry'),
+    'orient': (orient, {}, 'развернуть грани, повёрнутые внутрь', 'geometry'),
     'relax': (relax, {'steps': 10, 'lam': 0.5}, 'сгладить форму (Taubin), край области на месте', 'geometry'),
     'membrane': (membrane, {'blend': 0.6}, 'натянуть гладкую плёнку на край области (складки век, ямы)', 'geometry'),
     'push': (push, {'amount': 0.003}, 'выдвинуть/вдавить область по нормали (доля высоты)', 'geometry'),

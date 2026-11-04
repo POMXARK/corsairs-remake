@@ -14,7 +14,11 @@ into the hand, and pdm_glb2gm.py --parts binds every group to its own bones only
 --tpose raises both arms of a skinned character to the sides (each arm as one piece, about the shoulder joint of animation/<name>.an):
 the image models separate the arms from the body better, and the new model then gets the bind pose a rig expects.
 
-usage: pdm_model_views.py <game dir> <model> [<model> ...] [--out data/ai_models/views] [--size 1024] [--yaw 0] [--parts] [--tpose]
+--turns N draws N views evenly around instead of the four, <model>_a000.png, <model>_a030.png ... (the azimuth of the
+camera: 0 front, 90 right, 180 back, 270 left, as the four): the reference of the shape for head_views.py, which checks a
+model made of the four views from twelve sides (ours).
+
+usage: pdm_model_views.py <game dir> <model> [<model> ...] [--out data/ai_models/views] [--size 1024] [--yaw 0] [--parts] [--tpose] [--turns 12]
   <model>: a path under resource/models without .gm (characters/hero1), or a name found there (hero1)
 """
 import argparse
@@ -242,8 +246,11 @@ def main():
     ap.add_argument("--tpose", action="store_true", help="a skinned character with both arms raised to the sides")
     ap.add_argument("--parts", action="store_true", help="a skinned character part by part (PARTS)")
     ap.add_argument("--bg", default="128,128,128", help="background colour r,g,b (green 0,255,0: Qwen draws no grey neck into it)")
+    ap.add_argument("--turns", type=int, default=0, help="N views evenly around (a000 front, a090 right ...) instead of the four")
     a = ap.parse_args()
-    global BACKGROUND
+    global BACKGROUND, VIEWS
+    if a.turns:  # azimuth z of the camera (0 front, 90 right) is the yaw 180 - z of render, as VIEWS
+        VIEWS = tuple((f"a{round(i * 360 / a.turns):03d}", (180 - i * 360 / a.turns) % 360) for i in range(a.turns))
     BACKGROUND = tuple(int(c) for c in a.bg.split(","))
     out = a.out or a.game / "data" / "ai_models" / "views"
     out.mkdir(parents=True, exist_ok=True)

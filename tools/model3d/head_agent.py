@@ -3,6 +3,7 @@
 
 head_agent.py in.glb out.glb --views f l b r --parts parts.npy [--region eyes,neck] [--prompt "сгладить глаза"]
               [--passes 8] [--work dir] [--policy head_policy.json] [--check]
+              [--ref ref12/ --game pdm-game --model hero1]   (the reference shape of head_views.py: hull, snap, mirror)
 
 Every pass: the agent picks a tool with its parameters (an arm) for the context (the parts of the region and the
 intents of the prompt), applies it to a copy of the head, scores the region (head_tools.region_score: colour against
@@ -37,6 +38,9 @@ ARMS = [
     ('repaint', {'views': 'all'}), ('repaint', {'views': 'front'}), ('repaint', {'views': 'sides'}),
     ('repaint', {'views': 'back'}),
     ('hair_to_skin', {}), ('skin_to_hair', {}), ('blur', {'sigma': 1.0}), ('blur', {'sigma': 3.0}),
+    # against the reference shape (head_views.py, --ref): the twelve silhouettes and the surface of the original
+    ('hull', {'blend': 0.5}), ('hull', {'blend': 1.0}), ('snap', {'blend': 0.3}), ('snap', {'blend': 0.6}),
+    ('mirror', {'blend': 0.5}), ('mirror', {'blend': 1.0}), ('despike', {}), ('orient', {}),
 ]
 
 
@@ -58,6 +62,8 @@ INTENT_WORDS = [
     (r'(убр|убер|стер|без|нет|снять|сним)\w*\s+(\w+\s+)?волос|волос\w*\s+(\w+\s+)?(на|с|со)\s', 'hair_off'),
     (r'цвет|текстур|перекрас|окрас|краск|красн|светл|темн|тёмн', 'colour'),
     (r'шум|пятн|крапин|точк|размы', 'denoise'),
+    (r'симметр|перекош|кривое лицо|разн\w* (уш|глаз|щёк|щек)', 'asym'), (r'шип|игл|торч|осколок', 'spike'),
+    (r'вылез|раздут|оригинал|эталон|силуэт|лишн\w* объём|лишн\w* объем', 'outside'),
     (r'(кож\w*|светл\w*)\s+(\w+\s+)?(на|в)\s+(волос|хвост)|(волос|хвост)\w*\s+(\w+\s+)?(в|со?)\s+(\w+\s+)?(кож|светл|пятн)', 'skin_off'),
 ]
 INTENT_TOOLS = {  # intent -> tools (priors, score points)
@@ -68,6 +74,13 @@ INTENT_TOOLS = {  # intent -> tools (priors, score points)
     'colour': {'repaint': 4, 'blur': 1},
     'denoise': {'blur': 4, 'repaint': 2, 'skin_to_hair': 2},
     'skin_off': {'skin_to_hair': 5, 'blur': 1},
+    # the defects head_views.py finds (head_auto.py), and the prompt words above
+    'outside': {'hull': 5, 'snap': 3, 'relax': 1},
+    'asym': {'mirror': 5, 'relax': 1},
+    'spike': {'despike': 5, 'relax': 3},
+    'fold': {'relax': 4, 'membrane': 2, 'despike': 1},
+    'flip': {'orient': 5},
+    'wrong_class': {'skin_to_hair': 4, 'hair_to_skin': 4, 'repaint': 2},
 }
 PART_TOOLS = {  # what usually helps a part before anything is learned
     'eyes': {'membrane': 2, 'relax': 2, 'repaint': 1}, 'mouth': {'relax': 1, 'repaint': 1}, 'nose': {'relax': 1},
@@ -263,6 +276,7 @@ def main():
     prompt = opt('--prompt', default='')
     passes = int(opt('--passes', default=8))
     policy = opt('--policy', default=POLICY)
+    ref_dir, game, model = opt('--ref'), opt('--game', default='pdm-game'), opt('--model', default='hero1')
     check = '--check' in a
     a = [x for x in a if x != '--check']
     src, dst = a[:2]
@@ -275,6 +289,11 @@ def main():
         raise SystemExit('no region: --region eyes,neck[~rings] or a prompt that names a part')
     print('region', spec, 'intents', intents, flush=True)
     h = ht.Head(src, views, parts_file)
+    if ref_dir:  # the reference shape for hull, snap, mirror (head_views.py)
+        import head_views as hv
+        h.ref = hv.Reference(game, model, ref_dir)
+        h.fit = hv.fit_frame(h.P, h.tris, h.ref)
+        h.ref.adopt(h)
     mask = ht.region(h, spec)
     if check:
         r0 = ht.hc.check(src, views)
