@@ -82,6 +82,7 @@ Steam (app 2927200), Wikipedia, официальные moddocs, обзоры. И
 5. Автотесты на каждую механику (как в pdm-game).
 
 ## Связанное
+- Механики Bannerlord и War Sails для начинающего, девблоги, сравнение с «Корсарами» и Pirates!: [bannerlord-mechanics.md](bannerlord-mechanics.md).
 - Разведка по Crimson Desert (ASI-плагины, vtable-хуки): репозиторий `~/Documents/crimson-voice`, `docs/game-internals.md`.
 
 ## Источники
